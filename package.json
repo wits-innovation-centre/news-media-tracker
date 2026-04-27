@@ -1,5 +1,5 @@
 {
-  "name": "homicide-media-tracker-superproject",
+  "name": "news-media-tracker",
   "version": "3.0.1",
   "private": true,
   "description": "Superproject orchestration workspace for app.news-media-tracker and srvc.atom.",

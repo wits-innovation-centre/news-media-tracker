@@ -1,6 +1,6 @@
 [submodule "app.news-media-tracker"]
 	path = app.news-media-tracker
-	url = https://github.com/JulianVJacobs/app.news-media-tracker.git
+	url = git@github.com:JulianVJacobs/app.news-media-tracker.git
 [submodule "srvc.atom"]
 	path = srvc.atom
-	url = https://github.com/JulianVJacobs/srvc.atom.git
+	url = git@github.com:JulianVJacobs/srvc.atom.git

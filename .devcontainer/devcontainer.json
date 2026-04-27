@@ -13,7 +13,11 @@
     "workspace-superproject"
   ],
   "workspaceFolder": "/workspace",
+  "mounts": [
+    "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind"
+  ],
   "shutdownAction": "stopCompose",
+  "postCreateCommand": "/workspace/.devcontainer/post-create.sh",
   "containerEnv": {
     "POSTGRES_URL_NO_SSL": "${localEnv:POSTGRES_URL_NO_SSL}",
     "POSTGRES_USER": "${localEnv:POSTGRES_USER}",
@@ -24,6 +28,7 @@
     "ENV": "dev",
     "WINEARCH": "win64",
     "WINEPREFIX": "/home/vscode/.wine",
+    "SSH_AUTH_SOCK": "/ssh-agent",
     "DISPLAY": "${localEnv:DISPLAY}",
     "WORKBENCH_PLUGIN_API_BASE_URL": "http://atom-host:8080/plugins/homicide-tracker/api"
   },
@@ -51,7 +56,6 @@
       "label": "AtoM Cache (Redis)"
     }
   },
-  "postCreateCommand": "npm run workspace.app.install",
   "remoteUser": "vscode",
   "customizations": {
     "vscode": {
