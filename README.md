@@ -96,7 +96,7 @@ Useful orchestration commands from the superproject root:
 
 ## Roadmap
 
-**Current version: 3.0.1 | Strategic direction: AtoM plugin + Event-Actor-Role annotation layer**
+**Current version: 3.1.0 | Strategic direction: AtoM plugin + Workbench offline-sync + Event-Actor-Role annotation layer**
 
 Checkbox legend:
 
@@ -105,13 +105,14 @@ Checkbox legend:
 - `[>]` deferred/re-scoped to a different semver target (no standalone release at original line)
 - `[<]` promoted/re-sequenced from a later roadmap line into an earlier active line
 
-**Status update (2026-04-22):**
+**Status update (2026-04-28):**
 
 - ✅ Phase 3 integration merge completed on `origin/main` (Lima final integration PR #13, India PR #14, with Juliet/Kilo integrated in Lima merge flow).
 - ✅ Fleet `2.1.0` completed and closed on `origin/main` (final PR `#17`, post-merge worker branch cleanup complete).
 - ✅ Fleet `2.2.0` completed and closed on `origin/main` (final PR `#22`, integrated verification passed, post-merge worker branch cleanup complete).
 - ✅ Fleet `3.0.0` completed and merged on `origin/main` (conductor recovery final merge PR `#46`; lane merges and manifest cleanup complete).
-- ✅ Fleet `3.1.0` integrated on `phase/3.1.0` with lanes `01` through `05` merged in dependency order and manifest lifecycle completed before final PR drafting.
+- ✅ Fleet `3.1.0` completed and merged on `origin/main` (host provisioning, bootstrap, plugin runtime binding, workbench host-shell, verification runbook all integrated).
+- ⧗ Fleet `3.2.0` planning in progress (PWA offline-sync for workbench routes; lane decomposition ready for approval).
 
 ### **Foundation: Participant Management (1.x.x releases)**
 

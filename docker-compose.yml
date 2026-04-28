@@ -9,12 +9,13 @@ x-workspace-common: &workspace-common
   user: vscode
   volumes:
     - .:/workspace:cached
+    - /var/run/docker.sock:/var/run/docker.sock
   environment:
     ENV: dev
     WINEARCH: win64
     WINEPREFIX: /home/vscode/.wine
     DISPLAY: ${DISPLAY:-:99}
-    ATOM_STACK_SERVICE: atom-host
+    ATOM_STACK_SERVICE: atom
     WORKBENCH_PLUGIN_API_BASE_URL: http://atom-host:8080/plugins/homicide-tracker/api
 
 services:
@@ -33,19 +34,14 @@ services:
     ports:
       - "3000:3000"
       - "3001:3001"
-    depends_on:
-      atom-host:
-        condition: service_healthy
 
   workspace-service:
     <<: *workspace-common
     working_dir: /workspace/srvc.atom
-    depends_on:
-      atom-host:
-        condition: service_healthy
 
   atom-db:
     image: ${ATOM_DB_IMAGE:-mariadb:11.4.2}
+    profiles: [atom-stack]
     restart: unless-stopped
     environment:
       MARIADB_DATABASE: ${ATOM_DB_NAME:-atom}
@@ -69,6 +65,7 @@ services:
 
   atom-cache:
     image: ${ATOM_CACHE_IMAGE:-redis:7.4.2-alpine}
+    profiles: [atom-stack]
     restart: unless-stopped
     ports:
       - "${ATOM_CACHE_PORT:-63790}:6379"
@@ -79,8 +76,26 @@ services:
       retries: 20
       start_period: 5s
 
+  atom:
+    image: ${ATOM_APP_IMAGE:-qubit/atom:2.8.2}
+    profiles: [atom-stack]
+    restart: unless-stopped
+    depends_on:
+      atom-db:
+        condition: service_healthy
+      atom-cache:
+        condition: service_healthy
+    environment:
+      ATOM_DB_HOST: atom-db
+      ATOM_DB_NAME: ${ATOM_DB_NAME:-atom}
+      ATOM_DB_USER: ${ATOM_DB_USER:-atom}
+      ATOM_DB_PASSWORD: ${ATOM_DB_PASSWORD:-REPLACE_WITH_SECURE_DB_PASSWORD}
+      ATOM_CACHE_HOST: atom-cache
+      ATOM_CACHE_PORT: 6379
+
   atom-host:
     image: ${ATOM_HOST_IMAGE:-nginx:1.27.0-alpine}
+    profiles: [atom-stack]
     restart: unless-stopped
     environment:
       ATOM_HOST_INTERNAL_PORT: ${ATOM_HOST_INTERNAL_PORT:-8080}
@@ -90,6 +105,8 @@ services:
         condition: service_healthy
       atom-cache:
         condition: service_healthy
+      atom:
+        condition: service_started
     ports:
       - "${ATOM_HOST_PORT:-62080}:${ATOM_HOST_INTERNAL_PORT:-8080}"
     volumes:

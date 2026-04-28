@@ -21,8 +21,22 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive && \
     apt-get install -yq --no-install-suggests --no-install-recommends \
     git libx11-xcb1 libxcb-dri3-0 libxtst6 libnss3 libatk-bridge2.0-0 libgtk-3-0 \
     libxss1 libasound2 xorg openbox libatk-adaptor dbus xvfb gtk2-engines-pixbuf \
-    sudo winehq-stable && \
+        sudo docker.io winehq-stable && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install Docker Compose v2 plugin for `docker compose` compatibility.
+ARG DOCKER_COMPOSE_VERSION=v2.33.1
+RUN set -eux; \
+        arch="$(dpkg --print-architecture)"; \
+        case "$arch" in \
+            amd64) compose_arch='x86_64' ;; \
+            arm64) compose_arch='aarch64' ;; \
+            *) echo "Unsupported architecture for Docker Compose plugin: $arch"; exit 1 ;; \
+        esac; \
+        sudo mkdir -p /usr/local/lib/docker/cli-plugins; \
+        sudo wget -O /usr/local/lib/docker/cli-plugins/docker-compose \
+            "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${compose_arch}"; \
+        sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 RUN dbus-uuidgen > /var/lib/dbus/machine-id
 
@@ -67,6 +81,22 @@ RUN wine --version && \
     echo '' >> /home/vscode/entrypoint.sh && \
     echo '# Fix workspace permissions' >> /home/vscode/entrypoint.sh && \
     echo 'sudo chown -R vscode:vscode /workspace 2>/dev/null || true' >> /home/vscode/entrypoint.sh && \
+    echo '' >> /home/vscode/entrypoint.sh && \
+    echo '# Grant vscode access to mounted host docker socket when available' >> /home/vscode/entrypoint.sh && \
+    echo 'if [ -S /var/run/docker.sock ]; then' >> /home/vscode/entrypoint.sh && \
+    echo '  sock_gid=$(stat -c "%g" /var/run/docker.sock)' >> /home/vscode/entrypoint.sh && \
+    echo '  if [ -n "$sock_gid" ] && [ "$sock_gid" = "0" ]; then' >> /home/vscode/entrypoint.sh && \
+    echo '    sudo chmod 666 /var/run/docker.sock 2>/dev/null || true' >> /home/vscode/entrypoint.sh && \
+    echo '  elif [ -n "$sock_gid" ]; then' >> /home/vscode/entrypoint.sh && \
+    echo '    if ! getent group "$sock_gid" >/dev/null 2>&1; then' >> /home/vscode/entrypoint.sh && \
+    echo '      sudo groupadd -g "$sock_gid" docker-host 2>/dev/null || true' >> /home/vscode/entrypoint.sh && \
+    echo '    fi' >> /home/vscode/entrypoint.sh && \
+    echo '    sock_group=$(getent group "$sock_gid" | cut -d: -f1)' >> /home/vscode/entrypoint.sh && \
+    echo '    if [ -n "$sock_group" ] && ! id -nG "$USER" | tr " " "\n" | grep -qx "$sock_group"; then' >> /home/vscode/entrypoint.sh && \
+    echo '      sudo usermod -aG "$sock_group" "$USER" || true' >> /home/vscode/entrypoint.sh && \
+    echo '    fi' >> /home/vscode/entrypoint.sh && \
+    echo '  fi' >> /home/vscode/entrypoint.sh && \
+    echo 'fi' >> /home/vscode/entrypoint.sh && \
     echo '' >> /home/vscode/entrypoint.sh && \
     echo '# Set up Wine environment' >> /home/vscode/entrypoint.sh && \
     echo 'export WINEARCH=win64' >> /home/vscode/entrypoint.sh && \

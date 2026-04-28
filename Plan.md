@@ -1,3 +1,12 @@
+- Active update (2026-04-28): Devcontainer startup no longer pulls AtoM image
+  - Completed:
+    - Removed AtoM services (`atom-db`, `atom-cache`, `atom-host`) from `runServices` in root, app, and service devcontainer configs so VS Code startup does not attempt to pull `qubit/atom`.
+    - Preserved explicit AtoM lifecycle via stack scripts (`atom.stack.up` / `workspace.service.stack.up`) for users who need the hosted stack.
+  - Remaining:
+    - Reopen in container and confirm startup completes from all three entry points (superproject, app submodule, service submodule).
+  - Risks / follow-ups:
+    - If the AtoM stack is required locally, `ATOM_APP_IMAGE` must resolve to an accessible image (public tag or authenticated/private registry).
+
 - Active update (2026-04-27): Submodule topology preparation + devcontainer path fix
   - Completed:
     - Replaced the earlier multi-file devcontainer compose wiring with a single root `docker-compose.yml` that defines the superproject workspace, app workspace, service workspace, and hosted AtoM stack dependencies.
@@ -14,18 +23,58 @@
     - Until recursive submodule checkout is enforced in CI and local clone docs, builds may fail with missing directories.
     - Submodule pointer updates require explicit commits in the superproject; release process should define who owns version bump cadence for app vs service.
 
-- Active lane update (3.1.0 / 05-verification-runbook):
+- Active update (2026-04-28): Phase 3.1.0 host provisioning merged to origin/main + next phase planning
   - Completed:
-    - Added compose-based devcontainer profile joining workspace service with the hosted AtoM stack to support integrated local bring-up in a single container workflow.
-    - Added executable integrated verification gate suite at `__tests__/integrated-verification-gates.test.ts` for stack startup health, bootstrap registration, plugin route health, and host-shell IPC bridge access.
-    - Added CI wiring at `.github/workflows/integrated-verification.yml` to run the integrated gate in pull requests and manual dispatches.
-    - Published runbook at `docs/verification-runbook-3.1.0.md` with exact reset, bring-up, verification, teardown, and CI steps.
-    - Updated `.github/fleet/3.1.0/manifest.yaml` with lane readiness, blockers, PR metadata, and verification gate outcomes.
+    - ✅ 3.1.0 fleet merged to origin/main with all lanes (01-05) integrated
+    - ✅ AtoM host stack definition, bootstrap automation, plugin runtime binding, workbench host-shell slice, and verification runbook all delivered
+    - ✅ Fixed SQLite migration syntax errors (invalid IF NOT EXISTS in ALTER TABLE)
+    - ✅ Enhanced AtoM plugin API client error diagnostics for non-JSON responses
+    - ✅ SSH agent forwarding configured for devcontainer submodule access
   - Remaining:
-    - Conductor lane merge of verification lane PR into `phase/3.1.0`.
-    - Final integrated phase-branch execution record capture after conductor merge.
+    - Plan and scope 3.2.0 phase (PWA/offline sync for workbench routes)
+    - Open 3.2.0 fleet orchestration and lane decomposition
   - Risks / follow-ups:
-    - Integrated gate validates contract-level startup/bridge behavior; full desktop runtime smoke still depends on conductor-level integrated phase validation.
+    - Phase 3 plugin foundation is stable; Phase 4 (graph explorer, reproducibility) depends on 3.2.0 offline-sync completion
+    - Submodule pointer updates require explicit commits in superproject; ensure release process owns version bump cadence
+
+## Phase 3.2.0 Planning (PWA/Offline Sync for Workbench)
+
+### Phase contract (draft)
+
+- Phase name: PWA offline-sync bridge for workbench routes
+- Planned version: `3.2.0`
+- Version rationale: additive offline support for workbench plugin-backed routes (perpetrators, victims, events); builds on stable 3.1.0 plugin foundation
+- Allowed change class: minor (offline queue/replay, IndexedDB extensions, sync bridge endpoints)
+- Scope guardrail: restrict to workbench offline state management; defer full-app sync policy to 3.3.x
+- Target merge: `origin/main` after phase/3.2.0 verification
+
+### Preliminary lane decomposition (requires contractor review/approval)
+
+- `[3.2.0][00-conductor]` Integrate phase 3.2.0 offline-sync fleet
+  - Owned surface: `phase/3.2.0` governance, manifest, merge policy, final PR
+- `[3.2.0][01-indexeddb-extension]` Extend IndexedDB cache for plugin-backed routes
+  - Owned surface: data model extensions, cache layer schema updates
+- `[3.2.0][02-offline-queue]` Implement offline action queue and replay logic
+  - Owned surface: queue persistence, replay state machine, conflictresolution stubs
+- `[3.2.0][03-sync-bridge]` Add plugin sync bridge endpoints and status
+  - Owned surface: plugin sync routes, status reporting, queuedaction polling
+- `[3.2.0][04-workbench-offline]` Integrate offline UI indicators and queue status
+  - Owned surface: workbench offline mode UI, sync status display, manual sync triggers
+- `[3.2.0][05-verification]` Verify offline queue, sync replay, and bridge behavior
+  - Owned surface: offline scenario tests, sync bridge contract tests, integration smoke checks
+
+### Dependency notes
+
+- Lanes 01-02 can run in parallel (both IndexedDB/queue infrastructure)
+- Lane 03 depends on lanes 01-02 (sync bridge routes need IndexedDB + queue)
+- Lane 04 depends on lane 03 (UI needs bridge endpoints)
+- Lane 05 runs after all worker lanes merged
+
+### Next steps
+
+- Obtain explicit approval on lane scope and decomposition
+- Create `phase/3.2.0` branch and publish manifest
+- Delegate lanes to cloud agents
 
 - Phase 3 lane closeout status (archived snapshot):
   - Completed: event_actor_role, claim, and claim_evidence tables added with FK wiring; default event-role vocabulary seeding added; basic event-role and role-claim CRUD endpoints implemented.
