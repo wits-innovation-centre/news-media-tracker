@@ -1,3 +1,16 @@
+- Active update (2026-04-28): 3.1.1 AtoM stack readiness check
+  - Completed:
+    - Replaced the missing qubit/atom image pull with a source build from Artefactual AtoM stable/2.10.x in [docker-compose.yml](docker-compose.yml) and [srvc.atom/infrastructure/atom-stack/docker-compose.yml](srvc.atom/infrastructure/atom-stack/docker-compose.yml).
+    - Added a baked nginx host image in [srvc.atom/infrastructure/atom-stack/nginx/Dockerfile](srvc.atom/infrastructure/atom-stack/nginx/Dockerfile) so atom-host no longer depends on a fragile file bind mount for default.conf.
+    - Verified the atom image can build successfully with the classic Docker builder.
+  - Remaining:
+    - Align the local stack with upstream AtoM runtime dependencies (at minimum Elasticsearch, Memcached, Gearmand, and any required worker/service wiring).
+    - Add the required AtoM environment contract so the atom container stops restarting (currently missing ATOM_ELASTICSEARCH_HOST and related service configuration).
+    - Re-run the hosted plugin endpoint verification and confirm JSON responses replace the current stub path.
+  - Risks / follow-ups:
+    - 3.1.1 is not yet releasable; the current stack topology is still incomplete relative to upstream AtoM compose expectations.
+    - The existing Redis-backed atom-cache service does not match upstream AtoM's documented Memcached dependency and may need redesign rather than incremental patching.
+
 - Active update (2026-04-28): Devcontainer startup no longer pulls AtoM image
   - Completed:
     - Removed AtoM services (`atom-db`, `atom-cache`, `atom-host`) from `runServices` in root, app, and service devcontainer configs so VS Code startup does not attempt to pull `qubit/atom`.

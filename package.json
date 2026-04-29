@@ -1,6 +1,6 @@
 {
   "name": "news-media-tracker",
-  "version": "3.0.1",
+  "version": "3.1.1",
   "private": true,
   "description": "Superproject orchestration workspace for app.news-media-tracker and srvc.atom.",
   "repository": {
@@ -20,10 +20,10 @@
     "workspace.app.lint": "npm --prefix app.news-media-tracker run lint",
     "workspace.app.test": "npm --prefix app.news-media-tracker run test",
     "workspace.app.verify.integrated": "npm --prefix app.news-media-tracker run verify.integrated",
-    "workspace.service.stack.up": "docker compose --profile atom-stack up -d --wait atom-db atom-cache atom atom-host",
-    "workspace.service.stack.ps": "docker compose --profile atom-stack ps atom-db atom-cache atom atom-host",
-    "workspace.service.stack.readiness": "docker compose --profile atom-stack ps atom-db atom-cache atom atom-host",
-    "workspace.service.stack.down": "docker compose --profile atom-stack stop atom-host atom atom-cache atom-db",
+    "workspace.service.stack.up": "docker compose --profile atom-stack up -d atom-db memcached gearmand elasticsearch atom atom_worker atom-host",
+    "workspace.service.stack.ps": "docker compose --profile atom-stack ps atom-db memcached gearmand elasticsearch atom atom_worker atom-host",
+    "workspace.service.stack.readiness": "docker compose --profile atom-stack ps atom-db memcached gearmand elasticsearch atom atom_worker atom-host",
+    "workspace.service.stack.down": "docker compose --profile atom-stack stop atom-host atom atom_worker elasticsearch gearmand memcached atom-db",
     "workspace.service.bootstrap": "npm --prefix srvc.atom run atom.bootstrap",
     "workspace.service.bootstrap.force": "npm --prefix srvc.atom run atom.bootstrap.force",
     "workspace.service.bootstrap.reset": "npm --prefix srvc.atom run atom.bootstrap.reset",
