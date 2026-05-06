@@ -1,4 +1,18 @@
-- Active update (2026-05-06): AtoM-first embedded plugin capture model
+- Active update (2026-05-06): Phase 3.1.2 embedded-capture foundation merged to origin/main
+  - Completed:
+    - ✅ 3.1.2 fleet merged to origin/main with all lanes (01-04) integrated
+    - ✅ Field ownership contract finalized: AtoM-native vs plugin-owned vs linked-by-id field matrix
+    - ✅ Plugin form-extension hooks implemented for event/case and participant-adjacent AtoM capture views with style/token parity
+    - ✅ AtoM lifecycle-to-plugin sync bridge wired: create/update hooks trigger deterministic plugin persistence writes
+    - ✅ End-to-end embedded capture path verified: AtoM form entry → hook fire → plugin write → plugin retrieval
+    - ✅ Regression check confirmed existing workbench fallback routes remain intact
+    - ✅ UX parity validated: injected plugin controls match AtoM visual language
+  - Next phase: Phase 3.2.0 planning (PWA offline-sync for workbench routes) — approve contract and launch fleet
+  - Risks / follow-ups:
+    - Plugin route mount at `/plugins/homicide-tracker/*` remains unresolved; embedded runtime continues to use hosted fallback at `/api/workbench/[[...pluginPath]]`
+    - Phase 3.2.0 should prioritize offline queue and IndexedDB extensions for workbench routes before graph explorer work
+
+- Completed update (2026-05-06): AtoM-first embedded plugin capture model architecture decision
   - Decision confirmed:
     - AtoM remains the primary application and source-of-truth capture workflow.
     - The homicide tracker plugin extends existing AtoM capture surfaces instead of operating as a parallel standalone capture flow.
@@ -29,7 +43,7 @@
 - Target merge: `origin/main` after integrated verification on `phase/3.1.2`
 - UX/style priority: embedded plugin UI must match AtoM design language (layout, typography, spacing, controls, validation messaging, and interaction behavior) unless an explicit divergence is approved.
 
-### Fleet-oriented lane decomposition (draft for approval)
+### Fleet-oriented lane decomposition (completed)
 
 - `[3.1.2][00-conductor]` Integrate phase 3.1.2 embedded-capture fleet
   - Owned surface: `phase/3.1.2` governance, semver/scope enforcement, merge sequencing, final PR to `origin/main`
@@ -57,12 +71,12 @@
 - Track plugin mount readiness as a parallel risk item; do not block 01/02 on host-route mount restoration.
 - Gate final merge on 04 verification sign-off and no unresolved ownership conflicts.
 
-### Fleet launch plan (pending approval)
+### Fleet launch plan (completed)
 
 - Fleet identity token: 3.1.2
-- Approval state: pending explicit approval
-- Phase branch: phase/3.1.2
-- Manifest path: .github/fleet/3.1.2/manifest.yaml
+- Approval state: merged to origin/main
+- Phase branch: phase/3.1.2 (merged)
+- Manifest path: .github/fleet/3.1.2/manifest.yaml (deleted post-merge)
 - Merge policy: eager-after-green into phase/3.1.2, then one final PR to origin/main
 - Allowed change class enforcement:
   - Accept: additive integration contracts, extension hooks, lifecycle sync, verification artifacts

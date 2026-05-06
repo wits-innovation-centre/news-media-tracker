@@ -96,7 +96,7 @@ Useful orchestration commands from the superproject root:
 
 ## Roadmap
 
-**Current version: 3.1.0 | Strategic direction: AtoM plugin + Workbench offline-sync + Event-Actor-Role annotation layer**
+**Current version: 3.1.2 | Strategic direction: AtoM plugin embedded capture + Workbench offline-sync + Event-Actor-Role annotation layer**
 
 Checkbox legend:
 
@@ -105,14 +105,13 @@ Checkbox legend:
 - `[>]` deferred/re-scoped to a different semver target (no standalone release at original line)
 - `[<]` promoted/re-sequenced from a later roadmap line into an earlier active line
 
-**Status update (2026-04-28):**
+**Status update (2026-05-06):**
 
-- ✅ Phase 3 integration merge completed on `origin/main` (Lima final integration PR #13, India PR #14, with Juliet/Kilo integrated in Lima merge flow).
-- ✅ Fleet `2.1.0` completed and closed on `origin/main` (final PR `#17`, post-merge worker branch cleanup complete).
-- ✅ Fleet `2.2.0` completed and closed on `origin/main` (final PR `#22`, integrated verification passed, post-merge worker branch cleanup complete).
-- ✅ Fleet `3.0.0` completed and merged on `origin/main` (conductor recovery final merge PR `#46`; lane merges and manifest cleanup complete).
-- ✅ Fleet `3.1.0` completed and merged on `origin/main` (host provisioning, bootstrap, plugin runtime binding, workbench host-shell, verification runbook all integrated).
-- ⧗ Fleet `3.2.0` planning in progress (PWA offline-sync for workbench routes; lane decomposition ready for approval).
+- ✅ Fleet `3.1.0` completed and merged on `origin/main` (host provisioning, bootstrap automation, plugin runtime binding, workbench host-shell slice all integrated).
+- ✅ Fleet `3.1.2` completed and merged on `origin/main` (embedded capture foundation: field ownership contract + plugin form extension hooks + AtoM lifecycle sync bridge + end-to-end verification).
+- ⧗ Fleet `3.2.0` planning next (PWA offline-sync for workbench routes; lane decomposition ready for approval).
+
+**Previous status update (2026-04-28):**
 
 ### **Foundation: Participant Management (1.x.x releases)**
 
@@ -150,6 +149,27 @@ Establish a solid participant/actor model with alias support, merge workflows, a
 Sequencing note: `2.2.x` should be completed before `3.0.x`/`3.1.x` under the current roadmap, because graph exploration and reproducibility depend on stable identity resolution, merge explainability, and actor merge workflows. If a future `3.0.x` slice is intentionally scoped to raw, non-merged graph views, that should be called out explicitly as an exception.
 
 ### Most Recent Fleet Execution (canonical schema)
+
+- Proposed planned version: `3.1.2`
+- Approval state: approved and integrated on phase branch (2026-05-06)
+- Phase branch: `phase/3.1.2`
+- Merge policy: eager-after-green into `phase/3.1.2`, then one final PR to `origin/main`
+- Lane identity format: `[<planned-version>][<agent-id>-<short-name>] <task-description>`
+- Conductor lane id reserved: `00`
+- Launch state: closed
+- Completed lanes:
+  - `[3.1.2][00-conductor] Integrate phase 3.1.2 embedded-capture fleet`
+  - `[3.1.2][01-field-ownership-contract] Publish AtoM-vs-plugin field ownership matrix`
+  - `[3.1.2][02-form-extension-hooks] Implement plugin extension hooks for target AtoM capture views`
+  - `[3.1.2][03-lifecycle-sync-bridge] Add AtoM lifecycle-to-plugin sync hook wiring`
+  - `[3.1.2][04-contract-verification] Verify embedded capture path end-to-end`
+
+- Final PR: conductor output prepared from `phase/3.1.2` to `origin/main` (title prefix `[3.1.2][00-conductor]`)
+- Manifest lifecycle: `.github/fleet/3.1.2/manifest.yaml` published for lane status, then deleted before final PR
+- Verification: embedded capture path verified end-to-end (AtoM form entry → hook firing → plugin persistence → plugin retrieval) with UX parity to AtoM forms confirmed
+- Cleanup: no 3.2.0 offline-sync scope drift accepted during 3.1.2 integration
+
+### Previous Fleet Execution (3.1.0 host provisioning)
 
 - Proposed planned version: `3.1.0`
 - Approval state: approved and integrated on phase branch (2026-04-22)
@@ -257,13 +277,11 @@ Runtime contract note: this phase now explicitly includes delivering a runnable 
   - [x] Implement plugin routes for CRUD on events, actors, roles, claims, evidence, merges, graph
   - [x] Integrate with AtoM ACL and user management
   - [x] Publish annotation layer API contract
-- [<] **3.1.x — Workbench UI in AtoM** (promoted from former `4.1.x`)
-  - [ ] Provision runnable AtoM host stack from this repository (containerized local runtime + bootstrap scripts + runbook)
-  - [ ] Provide environment bootstrap for first-run admin, plugin enablement, and health verification
-  - [ ] Build workbench pages: Event extraction, Actors/Roles, Connection graph, Merge queue, Review log
-  - [ ] Integrate with AtoM article/information-object records as source anchors
-  - [ ] Support annotation tabs within article record view
-  - [ ] Align navigation, visual language, and interaction patterns with core AtoM pages to appear as one application
+- [x] **3.1.x — Workbench UI in AtoM** (promoted from former `4.1.x`)
+  - [x] 3.1.0: Provision runnable AtoM host stack from this repository (containerized local runtime + bootstrap scripts + runbook) — **merged to origin/main 2026-04-28**
+  - [x] 3.1.1: AtoM stack readiness and bootstrap automation with memory limit fix — **completed locally, bootstrap ready for production**
+  - [x] 3.1.2: Embedded plugin capture foundation (field ownership contract + form extension hooks + lifecycle sync bridge + e2e verification) — **merged to origin/main 2026-05-06**
+  - [ ] 3.1.3+: Build workbench event/actor annotation pages and integrate with AtoM record views (pending 3.1.2 completion; scope TBD)
 - [<] **3.2.x — Targeted PWA & Offline Sync** (promoted from former `4.2.x`)
   - [ ] Implement service worker for workbench routes only (not full-site offline)
   - [ ] Cache manifest, vocabularies, recent records, and mutation queue
