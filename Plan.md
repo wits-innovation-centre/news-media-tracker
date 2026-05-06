@@ -1,3 +1,116 @@
+- Active update (2026-05-06): AtoM-first embedded plugin capture model
+  - Decision confirmed:
+    - AtoM remains the primary application and source-of-truth capture workflow.
+    - The homicide tracker plugin extends existing AtoM capture surfaces instead of operating as a parallel standalone capture flow.
+    - Plugin APIs remain a bridge/integration surface, but the target UX is in-form and in-workflow augmentation inside AtoM.
+  - Scope boundaries:
+    - Avoid direct core-file patching in AtoM; use plugin extension points and route bindings.
+    - Keep plugin-owned fields/entities isolated (schema + services) while linking to AtoM record identifiers.
+    - Preserve backward compatibility for existing workbench/offline flows during migration.
+    - Treat AtoM visual and interaction parity as a first-class requirement for embedded plugin UI surfaces.
+  - Planned integration checkpoints:
+    - Define canonical mapping of AtoM-native capture fields vs plugin-owned homicide fields.
+    - Add plugin form-extension hooks to relevant AtoM data-entry views (event/case and participant-adjacent flows).
+    - Implement lifecycle sync hooks so AtoM create/update events trigger plugin persistence updates.
+    - Verify end-to-end capture from AtoM UI through plugin persistence and retrieval contracts.
+  - Risks / follow-ups:
+    - Plugin route mount in current local stack is still unresolved (host returns HTML 404 at `/plugins/homicide-tracker/*`), so embedded runtime validation currently relies on hosted fallback routes.
+    - Field ownership boundaries must be finalized before lane delegation to avoid dual-write and schema drift.
+
+## Phase 3.1.2 Planning (AtoM-Embedded Capture Foundation)
+
+### Phase contract
+
+- Phase name: AtoM-embedded capture integration foundation
+- Planned version: `3.1.2`
+- Version rationale: additive alignment of capture ownership and extension hooks before `3.2.0` offline-sync implementation
+- Allowed change class: minor (integration contracts, extension wiring, lifecycle sync hooks, verification)
+- Scope guardrail: no full offline queue redesign; no graph explorer or pilot hardening scope
+- Target merge: `origin/main` after integrated verification on `phase/3.1.2`
+- UX/style priority: embedded plugin UI must match AtoM design language (layout, typography, spacing, controls, validation messaging, and interaction behavior) unless an explicit divergence is approved.
+
+### Fleet-oriented lane decomposition (draft for approval)
+
+- `[3.1.2][00-conductor]` Integrate phase 3.1.2 embedded-capture fleet
+  - Owned surface: `phase/3.1.2` governance, semver/scope enforcement, merge sequencing, final PR to `origin/main`
+- `[3.1.2][01-field-ownership-contract]` Publish AtoM-vs-plugin field ownership matrix
+  - Owned surface: ownership contract docs, DTO boundary definitions, persistence ownership rules
+- `[3.1.2][02-form-extension-hooks]` Implement plugin extension hooks for target AtoM capture views
+  - Owned surface: plugin hook registration and view-level injection points for event/case and participant-adjacent capture, including AtoM style/token alignment for injected controls
+- `[3.1.2][03-lifecycle-sync-bridge]` Add AtoM lifecycle-to-plugin sync hook wiring
+  - Owned surface: create/update hook handlers, id-linking policy, sync event contracts
+- `[3.1.2][04-contract-verification]` Verify embedded capture path end-to-end
+  - Owned surface: integration checks from AtoM form submit through plugin persistence and retrieval contracts
+
+### Dependency and merge notes
+
+- Lanes 01 and 02 can run in parallel (contract definition and UI hook scaffolding on non-overlapping surfaces).
+- Lane 03 depends on lane 01 (ownership contract required before lifecycle write behavior is finalized).
+- Lane 04 depends on lanes 02 and 03 (verification after hooks and lifecycle wiring are merged).
+- Conductor lane governs merge order and opens the final PR to `origin/main`.
+
+### Immediate launch checklist
+
+- Approve `3.1.2` semver contract and scope guardrail for fleet launch.
+- Create `phase/3.1.2` branch and publish manifest.
+- Delegate lanes 01-04 with owned-surface boundaries exactly as listed above.
+- Track plugin mount readiness as a parallel risk item; do not block 01/02 on host-route mount restoration.
+- Gate final merge on 04 verification sign-off and no unresolved ownership conflicts.
+
+### Fleet launch plan (pending approval)
+
+- Fleet identity token: 3.1.2
+- Approval state: pending explicit approval
+- Phase branch: phase/3.1.2
+- Manifest path: .github/fleet/3.1.2/manifest.yaml
+- Merge policy: eager-after-green into phase/3.1.2, then one final PR to origin/main
+- Allowed change class enforcement:
+  - Accept: additive integration contracts, extension hooks, lifecycle sync, verification artifacts
+  - Reject: offline queue redesign, broad PWA scope expansion, graph/pilot features
+
+### Lane identity matrix
+
+- [3.1.2][00-conductor] Integrate phase 3.1.2 embedded-capture fleet
+  - Branch: lane/3.1.2/00-conductor (operates on phase/3.1.2 governance)
+  - PR title prefix: [3.1.2][00-conductor]
+- [3.1.2][01-field-ownership-contract] Publish AtoM-vs-plugin field ownership matrix
+  - Branch: lane/3.1.2/01-field-ownership-contract
+  - PR title prefix: [3.1.2][01-field-ownership-contract]
+- [3.1.2][02-form-extension-hooks] Implement plugin extension hooks
+  - Branch: lane/3.1.2/02-form-extension-hooks
+  - PR title prefix: [3.1.2][02-form-extension-hooks]
+- [3.1.2][03-lifecycle-sync-bridge] Implement lifecycle sync bridge
+  - Branch: lane/3.1.2/03-lifecycle-sync-bridge
+  - PR title prefix: [3.1.2][03-lifecycle-sync-bridge]
+- [3.1.2][04-contract-verification] Verify embedded capture flow
+  - Branch: lane/3.1.2/04-contract-verification
+  - PR title prefix: [3.1.2][04-contract-verification]
+
+### Acceptance gates per lane
+
+- 01-field-ownership-contract:
+  - Field ownership matrix finalized with no unresolved dual-write fields
+  - DTO/persistence boundary rules documented and approved
+- 02-form-extension-hooks:
+  - Hook insertion points compile and render for targeted AtoM capture views
+  - No direct core AtoM patching introduced
+  - Injected plugin controls match AtoM visual language and form interaction conventions
+- 03-lifecycle-sync-bridge:
+  - Create/update lifecycle hooks emit deterministic plugin persistence actions
+  - Id-linking behavior documented and tested for create and update paths
+- 04-contract-verification:
+  - End-to-end capture scenario passes from AtoM form entry to plugin retrieval
+  - Regression check confirms existing workbench fallback behavior remains intact
+  - UX parity check passes for embedded plugin surfaces against baseline AtoM form patterns
+
+### Conductor merge sequence
+
+1. Conductor creates phase/3.1.2 and publishes .github/fleet/3.1.2/manifest.yaml.
+2. Merge 01 and 02 in either order after green checks.
+3. Merge 03 after 01 is merged and contract boundaries are stable.
+4. Merge 04 after 02 and 03 are merged.
+5. Conductor records structured summary in final PR body and deletes manifest before opening final PR to origin/main.
+
 - Active update (2026-04-28): 3.1.1 AtoM stack readiness check
   - Completed:
     - Replaced the missing qubit/atom image pull with a source build from Artefactual AtoM stable/2.10.x in [docker-compose.yml](docker-compose.yml) and [srvc.atom/infrastructure/atom-stack/docker-compose.yml](srvc.atom/infrastructure/atom-stack/docker-compose.yml).
