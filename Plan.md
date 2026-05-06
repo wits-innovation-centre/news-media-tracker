@@ -12,6 +12,14 @@
     - Plugin route mount at `/plugins/homicide-tracker/*` remains unresolved; embedded runtime continues to use hosted fallback at `/api/workbench/[[...pluginPath]]`
     - Phase 3.2.0 should prioritize offline queue and IndexedDB extensions for workbench routes before graph explorer work
 
+- Ownership note (2026-05-06): native PHP AtoM plugin planning moved to `srvc.atom/PLAN.md`
+  - Reason:
+    - The native article-plugin line is owned by the AtoM service repository and should evolve there as its own release track.
+  - Current service-owned planning line:
+    - `srvc.atom/PLAN.md` version `1.0.0` covers the first draft native plugin shell, article menu entry, and AtoM-styled form path.
+  - Migration note:
+    - If the client approves the native plugin draft, continue migration planning in `srvc.atom/PLAN.md` rather than the superproject plan.
+
 - Completed update (2026-05-06): AtoM-first embedded plugin capture model architecture decision
   - Decision confirmed:
     - AtoM remains the primary application and source-of-truth capture workflow.

@@ -1,6 +1,6 @@
 {
   "name": "news-media-tracker",
-  "version": "3.1.1",
+  "version": "1.0.0",
   "private": true,
   "description": "Superproject orchestration workspace for app.news-media-tracker and srvc.atom.",
   "repository": {
@@ -28,6 +28,7 @@
     "workspace.service.bootstrap.force": "npm --prefix srvc.atom run atom.bootstrap.force",
     "workspace.service.bootstrap.reset": "npm --prefix srvc.atom run atom.bootstrap.reset",
     "workspace.service.bootstrap.reseed": "npm --prefix srvc.atom run atom.bootstrap.reseed",
+    "workspace.embedded.dev": "bash scripts/embedded-capture-dev.sh",
     "dev": "npm run workspace.app.dev",
     "start": "npm run workspace.app.start",
     "build": "npm run workspace.app.build",
