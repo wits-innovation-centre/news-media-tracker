@@ -54,7 +54,7 @@ describe('sync replay bridge', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://plugin.example/api/workbench/sync/batch',
+      'https://plugin.example/api/sync/batch',
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
@@ -110,7 +110,7 @@ describe('sync replay bridge', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:3000/api/workbench/sync/batch',
+      'http://localhost:3000/api/sync/batch',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer lane-06-acl-token',

@@ -27,7 +27,7 @@ type ReplayContext = {
   fetchImpl?: typeof fetch;
 };
 
-const PLUGIN_SYNC_BATCH_PATH = '/api/workbench/sync/batch';
+const PLUGIN_SYNC_BATCH_PATH = '/api/sync/batch';
 // Keep a bounded in-memory cache of recent replay ids to prevent duplicate writes.
 const MAX_REPLAY_CACHE_ENTRIES = 500;
 const REPLAYABLE_ENDPOINT_PREFIXES = [

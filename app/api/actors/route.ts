@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { and, eq, inArray, like, or, sql, type SQL } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import type { ActorPayload } from '../../../lib/contracts/plugin-api-contract';
 import { dbm, DatabaseManagerServer } from '../../../lib/db/server';
 import {
   actors,
@@ -14,11 +13,6 @@ import {
   type NewActorAlias,
   type NewActorIdentifier,
 } from '../../../lib/db/schema';
-import {
-  createPluginResource,
-  isWorkbenchPluginApiEnabled,
-  listPluginResource,
-} from '../../../lib/workbench/plugin-api-client';
 import { splitAliases } from '../participant/[role]/utils';
 
 const ensureServerDatabase = async () => {
@@ -79,38 +73,6 @@ export async function GET(request: Request) {
     const limit = Number.isNaN(parsedLimit) ? 50 : parsedLimit;
     const offset = Number.isNaN(parsedOffset) ? 0 : parsedOffset;
     const status = (url.searchParams.get('status') || '').trim();
-
-    if (isWorkbenchPluginApiEnabled()) {
-      const { items } = await listPluginResource<ActorPayload>('actors', {
-        search,
-        status,
-        limit,
-        offset,
-      });
-      return NextResponse.json({
-        success: true,
-        data: items.map((item) => ({
-          ...item,
-          status:
-            typeof (item as unknown as Record<string, unknown>).status ===
-            'string'
-              ? (item as unknown as Record<string, string>).status
-              : 'active',
-          schemaProfileId:
-            typeof (item as unknown as Record<string, unknown>)
-              .schemaProfileId === 'string'
-              ? (item as unknown as Record<string, string>).schemaProfileId
-              : null,
-          identifiers: [
-            {
-              namespace: 'primary_name',
-              value: item.canonicalLabel,
-              isPrimary: true,
-            },
-          ],
-        })),
-      });
-    }
 
     const db = await ensureServerDatabase();
     const whereConditions: SQL[] = [];
@@ -232,36 +194,6 @@ export async function POST(request: Request) {
       updatedAt: now,
     };
     const aliasValues = normaliseAliasInput(payload.aliases);
-
-    if (isWorkbenchPluginApiEnabled()) {
-      const created = await createPluginResource<
-        Omit<ActorPayload, 'id'>,
-        ActorPayload
-      >('actors', {
-        canonicalLabel,
-        actorKind,
-        aliases: aliasValues,
-      });
-
-      return NextResponse.json(
-        {
-          success: true,
-          data: {
-            ...created,
-            status,
-            schemaProfileId,
-            identifiers: [
-              {
-                namespace: 'primary_name',
-                value: created.canonicalLabel,
-                isPrimary: true,
-              },
-            ],
-          },
-        },
-        { status: 201 },
-      );
-    }
 
     const db = await ensureServerDatabase();
     const aliasRows: NewActorAlias[] = aliasValues.map((alias) => ({
