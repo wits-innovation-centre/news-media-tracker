@@ -1,71 +1,19 @@
 {
-  "name": "Homicide Media Tracker Superproject",
-  "dockerComposeFile": [
-    "../docker-compose.yml"
-  ],
-  "service": "workspace-superproject",
-  "runServices": [
-    "workspace-app",
-    "workspace-service",
-    "workspace-superproject"
-  ],
-  "workspaceFolder": "/workspace",
-  "shutdownAction": "stopCompose",
-  "postCreateCommand": "/workspace/.devcontainer/post-create.sh",
-  "containerEnv": {
-    "POSTGRES_URL_NO_SSL": "${localEnv:POSTGRES_URL_NO_SSL}",
-    "POSTGRES_USER": "${localEnv:POSTGRES_USER}",
-    "POSTGRES_PASSWORD": "${localEnv:POSTGRES_PASSWORD}",
-    "POSTGRES_DB": "${localEnv:POSTGRES_DB}",
-    "POSTGRES_HOST": "${localEnv:POSTGRES_HOST}",
-    "POSTGRES_PORT_INT": "${localEnv:POSTGRES_PORT_INT}",
-    "ENV": "dev",
-    "WINEARCH": "win64",
-    "WINEPREFIX": "/home/vscode/.wine",
-    "DISPLAY": "${localEnv:DISPLAY}",
-    "WORKBENCH_PLUGIN_API_BASE_URL": "http://atom-host:8080/plugins/homicide-tracker/api"
-  },
-  "forwardPorts": [
-    3000,
-    3001,
-    62080,
-    63306,
-    63790
-  ],
-  "portsAttributes": {
-    "3000": {
-      "label": "Next.js Dev Server"
+    "name": "news-media-tracker",
+    "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+    "workspaceFolder": "/workspace",
+    "forwardPorts": [
+        3000,
+        3001
+    ],
+    "portsAttributes": {
+        "3000": {
+            "label": "Next.js Dev Server"
+        },
+        "3001": {
+            "label": "Electron Dev"
+        }
     },
-    "3001": {
-      "label": "Electron Dev"
-    },
-    "62080": {
-      "label": "AtoM Host"
-    },
-    "63306": {
-      "label": "AtoM Database (MariaDB)"
-    },
-    "63790": {
-      "label": "AtoM Cache (Redis)"
-    }
-  },
-  "remoteUser": "vscode",
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "ms-vscode-remote.remote-containers",
-        "ms-vscode.vscode-typescript-next",
-        "Shibu.nextjs-js-ts-code-snippets",
-        "Postman.postman-for-vscode",
-        "ms-kubernetes-tools.vscode-kubernetes-tools",
-        "bradlc.vscode-tailwindcss",
-        "mongodb.mongodb-vscode",
-        "ms-azuretools.vscode-docker",
-        "donjayamanne.githistory",
-        "christian-kohler.npm-intellisense",
-        "esbenp.prettier-vscode",
-        "dbaeumer.vscode-eslint"
-      ]
-    }
-  }
+    "postCreateCommand": "npm install --legacy-peer-deps",
+    "remoteUser": "node"
 }

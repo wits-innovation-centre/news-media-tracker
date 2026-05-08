@@ -44,9 +44,9 @@ npm-debug.log.*
 
 # environment variables
 .env
-.atom-host/
 
 *.db
 
 # remove generated cache
 public/cache.json
+tsconfig.tsbuildinfo
