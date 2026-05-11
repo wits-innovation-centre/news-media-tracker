@@ -18,6 +18,10 @@ export type ReplayResult = {
   error?: string;
 };
 
+type IndexedReplayOperation = ReplayOperation & {
+  index: number;
+};
+
 type ReplayContext = {
   requestOrigin: string;
   remoteBaseUrl?: string;
@@ -155,51 +159,59 @@ function toBooleanReplayStatus(value: unknown): boolean | null {
   return null;
 }
 
+function collectAckedQueueIds(results: ReplayResult[]): number[] {
+  return Array.from(
+    new Set(
+      results.flatMap((result) =>
+        result.status !== 'failed' && typeof result.queueId === 'number'
+          ? [result.queueId]
+          : [],
+      ),
+    ),
+  );
+}
+
 export async function replayOfflineOperations(
   operations: ReplayOperation[],
   context: ReplayContext,
 ): Promise<{ ackedQueueIds: number[]; results: ReplayResult[] }> {
   const fetchImpl = context.fetchImpl ?? fetch;
-  const ackedQueueIds: number[] = [];
-  const results: ReplayResult[] = [];
-  const pendingOperations: ReplayOperation[] = [];
+  const orderedResults: Array<ReplayResult | undefined> = new Array(
+    operations.length,
+  );
+  const pendingOperations: IndexedReplayOperation[] = [];
   const seenRequestIds = new Set<string>();
 
-  for (const operation of operations) {
+  for (const [index, operation] of operations.entries()) {
     const { queueId, requestId, method, endpoint, body } = operation;
 
     if (requestId) {
       const cachedResult = context.replayCache.get(requestId);
       if (cachedResult) {
-        results.push({
+        orderedResults[index] = {
           ...cachedResult,
           queueId,
           requestId,
           status: 'duplicate',
-        });
-        if (typeof queueId === 'number') {
-          ackedQueueIds.push(queueId);
-        }
+        };
         continue;
       }
 
       if (seenRequestIds.has(requestId)) {
-        results.push({
+        orderedResults[index] = {
           queueId,
           requestId,
           method,
           endpoint,
           status: 'duplicate',
-        });
-        if (typeof queueId === 'number') {
-          ackedQueueIds.push(queueId);
-        }
+        };
         continue;
       }
       seenRequestIds.add(requestId);
     }
 
     pendingOperations.push({
+      index,
       queueId,
       requestId,
       method,
@@ -209,7 +221,13 @@ export async function replayOfflineOperations(
   }
 
   if (pendingOperations.length === 0) {
-    return { ackedQueueIds, results };
+    const results = orderedResults.filter(
+      (result): result is ReplayResult => typeof result !== 'undefined',
+    );
+    return {
+      ackedQueueIds: collectAckedQueueIds(results),
+      results,
+    };
   }
 
   const requestHeaders: Record<string, string> = {
@@ -314,10 +332,7 @@ export async function replayOfflineOperations(
         error: replayed ? undefined : `${response.status} ${response.statusText}`,
       };
 
-      results.push(replayResult);
-      if (replayed && typeof operation.queueId === 'number') {
-        ackedQueueIds.push(operation.queueId);
-      }
+      orderedResults[operation.index] = replayResult;
 
       if (replayed && operation.requestId) {
         context.replayCache.set(operation.requestId, replayResult);
@@ -326,16 +341,21 @@ export async function replayOfflineOperations(
     }
   } catch (error) {
     for (const operation of pendingOperations) {
-      results.push({
+      orderedResults[operation.index] = {
         queueId: operation.queueId,
         requestId: operation.requestId,
         method: operation.method,
         endpoint: operation.endpoint,
         status: 'failed',
         error: error instanceof Error ? error.message : String(error),
-      });
+      };
     }
   }
+
+  const results = orderedResults.filter(
+    (result): result is ReplayResult => typeof result !== 'undefined',
+  );
+  const ackedQueueIds = collectAckedQueueIds(results);
 
   return { ackedQueueIds, results };
 }
