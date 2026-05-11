@@ -87,16 +87,23 @@ lanes:
     role: worker
     branch: lane/3.2.0/05-external-server-stack
     prNumber: null
-    status: planned
-    readiness: waiting
+    status: merged
+    readiness: ready
     ownedSurface:
       - docker-compose.yml
+      - Dockerfile
+      - .env.example
+      - .dockerignore
       - .devcontainer/devcontainer.json
       - README.md
-    blockers:
-      - docker-compose.yml currently absent; lane must create stack definition
+    blockers: []
     verification:
-      - one-command external server startup check
+      - docker-compose.yml created with external-server profile (tracker-sqld + tracker-app)
+      - tracker-sqld uses ghcr.io/tursodatabase/libsql-server with persistent named volume
+      - tracker-app built from Dockerfile with persistent named volume for /app/data
+      - one-command startup documented in README (docker compose --profile external-server up -d)
+      - .env.example documents all required env vars with safe defaults
+      - devcontainer forwards sqld port 8080
   - laneId: 06-local-server-packaging
     role: worker
     branch: lane/3.2.0/06-local-server-packaging

@@ -1,0 +1,34 @@
+# Files/directories excluded from the Docker build context.
+# Keeping the context small speeds up `docker compose build`.
+
+# Node dependencies (re-installed inside the container)
+node_modules
+
+# Next.js build artifacts (rebuilt inside the container)
+.next
+dist
+build
+release
+
+# Version control
+.git
+.gitignore
+
+# Dev tooling
+.github
+.devcontainer
+.eslintcache
+coverage
+
+# Editor / OS artefacts
+.DS_Store
+.idea
+*.log
+
+# Local environment files (never bake secrets into the image)
+.env
+.env.*
+!.env.example
+
+# Test output
+*.db

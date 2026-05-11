@@ -4,7 +4,8 @@
     "workspaceFolder": "/workspaces/Homicide-Media-Tracker",
     "forwardPorts": [
         3000,
-        3001
+        3001,
+        8080
     ],
     "portsAttributes": {
         "3000": {
@@ -12,6 +13,9 @@
         },
         "3001": {
             "label": "Electron Dev"
+        },
+        "8080": {
+            "label": "sqld Sync Target (external-server profile)"
         }
     },
     "postCreateCommand": "npm install --legacy-peer-deps",
