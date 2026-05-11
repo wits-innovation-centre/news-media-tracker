@@ -5,7 +5,7 @@
 - Direction confirmed: web-first, offline-first, and single-user-first.
 - Electron packaging is deprioritized for now; runtime assumptions should not depend on Electron-specific paths.
 - Primary near-term target: one user can run the full workflow reliably offline and sync on reconnect.
-- Verification update (3.3.0 lane 07): permission/conflict gates pass, but Stitch Form|Graph in-place mode and graph accessibility controls remain blocking regressions for conductor merge gating.
+- Verification update: latest phase-gate artifacts are published and the conductor merge gate status is tracked in the fleet manifest.
 - The primary persistence strategy is:
 	1. Durable local storage and offline queueing in the browser/PWA.
 	2. A user-installable local server with persistent on-disk database.

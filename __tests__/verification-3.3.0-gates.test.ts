@@ -25,7 +25,7 @@ describe('[gate-1] sharing permission enforcement', () => {
     ]);
   });
 
-  it('keeps richer visibility for editor role than viewer role', () => {
+  it('grants broader field visibility to editor role than viewer role', () => {
     expect(resolveVisibleFieldGroups('perpetrator', { role: 'editor' })).toEqual([
       'coreIdentity',
       'relationship',
@@ -68,7 +68,7 @@ describe('[gate-2] operation-log divergence handling', () => {
       'duplicate',
       'replayed',
     ]);
-    expect(result.ackedQueueIds.sort((left, right) => left - right)).toEqual([1, 2]);
+    expect(result.ackedQueueIds.sort((a, b) => a - b)).toEqual([1, 2]);
   });
 
   it('retries previously failed operations while preserving successful replay cache entries', async () => {
@@ -137,7 +137,7 @@ describe('[gate-2] operation-log divergence handling', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(secondReplay.ackedQueueIds.sort((left, right) => left - right)).toEqual([
+    expect(secondReplay.ackedQueueIds.sort((a, b) => a - b)).toEqual([
       10,
       11,
     ]);
@@ -194,20 +194,31 @@ describe('[gate-4] Stitch workspace UI and accessibility checks', () => {
   const readRootFile = (relativePath: string) =>
     fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 
-  it('flags missing in-place Form|Graph mode switching and graph controls as regressions', () => {
+  it('detects current absence of Form|Graph switching and graph controls (blocker signal)', () => {
     const pageSource = readRootFile('app/page.tsx');
     const inputSource = readRootFile('lib/components/input-homicide.tsx');
     const globalCss = readRootFile('app/globals.css');
 
-    const modeTogglePattern =
-      /Form\s*\|\s*Graph|Workspace Mode|role=['"]tablist['"]|aria-label=['"][^'"]*(Form|Graph|Workspace Mode)[^'"]*['"]/i;
+    const modeLabelPattern = /Form\s*\|\s*Graph|Workspace Mode/i;
+    const tablistPattern = /role=['"]tablist['"]/i;
+    const modeAriaLabelPattern =
+      /aria-label=['"][^'"]*(Form|Graph|Workspace Mode)[^'"]*['"]/i;
     const graphPattern = /Connected Graph|graph workspace|graph legend|graph controls/i;
     const keyboardPattern = /ArrowLeft|ArrowRight|onKeyDown|aria-controls/i;
 
     const combinedSource = `${pageSource}\n${inputSource}\n${globalCss}`;
 
-    expect(modeTogglePattern.test(combinedSource)).toBe(false);
-    expect(graphPattern.test(combinedSource)).toBe(false);
-    expect(keyboardPattern.test(combinedSource)).toBe(false);
+    const hasModeToggleContract =
+      modeLabelPattern.test(combinedSource) ||
+      tablistPattern.test(combinedSource) ||
+      modeAriaLabelPattern.test(combinedSource);
+    const hasGraphWorkspaceContract = graphPattern.test(combinedSource);
+    const hasKeyboardA11yContract = keyboardPattern.test(combinedSource);
+
+    // This is intentionally a regression detector for verification lane 07.
+    // When lane 06 UI implementation lands, these expectations must be inverted.
+    expect(hasModeToggleContract).toBe(false);
+    expect(hasGraphWorkspaceContract).toBe(false);
+    expect(hasKeyboardA11yContract).toBe(false);
   });
 });
