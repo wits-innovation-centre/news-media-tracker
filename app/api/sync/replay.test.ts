@@ -234,6 +234,118 @@ describe('sync replay bridge', () => {
     ]);
   });
 
+  it('auto-merges non-overlapping PATCH operations on the same endpoint', async () => {
+    const fetchMock = jest.fn(async () =>
+      ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        clone: () => ({ json: async () => ({}) }),
+      }) as unknown as Response,
+    );
+
+    const operations = normalizeReplayOperations([
+      {
+        queueId: 91,
+        requestId: 'req-91',
+        method: 'PATCH',
+        endpoint: '/api/events/event-merge',
+        body: { summary: 'merged summary' },
+      },
+      {
+        queueId: 92,
+        requestId: 'req-92',
+        method: 'PATCH',
+        endpoint: '/api/events/event-merge',
+        body: { status: 'verified' },
+      },
+    ]);
+
+    const result = await replayOfflineOperations(operations, {
+      requestOrigin: 'http://localhost:3000',
+      replayCache: new Map(),
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.body).toBe(
+      JSON.stringify({
+        operations: [
+          {
+            requestId: 'req-91',
+            method: 'PATCH',
+            endpoint: '/api/events/event-merge',
+            body: {
+              summary: 'merged summary',
+              status: 'verified',
+            },
+          },
+        ],
+      }),
+    );
+    expect(result.ackedQueueIds).toEqual([91, 92]);
+    expect(result.results).toEqual([
+      expect.objectContaining({ queueId: 91, status: 'replayed' }),
+      expect.objectContaining({ queueId: 92, status: 'replayed' }),
+    ]);
+  });
+
+  it('records conflicts for overlapping edits and does not replay conflicted operations', async () => {
+    const fetchMock = jest.fn(async () =>
+      ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        clone: () => ({ json: async () => ({}) }),
+      }) as unknown as Response,
+    );
+    const persistConflictRecords = jest.fn();
+    const operations = normalizeReplayOperations([
+      {
+        queueId: 93,
+        requestId: 'req-93',
+        method: 'PATCH',
+        endpoint: '/api/events/event-conflict',
+        body: { status: 'draft' },
+      },
+      {
+        queueId: 94,
+        requestId: 'req-94',
+        method: 'PATCH',
+        endpoint: '/api/events/event-conflict',
+        body: { status: 'published' },
+      },
+    ]);
+
+    const result = await replayOfflineOperations(operations, {
+      requestOrigin: 'http://localhost:3000',
+      replayCache: new Map(),
+      persistConflictRecords,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.results).toEqual([
+      expect.objectContaining({ queueId: 93, status: 'replayed' }),
+      expect.objectContaining({
+        queueId: 94,
+        status: 'failed',
+        statusCode: 409,
+        error: expect.stringContaining('Conflict detected'),
+      }),
+    ]);
+    expect(result.ackedQueueIds).toEqual([93]);
+    expect(persistConflictRecords).toHaveBeenCalledWith([
+      expect.objectContaining({
+        endpoint: '/api/events/event-conflict',
+        requestId: 'req-94',
+        overlappingFields: ['status'],
+        decision: 'manual',
+      }),
+    ]);
+  });
+
   // -----------------------------------------------------------------------
   // [3.2.0][08-verification] Replay correctness — server ack paths
   // -----------------------------------------------------------------------

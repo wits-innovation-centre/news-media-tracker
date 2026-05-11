@@ -1,3 +1,8 @@
+import {
+  buildReplayDispatchPlan,
+  type ReplayConflictRecord,
+} from './conflict-engine';
+
 type ReplayStatus = 'replayed' | 'duplicate' | 'failed';
 
 export type ReplayOperation = {
@@ -30,6 +35,9 @@ type ReplayContext = {
   remoteAuthToken?: string;
   forwardedHeaders?: Record<string, string | undefined>;
   replayCache: Map<string, ReplayResult>;
+  persistConflictRecords?: (
+    records: ReplayConflictRecord[],
+  ) => Promise<void> | void;
   fetchImpl?: typeof fetch;
 };
 
@@ -232,6 +240,42 @@ export async function replayOfflineOperations(
     };
   }
 
+  const {
+    dispatchGroups,
+    conflictedOperations,
+    conflictRecords,
+  } = buildReplayDispatchPlan(pendingOperations);
+
+  for (const conflictedOperation of conflictedOperations) {
+    orderedResults[conflictedOperation.index] = {
+      queueId: conflictedOperation.queueId,
+      requestId: conflictedOperation.requestId,
+      method: conflictedOperation.method,
+      endpoint: conflictedOperation.endpoint,
+      status: 'failed',
+      statusCode: 409,
+      error: 'Conflict detected: overlapping edits require manual resolution',
+    };
+  }
+
+  if (conflictRecords.length > 0 && context.persistConflictRecords) {
+    try {
+      await context.persistConflictRecords(conflictRecords);
+    } catch {
+      // Best effort persistence only; replay should continue for mergeable operations.
+    }
+  }
+
+  if (dispatchGroups.length === 0) {
+    const results = orderedResults.filter(
+      (result): result is ReplayResult => typeof result !== 'undefined',
+    );
+    return {
+      ackedQueueIds: collectAckedQueueIds(results),
+      results,
+    };
+  }
+
   const requestHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Offline-Replay': '1',
@@ -256,14 +300,14 @@ export async function replayOfflineOperations(
       method: 'POST',
       headers: requestHeaders,
       body: JSON.stringify({
-        operations: pendingOperations.map((operation) => ({
-          requestId: operation.requestId,
-          method: operation.method,
-          endpoint: operation.endpoint,
-          body: operation.body,
-        })),
-      }),
-    });
+          operations: dispatchGroups.map((group) => ({
+            requestId: group.sourceOperations[0]?.requestId,
+            method: group.method,
+            endpoint: group.endpoint,
+            body: group.body,
+          })),
+        }),
+      });
 
     let replayBody: unknown = null;
     try {
@@ -308,49 +352,57 @@ export async function replayOfflineOperations(
       }
     }
 
-    for (const operation of pendingOperations) {
+    for (const group of dispatchGroups) {
+      const primaryOperation = group.sourceOperations[0];
+      if (!primaryOperation) {
+        continue;
+      }
       const explicitStatusFromBody =
-        operation.requestId && perRequestStatus.has(operation.requestId)
-          ? perRequestStatus.get(operation.requestId)
+        primaryOperation.requestId && perRequestStatus.has(primaryOperation.requestId)
+          ? perRequestStatus.get(primaryOperation.requestId)
           : null;
       const replayed =
         explicitStatusFromBody ??
-        (typeof operation.queueId === 'number' &&
-        ackedQueueIdSet.has(operation.queueId)
+        (typeof primaryOperation.queueId === 'number' &&
+        ackedQueueIdSet.has(primaryOperation.queueId)
           ? true
           : null) ??
-        (operation.requestId && ackedRequestIdSet.has(operation.requestId)
+        (primaryOperation.requestId && ackedRequestIdSet.has(primaryOperation.requestId)
           ? true
           : null) ??
         response.ok;
 
-      const replayResult: ReplayResult = {
-        queueId: operation.queueId,
-        requestId: operation.requestId,
-        method: operation.method,
-        endpoint: operation.endpoint,
-        status: replayed ? 'replayed' : 'failed',
-        statusCode: response.status,
-        error: replayed ? undefined : `${response.status} ${response.statusText}`,
-      };
+      for (const operation of group.sourceOperations) {
+        const replayResult: ReplayResult = {
+          queueId: operation.queueId,
+          requestId: operation.requestId,
+          method: operation.method,
+          endpoint: operation.endpoint,
+          status: replayed ? 'replayed' : 'failed',
+          statusCode: response.status,
+          error: replayed ? undefined : `${response.status} ${response.statusText}`,
+        };
 
-      orderedResults[operation.index] = replayResult;
+        orderedResults[operation.index] = replayResult;
 
-      if (replayed && operation.requestId) {
-        context.replayCache.set(operation.requestId, replayResult);
-        trimReplayCache(context.replayCache);
+        if (replayed && operation.requestId) {
+          context.replayCache.set(operation.requestId, replayResult);
+          trimReplayCache(context.replayCache);
+        }
       }
     }
   } catch (error) {
-    for (const operation of pendingOperations) {
-      orderedResults[operation.index] = {
-        queueId: operation.queueId,
-        requestId: operation.requestId,
-        method: operation.method,
-        endpoint: operation.endpoint,
-        status: 'failed',
-        error: error instanceof Error ? error.message : String(error),
-      };
+    for (const group of dispatchGroups) {
+      for (const operation of group.sourceOperations) {
+        orderedResults[operation.index] = {
+          queueId: operation.queueId,
+          requestId: operation.requestId,
+          method: operation.method,
+          endpoint: operation.endpoint,
+          status: 'failed',
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
     }
   }
 

@@ -1,0 +1,28 @@
+fleet:
+  plannedVersion: 3.3.0
+  phaseBranch: phase/3.3.0
+  allowedChangeClass: minor
+  mergePolicy: eager-after-green
+
+lanes:
+  - id: "04"
+    name: "[3.3.0][04-conflict-engine] Implement auto-merge rules and conflict record generation."
+    branch: lane/3.3.0/04-conflict-engine
+    targetBranch: phase/3.3.0
+    readiness: ready-to-merge
+    blockers: []
+    prMetadata:
+      titlePrefix: "[3.3.0][04-conflict-engine]"
+      status: open
+    verification:
+      summary: "Conflict engine auto-merge/no-merge branches are covered and replay integration checks pass."
+      gates:
+        - id: conflict-engine-tests
+          command: npm run test -- app/api/sync/conflict-engine.test.ts app/api/sync/replay.test.ts app/api/sync/route.test.ts lib/contracts/conflict-engine.test.ts
+          result: pass
+        - id: replay-integration-checks
+          command: npm run verify.integrated
+          result: pass
+        - id: lint-check
+          command: npm run lint
+          result: pass
