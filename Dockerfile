@@ -6,8 +6,8 @@
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 COPY package*.json ./
-# --legacy-peer-deps is required because several devDependencies declare
-# overlapping peer requirements that npm 7+ would otherwise block.
+# --legacy-peer-deps matches the current root install workaround while the
+# Next.js / ESLint toolchain peer ranges in package-lock.json remain unaligned.
 RUN npm ci --legacy-peer-deps
 
 # ── Stage 2: build the Next.js app ───────────────────────────────────────────

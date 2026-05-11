@@ -18,6 +18,8 @@ export type ReplayResult = {
   error?: string;
 };
 
+// Preserve the original normalized position so filtered/deduplicated batches
+// can still return results in the same order the caller supplied them.
 type IndexedReplayOperation = ReplayOperation & {
   index: number;
 };

@@ -62,6 +62,19 @@ interface QueuedOperation {
   body?: unknown;
 }
 
+const isQueuedOperation = (value: unknown): value is QueuedOperation => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const candidate = value as Partial<QueuedOperation>;
+  return (
+    typeof candidate.id === 'number' &&
+    typeof candidate.method === 'string' &&
+    typeof candidate.endpoint === 'string'
+  );
+};
+
 /**
  * Replay queued offline operations directly against the PATCH /api/sync
  * endpoint (fallback for when the Background Sync API is unavailable).
@@ -89,9 +102,9 @@ const replayQueueDirect = (): Promise<void> => {
         const store = tx.objectStore(OFFLINE_QUEUE_STORE);
         const getAll = store.getAll();
         getAll.onsuccess = async () => {
-          const posts: QueuedOperation[] = (getAll.result as QueuedOperation[]).sort(
-            (a, b) => a.id - b.id,
-          );
+          const posts = getAll.result
+            .filter(isQueuedOperation)
+            .sort((a, b) => a.id - b.id);
           if (posts.length === 0) {
             db.close();
             resolve();

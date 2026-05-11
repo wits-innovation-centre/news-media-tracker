@@ -226,7 +226,7 @@ function syncQueuedPosts() {
         db.close();
         resolve();
       };
-      const finishReject = error => {
+      const finishReject = (error) => {
         if (settled) return;
         settled = true;
         db.close();
