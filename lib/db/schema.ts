@@ -684,7 +684,7 @@ export const syncConflictRecords = sqliteTable('sync_conflict_record', {
   queueId: integer('queue_id'),
   overlappingFields: text('overlapping_fields', { mode: 'json' }).$type<
     string[]
-  >(),
+  >().notNull(),
   winnerOperation: text('winner_operation', { mode: 'json' }),
   conflictingOperation: text('conflicting_operation', { mode: 'json' }),
   decision: text('decision').default('manual'),
@@ -698,7 +698,7 @@ export const migrationSyncConflictRecords = `CREATE TABLE IF NOT EXISTS sync_con
   endpoint TEXT NOT NULL,
   request_id TEXT,
   queue_id INTEGER,
-  overlapping_fields TEXT,
+  overlapping_fields TEXT NOT NULL,
   winner_operation TEXT,
   conflicting_operation TEXT,
   decision TEXT DEFAULT 'manual',

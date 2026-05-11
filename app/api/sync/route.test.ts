@@ -8,6 +8,25 @@
  */
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
+type PersistedReplayConflictRecord = {
+  id: string;
+  method: string;
+  endpoint: string;
+  requestId?: string;
+  queueId?: number;
+  overlappingFields: string[];
+  winnerOperation: {
+    requestId?: string;
+    queueId?: number;
+  };
+  conflictingOperation: {
+    requestId?: string;
+    queueId?: number;
+  };
+  decision: string;
+  decisionMetadata: Record<string, unknown>;
+};
+
 // ---------------------------------------------------------------------------
 // Mock next/server to avoid Web API dependencies unavailable in jsdom.
 // ---------------------------------------------------------------------------
@@ -49,7 +68,9 @@ jest.mock('../../../lib/db/server', () => {
     processSyncQueue = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
     updateConfig = jest.fn<(updates: object) => void>();
     configureRemote = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
-    persistSyncConflictRecords = jest.fn<(records: object[]) => Promise<void>>().mockResolvedValue(undefined);
+    persistSyncConflictRecords = jest
+      .fn<(records: PersistedReplayConflictRecord[]) => Promise<void>>()
+      .mockResolvedValue(undefined);
   }
   return {
     DatabaseManagerServer,

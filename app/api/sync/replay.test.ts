@@ -326,6 +326,19 @@ describe('sync replay bridge', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.body).toBe(
+      JSON.stringify({
+        operations: [
+          {
+            requestId: 'req-93',
+            method: 'PATCH',
+            endpoint: '/api/events/event-conflict',
+            body: { status: 'draft' },
+          },
+        ],
+      }),
+    );
     expect(result.results).toEqual([
       expect.objectContaining({ queueId: 93, status: 'replayed' }),
       expect.objectContaining({

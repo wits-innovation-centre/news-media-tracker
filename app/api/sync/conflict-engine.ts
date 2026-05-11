@@ -121,6 +121,27 @@ function createConflictRecord(
   };
 }
 
+function pickConflictWinner(
+  overlappingFields: string[],
+  group: MergeableReplayGroup,
+): ConflictEngineOperation {
+  const firstOperation = group.sourceOperations[0];
+  if (!firstOperation) {
+    throw new Error('Conflict merge group must contain at least one operation');
+  }
+  const overlappingOwners = new Set<ConflictEngineOperation>();
+  for (const field of overlappingFields) {
+    const owner = group.fieldOwners.get(field);
+    if (owner) {
+      overlappingOwners.add(owner);
+    }
+  }
+  const firstOwnerInGroupOrder = group.sourceOperations.find((sourceOperation) =>
+    overlappingOwners.has(sourceOperation),
+  );
+  return firstOwnerInGroupOrder ?? firstOperation;
+}
+
 export function buildReplayDispatchPlan(
   operations: ConflictEngineOperation[],
 ): DispatchPlan {
@@ -158,9 +179,7 @@ export function buildReplayDispatchPlan(
     });
 
     if (overlappingFields.length > 0) {
-      const winner =
-        existingGroup.fieldOwners.get(overlappingFields[0]) ??
-        existingGroup.sourceOperations[existingGroup.sourceOperations.length - 1];
+      const winner = pickConflictWinner(overlappingFields, existingGroup);
       conflictRecords.push(
         createConflictRecord(operation, winner, overlappingFields),
       );
