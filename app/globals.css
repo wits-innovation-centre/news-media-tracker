@@ -92,6 +92,11 @@ a {
     font-weight: 600;
 }
 
+.workspace-surface-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
 .workspace-queue-item {
     display: flex;
     align-items: center;
@@ -115,6 +120,8 @@ a {
 
 .graph-canvas:focus {
     box-shadow: 0 0 0 0.2rem rgb(59 130 246 / 25%);
+    outline: 2px solid #1d4ed8;
+    outline-offset: 2px;
 }
 
 .graph-canvas-inner {

@@ -224,7 +224,7 @@ const InputHomicide: React.FC<InputHomicideProps> = ({
       <Row>
         <Col>
           <div className="d-flex justify-content-between align-items-center mb-4">
-            <h2 className="workspace-section-title">Input New Homicide Case</h2>
+            <h3 className="workspace-section-title">Input New Homicide Case</h3>
             {!embedded && (
               <Button variant="outline-secondary" onClick={onBack}>
                 Back to Home

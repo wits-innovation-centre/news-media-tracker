@@ -47,7 +47,7 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
     <Card className="workspace-surface h-100">
       <Card.Header className="workspace-surface-header d-flex justify-content-between align-items-center">
         <div>
-          <h5 className="mb-1">Connected Graph</h5>
+          <h3 className="workspace-surface-title mb-1">Connected Graph</h3>
           <small className="text-muted">Cases and participant relationships</small>
         </div>
         <Badge bg="dark">{selectedCaseIds.length} selected</Badge>
@@ -120,21 +120,29 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
             }
           }}
         >
-          <div className="graph-canvas-inner" style={{ transform: `scale(${scale})` }}>
+          <div
+            className="graph-canvas-inner"
+            style={{ transform: `scale(${scale})` }}
+            role="list"
+            aria-label="Graph case nodes"
+          >
             {(selectedCases.length > 0 ? selectedCases : cases).map((case_) => {
               const caseId = case_.id ?? 'unknown-case-id';
+              const headline =
+                case_.articleData?.newsReportHeadline?.trim() || 'Untitled case';
+              const victimCount = case_.victims.length;
+              const perpetratorCount = case_.perpetrators.length;
               return (
                 <div
                   key={caseId}
                   className={`graph-node ${case_.id && selectedSet.has(case_.id) ? 'is-active' : ''}`}
+                  role="listitem"
+                  aria-label={`${headline}. ${victimCount} victim(s), ${perpetratorCount} suspect(s).`}
                 >
-                <strong>
-                  {case_.articleData?.newsReportHeadline?.trim() || 'Untitled case'}
-                </strong>
-                <small>
-                  {case_.victims.length} victim(s) · {case_.perpetrators.length}{' '}
-                  suspect(s)
-                </small>
+                  <strong>{headline}</strong>
+                  <small>
+                    {victimCount} victim(s) · {perpetratorCount} suspect(s)
+                  </small>
                 </div>
               );
             })}

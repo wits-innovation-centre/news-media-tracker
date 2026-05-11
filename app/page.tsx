@@ -171,6 +171,9 @@ export default function Home() {
             role="tablist"
             aria-label="Workspace mode"
             onKeyDown={(event) => {
+              if (!(event.target instanceof HTMLButtonElement)) {
+                return;
+              }
               if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
                 event.preventDefault();
                 setWorkspaceMode((previousMode) =>
@@ -201,9 +204,11 @@ export default function Home() {
             <Col lg={workspaceMode === 'form' ? 8 : 7}>
               <Card className="workspace-surface h-100">
                 <Card.Header className="workspace-surface-header">
-                  {workspaceMode === 'form'
-                    ? 'Entry Workspace'
-                    : 'Event Ledger'}
+                  <h3 className="workspace-surface-title mb-0">
+                    {workspaceMode === 'form'
+                      ? 'Entry Workspace'
+                      : 'Event Ledger'}
+                  </h3>
                 </Card.Header>
                 <Card.Body>
                   {workspaceMode === 'form' ? (
@@ -223,7 +228,9 @@ export default function Home() {
               {workspaceMode === 'form' ? (
                 <Card className="workspace-surface h-100">
                   <Card.Header className="workspace-surface-header">
-                    Workspace Queue
+                    <h3 className="workspace-surface-title mb-0">
+                      Workspace Queue
+                    </h3>
                   </Card.Header>
                   <Card.Body className="d-flex flex-column gap-3">
                     <div className="workspace-queue-item">
