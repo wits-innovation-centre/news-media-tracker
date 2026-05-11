@@ -210,7 +210,7 @@ function syncQueuedPosts() {
     return queueReplayPromise;
   }
 
-  queueReplayPromise = new Promise((resolve, reject) => {
+  const replayPromise = new Promise((resolve, reject) => {
     const open = indexedDB.open(OFFLINE_QUEUE_DB, OFFLINE_QUEUE_DB_VERSION);
     open.onupgradeneeded = () => {
       if (!open.result.objectStoreNames.contains(OFFLINE_QUEUE_STORE)) {
@@ -282,7 +282,7 @@ function syncQueuedPosts() {
     open.onerror = () => reject(open.error);
   });
 
-  queueReplayPromise = queueReplayPromise.finally(() => {
+  queueReplayPromise = replayPromise.finally(() => {
     queueReplayPromise = null;
   });
 

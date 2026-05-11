@@ -204,7 +204,8 @@ describe('sync replay bridge', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1]?.[1]).toEqual(
+    const secondReplayCallOptions = fetchMock.mock.calls[1][1];
+    expect(secondReplayCallOptions).toEqual(
       expect.objectContaining({
         body: JSON.stringify({
           operations: [
