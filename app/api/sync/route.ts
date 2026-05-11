@@ -41,11 +41,14 @@ export async function GET() {
       pendingCount = pending.length;
     }
 
-    const syncStatus: 'disabled' | 'idle' | 'pending' = !config.sync.enabled
-      ? 'disabled'
-      : pendingCount > 0
-        ? 'pending'
-        : 'idle';
+    let syncStatus: 'disabled' | 'idle' | 'pending';
+    if (!config.sync.enabled) {
+      syncStatus = 'disabled';
+    } else if (pendingCount > 0) {
+      syncStatus = 'pending';
+    } else {
+      syncStatus = 'idle';
+    }
 
     return NextResponse.json({
       success: true,
