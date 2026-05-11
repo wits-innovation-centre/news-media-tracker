@@ -3,13 +3,18 @@
  *
  * This component allows users to configure remote LibSQL database
  * synchronization for when network connectivity is available.
+ * It also provides a localhost connector so users can point the app
+ * at a local server endpoint and verify reachability via health checks.
  */
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Card, Button, Form, Alert, Spinner, Modal } from 'react-bootstrap';
+import React, { useState, useEffect, useRef } from 'react';
+import { Card, Button, Form, Alert, Spinner, Modal, Badge } from 'react-bootstrap';
 import { toast } from 'react-toastify';
+
+const LOCAL_SERVER_URL_KEY = 'hmt.local-server-url';
+const HEALTH_CHECK_TIMEOUT_MS = 5000;
 
 interface SyncConfig {
   enabled: boolean;
@@ -17,6 +22,15 @@ interface SyncConfig {
   conflictResolution: 'local' | 'remote' | 'manual';
   syncInterval: number;
   lastSync: string | null;
+}
+
+type LocalServerStatus = 'idle' | 'checking' | 'reachable' | 'unreachable';
+
+interface LocalServerDiagnostics {
+  latencyMs: number | null;
+  statusCode: number | null;
+  checkedAt: string | null;
+  error: string | null;
 }
 
 const SyncConfiguration: React.FC = () => {
@@ -32,6 +46,18 @@ const SyncConfiguration: React.FC = () => {
   const [conflictResolution, setConflictResolution] = useState<
     'local' | 'remote' | 'manual'
   >('local');
+
+  // Localhost connector state
+  const [localServerUrl, setLocalServerUrl] = useState('http://localhost:8080');
+  const [localServerUrlInput, setLocalServerUrlInput] = useState('http://localhost:8080');
+  const [localServerStatus, setLocalServerStatus] = useState<LocalServerStatus>('idle');
+  const [localServerDiag, setLocalServerDiag] = useState<LocalServerDiagnostics>({
+    latencyMs: null,
+    statusCode: null,
+    checkedAt: null,
+    error: null,
+  });
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchConfig = async () => {
     try {
@@ -114,8 +140,84 @@ const SyncConfiguration: React.FC = () => {
     }
   };
 
+  // ── Localhost connector helpers ─────────────────────────────────────────────
+
+  const loadSavedLocalServerUrl = () => {
+    try {
+      const saved = localStorage.getItem(LOCAL_SERVER_URL_KEY);
+      if (saved) {
+        setLocalServerUrl(saved);
+        setLocalServerUrlInput(saved);
+      }
+    } catch {
+      // localStorage may be unavailable (SSR, private browsing, etc.)
+    }
+  };
+
+  const handleSaveLocalServerUrl = () => {
+    const trimmed = localServerUrlInput.trim();
+    if (!trimmed) return;
+    setLocalServerUrl(trimmed);
+    try {
+      localStorage.setItem(LOCAL_SERVER_URL_KEY, trimmed);
+    } catch {
+      // ignore storage errors
+    }
+    toast.success('Local server URL saved');
+  };
+
+  const handleCheckLocalServer = async () => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+
+    setLocalServerStatus('checking');
+    setLocalServerDiag({ latencyMs: null, statusCode: null, checkedAt: null, error: null });
+
+    const t0 = Date.now();
+    try {
+      const response = await fetch(localServerUrl, {
+        signal: controller.signal,
+        method: 'GET',
+        cache: 'no-store',
+      });
+      clearTimeout(timeoutId);
+      const latencyMs = Date.now() - t0;
+      setLocalServerStatus('reachable');
+      setLocalServerDiag({
+        latencyMs,
+        statusCode: response.status,
+        checkedAt: new Date().toISOString(),
+        error: null,
+      });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const latencyMs = Date.now() - t0;
+      const isTimeout =
+        err instanceof DOMException && err.name === 'AbortError';
+      setLocalServerStatus('unreachable');
+      setLocalServerDiag({
+        latencyMs,
+        statusCode: null,
+        checkedAt: new Date().toISOString(),
+        error: isTimeout
+          ? `Connection timed out after ${HEALTH_CHECK_TIMEOUT_MS / 1000}s`
+          : err instanceof Error
+            ? err.message
+            : 'Unknown error',
+      });
+    }
+  };
+
   useEffect(() => {
     fetchConfig();
+    loadSavedLocalServerUrl();
+    return () => {
+      abortRef.current?.abort();
+    };
   }, []);
 
   if (loading) {
@@ -207,6 +309,125 @@ const SyncConfiguration: React.FC = () => {
                 <i className="bi bi-cloud-plus me-1"></i>
                 Configure Remote Sync
               </Button>
+            </div>
+          )}
+        </Card.Body>
+      </Card>
+
+      {/* Localhost Connector */}
+      <Card className="mt-3">
+        <Card.Header>
+          <h5 className="mb-0">
+            <i className="bi bi-hdd-network me-2"></i>
+            Local Server Connectivity
+          </h5>
+        </Card.Header>
+        <Card.Body>
+          <p className="text-muted small mb-3">
+            Configure and verify connectivity to a local server endpoint (e.g.
+            a locally-running AtoM instance or a development API server).
+          </p>
+
+          {/* URL configuration row */}
+          <Form.Group className="mb-3">
+            <Form.Label className="fw-semibold">Local Server URL</Form.Label>
+            <div className="d-flex gap-2">
+              <Form.Control
+                type="url"
+                value={localServerUrlInput}
+                onChange={(e) => setLocalServerUrlInput(e.target.value)}
+                placeholder="http://localhost:8080"
+              />
+              <Button
+                variant="outline-secondary"
+                onClick={handleSaveLocalServerUrl}
+                disabled={!localServerUrlInput.trim()}
+              >
+                Save
+              </Button>
+            </div>
+            <Form.Text className="text-muted">
+              The base URL of the local server (protocol + host + port).
+            </Form.Text>
+          </Form.Group>
+
+          {/* Health check row */}
+          <div className="d-flex align-items-center gap-3 flex-wrap">
+            <Button
+              variant="outline-primary"
+              size="sm"
+              onClick={handleCheckLocalServer}
+              disabled={localServerStatus === 'checking' || !localServerUrl}
+            >
+              {localServerStatus === 'checking' ? (
+                <>
+                  <Spinner animation="border" size="sm" className="me-1" />
+                  Checking&hellip;
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-activity me-1"></i>
+                  Check Connection
+                </>
+              )}
+            </Button>
+
+            {localServerStatus === 'idle' && (
+              <Badge bg="secondary">Not checked</Badge>
+            )}
+            {localServerStatus === 'checking' && (
+              <Badge bg="warning" text="dark">Checking&hellip;</Badge>
+            )}
+            {localServerStatus === 'reachable' && (
+              <Badge bg="success">
+                <i className="bi bi-check-circle me-1"></i>
+                Reachable
+              </Badge>
+            )}
+            {localServerStatus === 'unreachable' && (
+              <Badge bg="danger">
+                <i className="bi bi-x-circle me-1"></i>
+                Unreachable
+              </Badge>
+            )}
+          </div>
+
+          {/* Diagnostics panel */}
+          {localServerDiag.checkedAt && (
+            <div className="mt-3 p-2 border rounded bg-light small">
+              <div className="fw-semibold mb-1">Connection Diagnostics</div>
+              <div>
+                <strong>Endpoint:</strong> <code>{localServerUrl}</code>
+              </div>
+              {localServerDiag.statusCode !== null && (
+                <div>
+                  <strong>HTTP Status:</strong>{' '}
+                  <span
+                    className={
+                      localServerDiag.statusCode >= 200 &&
+                      localServerDiag.statusCode < 300
+                        ? 'text-success'
+                        : 'text-warning'
+                    }
+                  >
+                    {localServerDiag.statusCode}
+                  </span>
+                </div>
+              )}
+              {localServerDiag.latencyMs !== null && (
+                <div>
+                  <strong>Latency:</strong> {localServerDiag.latencyMs} ms
+                </div>
+              )}
+              <div>
+                <strong>Checked at:</strong>{' '}
+                {new Date(localServerDiag.checkedAt).toLocaleString()}
+              </div>
+              {localServerDiag.error && (
+                <Alert variant="danger" className="mt-2 mb-0 py-1 px-2">
+                  {localServerDiag.error}
+                </Alert>
+              )}
             </div>
           )}
         </Card.Body>
