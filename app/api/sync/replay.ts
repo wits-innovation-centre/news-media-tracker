@@ -18,6 +18,10 @@ export type ReplayResult = {
   error?: string;
 };
 
+type IndexedReplayOperation = ReplayOperation & {
+  index: number;
+};
+
 type ReplayContext = {
   requestOrigin: string;
   remoteBaseUrl?: string;
@@ -163,7 +167,7 @@ export async function replayOfflineOperations(
   const orderedResults: Array<ReplayResult | undefined> = new Array(
     operations.length,
   );
-  const pendingOperations: Array<ReplayOperation & { index: number }> = [];
+  const pendingOperations: IndexedReplayOperation[] = [];
   const seenRequestIds = new Set<string>();
 
   for (const [index, operation] of operations.entries()) {
