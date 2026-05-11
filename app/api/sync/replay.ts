@@ -52,6 +52,8 @@ type ReplayContext = {
 const PLUGIN_SYNC_BATCH_PATH = '/api/sync/batch';
 // Keep a bounded in-memory cache of recent replay ids to prevent duplicate writes.
 const MAX_REPLAY_CACHE_ENTRIES = 500;
+// Remote replay handlers can return any of these string statuses when a mutation
+// cannot be applied because its base version no longer matches server state.
 const STALE_REPLAY_STATUSES = new Set([
   'stale',
   'conflict',
@@ -149,6 +151,42 @@ function buildDeterministicDivergenceKey(
   currentVersion: number | null,
 ): string {
   return `${operation.method}:${operation.endpoint}:${operation.requestId ?? ''}:${baseVersion ?? 'na'}:${currentVersion ?? 'na'}`;
+}
+
+function resolveReplaySuccess(
+  stale: boolean,
+  operation: Pick<ReplayOperation, 'queueId' | 'requestId'>,
+  requestMeta: { replayed: boolean | null } | null,
+  ackedQueueIdSet: ReadonlySet<number>,
+  ackedRequestIdSet: ReadonlySet<string>,
+  responseOk: boolean,
+): boolean {
+  if (stale) {
+    return false;
+  }
+  if (requestMeta?.replayed !== null && typeof requestMeta?.replayed !== 'undefined') {
+    return requestMeta.replayed;
+  }
+  if (typeof operation.queueId === 'number' && ackedQueueIdSet.has(operation.queueId)) {
+    return true;
+  }
+  if (operation.requestId && ackedRequestIdSet.has(operation.requestId)) {
+    return true;
+  }
+  return responseOk;
+}
+
+function buildReplayErrorMessage(
+  stale: boolean,
+  statusCode: number,
+  statusText: string,
+  baseVersion: number | null,
+  currentVersion: number | null,
+): string | undefined {
+  if (stale) {
+    return `stale base version (base=${baseVersion ?? 'unknown'}, current=${currentVersion ?? 'unknown'})`;
+  }
+  return `${statusCode} ${statusText}`;
 }
 
 export function normalizeReplayOperations(input: unknown): ReplayOperation[] {
@@ -384,23 +422,19 @@ export async function replayOfflineOperations(
           : null;
       const baseVersion = requestMeta?.baseVersion ?? operation.baseVersion ?? null;
       const currentVersion = requestMeta?.currentVersion ?? null;
-      const staleByBaseVersion =
+      const hasVersionMismatch =
         baseVersion !== null &&
         currentVersion !== null &&
         baseVersion < currentVersion;
-      const stale = (requestMeta?.stale ?? false) || staleByBaseVersion;
-      const replayed =
-        stale
-          ? false
-          : (requestMeta?.replayed ??
-        (typeof operation.queueId === 'number' &&
-        ackedQueueIdSet.has(operation.queueId)
-          ? true
-          : null) ??
-        (operation.requestId && ackedRequestIdSet.has(operation.requestId)
-          ? true
-          : null) ??
-            response.ok);
+      const stale = (requestMeta?.stale ?? false) || hasVersionMismatch;
+      const replayed = resolveReplaySuccess(
+        stale,
+        operation,
+        requestMeta ? { replayed: requestMeta.replayed } : null,
+        ackedQueueIdSet,
+        ackedRequestIdSet,
+        response.ok,
+      );
 
       const replayResult: ReplayResult = {
         queueId: operation.queueId,
@@ -411,9 +445,13 @@ export async function replayOfflineOperations(
         statusCode: response.status,
         error: replayed
           ? undefined
-          : stale
-            ? `stale base version (base=${baseVersion ?? 'unknown'}, current=${currentVersion ?? 'unknown'})`
-            : `${response.status} ${response.statusText}`,
+          : buildReplayErrorMessage(
+              stale,
+              response.status,
+              response.statusText,
+              baseVersion,
+              currentVersion,
+            ),
         divergence: stale
           ? {
               code: 'STALE_BASE_VERSION',
