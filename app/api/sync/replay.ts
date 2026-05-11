@@ -1,4 +1,17 @@
+import type {
+  LoggedMutationOperation,
+  LoggedMutationResult,
+  MutationOperationLogStore,
+} from './operation-log';
+
 type ReplayStatus = 'replayed' | 'duplicate' | 'failed';
+
+export type ReplayDivergenceSignal = {
+  code: 'STALE_BASE_VERSION';
+  deterministicKey: string;
+  baseVersion: number | null;
+  currentVersion: number | null;
+};
 
 export type ReplayOperation = {
   queueId?: number;
@@ -6,6 +19,7 @@ export type ReplayOperation = {
   method: string;
   endpoint: string;
   body?: unknown;
+  baseVersion?: number;
 };
 
 export type ReplayResult = {
@@ -16,6 +30,7 @@ export type ReplayResult = {
   status: ReplayStatus;
   statusCode?: number;
   error?: string;
+  divergence?: ReplayDivergenceSignal;
 };
 
 // Preserve the original normalized position so filtered/deduplicated batches
@@ -30,6 +45,7 @@ type ReplayContext = {
   remoteAuthToken?: string;
   forwardedHeaders?: Record<string, string | undefined>;
   replayCache: Map<string, ReplayResult>;
+  operationLog?: MutationOperationLogStore;
   fetchImpl?: typeof fetch;
 };
 
@@ -73,6 +89,12 @@ function toSafeMethod(value: unknown): string | null {
   return method;
 }
 
+function toSafeVersion(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+    ? value
+    : null;
+}
+
 function toSafeEndpoint(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;
@@ -97,6 +119,23 @@ function toSafeEndpoint(value: unknown): string | null {
   }
 
   return value;
+}
+
+function appendOperationLog(
+  operationLog: MutationOperationLogStore | undefined,
+  operation: LoggedMutationOperation,
+  result: LoggedMutationResult,
+): void {
+  operationLog?.append(operation, result);
+}
+
+function isStaleStatus(value: unknown): boolean {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  return ['stale', 'conflict', 'diverged', 'version_mismatch', 'stale_base_version'].includes(
+    value.toLowerCase(),
+  );
 }
 
 export function normalizeReplayOperations(input: unknown): ReplayOperation[] {
@@ -128,6 +167,7 @@ export function normalizeReplayOperations(input: unknown): ReplayOperation[] {
           typeof item.requestId === 'string' && item.requestId.trim()
             ? item.requestId.trim()
             : undefined,
+        baseVersion: toSafeVersion(item.baseVersion) ?? undefined,
         method,
         endpoint,
         body: item.body,
@@ -190,23 +230,25 @@ export async function replayOfflineOperations(
     if (requestId) {
       const cachedResult = context.replayCache.get(requestId);
       if (cachedResult) {
-        orderedResults[index] = {
+        const duplicateResult: ReplayResult = {
           ...cachedResult,
           queueId,
           requestId,
           status: 'duplicate',
         };
+        orderedResults[index] = duplicateResult;
         continue;
       }
 
       if (seenRequestIds.has(requestId)) {
-        orderedResults[index] = {
+        const duplicateResult: ReplayResult = {
           queueId,
           requestId,
           method,
           endpoint,
           status: 'duplicate',
         };
+        orderedResults[index] = duplicateResult;
         continue;
       }
       seenRequestIds.add(requestId);
@@ -219,6 +261,7 @@ export async function replayOfflineOperations(
       method,
       endpoint,
       body,
+      baseVersion: operation.baseVersion,
     });
   }
 
@@ -256,14 +299,15 @@ export async function replayOfflineOperations(
       method: 'POST',
       headers: requestHeaders,
       body: JSON.stringify({
-        operations: pendingOperations.map((operation) => ({
-          requestId: operation.requestId,
-          method: operation.method,
-          endpoint: operation.endpoint,
-          body: operation.body,
-        })),
-      }),
-    });
+          operations: pendingOperations.map((operation) => ({
+            requestId: operation.requestId,
+            method: operation.method,
+            endpoint: operation.endpoint,
+            body: operation.body,
+            baseVersion: operation.baseVersion,
+          })),
+        }),
+      });
 
     let replayBody: unknown = null;
     try {
@@ -274,7 +318,15 @@ export async function replayOfflineOperations(
 
     const ackedQueueIdSet = new Set<number>();
     const ackedRequestIdSet = new Set<string>();
-    const perRequestStatus = new Map<string, boolean>();
+    const perRequestStatus = new Map<
+      string,
+      {
+        replayed: boolean | null;
+        stale: boolean;
+        currentVersion: number | null;
+        baseVersion: number | null;
+      }
+    >();
 
     if (isRecord(replayBody)) {
       if (Array.isArray(replayBody.ackedQueueIds)) {
@@ -300,21 +352,34 @@ export async function replayOfflineOperations(
             typeof entry.requestId === 'string' && entry.requestId
               ? entry.requestId
               : null;
-          const status = toBooleanReplayStatus(entry.status);
-          if (requestId && status !== null) {
-            perRequestStatus.set(requestId, status);
+          if (requestId) {
+            perRequestStatus.set(requestId, {
+              replayed: toBooleanReplayStatus(entry.status),
+              stale: isStaleStatus(entry.status),
+              currentVersion: toSafeVersion(entry.currentVersion),
+              baseVersion: toSafeVersion(entry.baseVersion),
+            });
           }
         }
       }
     }
 
     for (const operation of pendingOperations) {
-      const explicitStatusFromBody =
+      const requestMeta =
         operation.requestId && perRequestStatus.has(operation.requestId)
-          ? perRequestStatus.get(operation.requestId)
+          ? perRequestStatus.get(operation.requestId) ?? null
           : null;
+      const baseVersion = requestMeta?.baseVersion ?? operation.baseVersion ?? null;
+      const currentVersion = requestMeta?.currentVersion ?? null;
+      const staleByBaseVersion =
+        baseVersion !== null &&
+        currentVersion !== null &&
+        baseVersion < currentVersion;
+      const stale = (requestMeta?.stale ?? false) || staleByBaseVersion;
       const replayed =
-        explicitStatusFromBody ??
+        stale
+          ? false
+          : (requestMeta?.replayed ??
         (typeof operation.queueId === 'number' &&
         ackedQueueIdSet.has(operation.queueId)
           ? true
@@ -322,7 +387,7 @@ export async function replayOfflineOperations(
         (operation.requestId && ackedRequestIdSet.has(operation.requestId)
           ? true
           : null) ??
-        response.ok;
+            response.ok);
 
       const replayResult: ReplayResult = {
         queueId: operation.queueId,
@@ -331,11 +396,22 @@ export async function replayOfflineOperations(
         endpoint: operation.endpoint,
         status: replayed ? 'replayed' : 'failed',
         statusCode: response.status,
-        error: replayed ? undefined : `${response.status} ${response.statusText}`,
+        error: replayed
+          ? undefined
+          : stale
+            ? `stale base version (base=${baseVersion ?? 'unknown'}, current=${currentVersion ?? 'unknown'})`
+            : `${response.status} ${response.statusText}`,
+        divergence: stale
+          ? {
+              code: 'STALE_BASE_VERSION',
+              deterministicKey: `${operation.method}:${operation.endpoint}:${operation.requestId ?? ''}:${baseVersion ?? 'na'}:${currentVersion ?? 'na'}`,
+              baseVersion,
+              currentVersion,
+            }
+          : undefined,
       };
 
       orderedResults[operation.index] = replayResult;
-
       if (replayed && operation.requestId) {
         context.replayCache.set(operation.requestId, replayResult);
         trimReplayCache(context.replayCache);
@@ -352,6 +428,24 @@ export async function replayOfflineOperations(
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  for (const [index, operation] of operations.entries()) {
+    const result = orderedResults[index];
+    if (!result) {
+      continue;
+    }
+    appendOperationLog(
+      context.operationLog,
+      {
+        queueId: operation.queueId,
+        requestId: operation.requestId,
+        method: operation.method,
+        endpoint: operation.endpoint,
+        baseVersion: operation.baseVersion,
+      },
+      result,
+    );
   }
 
   const results = orderedResults.filter(
