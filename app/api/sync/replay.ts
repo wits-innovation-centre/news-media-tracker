@@ -52,6 +52,13 @@ type ReplayContext = {
 const PLUGIN_SYNC_BATCH_PATH = '/api/sync/batch';
 // Keep a bounded in-memory cache of recent replay ids to prevent duplicate writes.
 const MAX_REPLAY_CACHE_ENTRIES = 500;
+const STALE_REPLAY_STATUSES = new Set([
+  'stale',
+  'conflict',
+  'diverged',
+  'version_mismatch',
+  'stale_base_version',
+]);
 const REPLAYABLE_ENDPOINT_PREFIXES = [
   '/api/articles',
   '/api/events',
@@ -133,9 +140,15 @@ function isStaleStatus(value: unknown): boolean {
   if (typeof value !== 'string') {
     return false;
   }
-  return ['stale', 'conflict', 'diverged', 'version_mismatch', 'stale_base_version'].includes(
-    value.toLowerCase(),
-  );
+  return STALE_REPLAY_STATUSES.has(value.toLowerCase());
+}
+
+function buildDeterministicDivergenceKey(
+  operation: Pick<ReplayOperation, 'method' | 'endpoint' | 'requestId'>,
+  baseVersion: number | null,
+  currentVersion: number | null,
+): string {
+  return `${operation.method}:${operation.endpoint}:${operation.requestId ?? ''}:${baseVersion ?? 'na'}:${currentVersion ?? 'na'}`;
 }
 
 export function normalizeReplayOperations(input: unknown): ReplayOperation[] {
@@ -404,7 +417,11 @@ export async function replayOfflineOperations(
         divergence: stale
           ? {
               code: 'STALE_BASE_VERSION',
-              deterministicKey: `${operation.method}:${operation.endpoint}:${operation.requestId ?? ''}:${baseVersion ?? 'na'}:${currentVersion ?? 'na'}`,
+              deterministicKey: buildDeterministicDivergenceKey(
+                operation,
+                baseVersion,
+                currentVersion,
+              ),
               baseVersion,
               currentVersion,
             }
