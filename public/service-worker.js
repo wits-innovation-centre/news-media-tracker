@@ -219,31 +219,30 @@ function syncQueuedPosts() {
     };
     open.onsuccess = () => {
       const db = open.result;
-      const tx = db.transaction(OFFLINE_QUEUE_STORE, 'readwrite');
-      const store = tx.objectStore(OFFLINE_QUEUE_STORE);
-      let closed = false;
-      const closeDb = () => {
-        if (!closed) {
-          closed = true;
-          db.close();
-        }
-      };
-
-      tx.oncomplete = () => {
-        closeDb();
+      let settled = false;
+      const finishResolve = () => {
+        if (settled) return;
+        settled = true;
+        db.close();
         resolve();
       };
-      tx.onerror = () => {
-        closeDb();
-        reject(tx.error);
+      const finishReject = error => {
+        if (settled) return;
+        settled = true;
+        db.close();
+        reject(error);
       };
 
-      const getAll = store.getAll();
+      const readTx = db.transaction(OFFLINE_QUEUE_STORE, 'readonly');
+      const readStore = readTx.objectStore(OFFLINE_QUEUE_STORE);
+      const getAll = readStore.getAll();
       getAll.onsuccess = async () => {
         const posts = getAll.result.sort((left, right) => left.id - right.id);
         if (posts.length === 0) {
+          finishResolve();
           return;
         }
+
         try {
           const replayResponse = await fetch(OFFLINE_SYNC_ENDPOINT, {
             method: 'PATCH',
@@ -260,24 +259,42 @@ function syncQueuedPosts() {
           });
 
           if (!replayResponse.ok) {
+            finishResolve();
             return;
           }
 
           const replayResult = await replayResponse.json().catch(() => null);
-          const ackedQueueIds = Array.isArray(replayResult?.ackedQueueIds)
-            ? replayResult.ackedQueueIds.filter(queueId => Number.isInteger(queueId))
+          const rawAckedQueueIds = Array.isArray(replayResult?.ackedQueueIds)
+            ? replayResult.ackedQueueIds
             : [];
-          for (const queueId of ackedQueueIds) {
-            store.delete(queueId);
+          const ackedQueueIds = rawAckedQueueIds.filter(queueId =>
+            Number.isInteger(queueId),
+          );
+          if (ackedQueueIds.length !== rawAckedQueueIds.length) {
+            console.warn('Service worker replay ignored invalid queue IDs from server response.');
           }
+
+          if (ackedQueueIds.length === 0) {
+            finishResolve();
+            return;
+          }
+
+          const writeTx = db.transaction(OFFLINE_QUEUE_STORE, 'readwrite');
+          const writeStore = writeTx.objectStore(OFFLINE_QUEUE_STORE);
+          for (const queueId of ackedQueueIds) {
+            writeStore.delete(queueId);
+          }
+          writeTx.oncomplete = () => finishResolve();
+          writeTx.onerror = () => finishReject(writeTx.error);
         } catch (err) {
           // If still offline, keep in queue
+          finishResolve();
         }
       };
       getAll.onerror = () => {
-        closeDb();
-        reject(getAll.error);
+        finishReject(getAll.error);
       };
+      readTx.onerror = () => finishReject(readTx.error);
     };
     open.onerror = () => reject(open.error);
   });
