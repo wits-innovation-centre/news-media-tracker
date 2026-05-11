@@ -18,45 +18,22 @@ import ParticipantMergeQueue from '@/lib/components/participant-merge-queue';
 import SchemaProfileAdmin from '@/lib/components/schema-profile-admin';
 import SysInfo from '@/lib/components/system-information';
 import {
-  OFFLINE_QUEUE_DB,
-  OFFLINE_QUEUE_STORE,
   OFFLINE_SYNC_TAG,
+  readOfflineQueueCount,
 } from '@/lib/utils/cache-manager';
 
 type Views = 'home' | 'input' | 'list' | 'merge' | 'profiles' | 'info';
 
-/** Read the number of pending offline-queued operations from IndexedDB. */
-function readQueueCount(): Promise<number> {
-  if (typeof window === 'undefined' || !('indexedDB' in window)) {
-    return Promise.resolve(0);
-  }
-  return new Promise<number>((resolve) => {
-    try {
-      const open = window.indexedDB.open(OFFLINE_QUEUE_DB);
-      open.onsuccess = () => {
-        const db = open.result;
-        if (!db.objectStoreNames.contains(OFFLINE_QUEUE_STORE)) {
-          db.close();
-          resolve(0);
-          return;
-        }
-        const tx = db.transaction(OFFLINE_QUEUE_STORE, 'readonly');
-        const countReq = tx.objectStore(OFFLINE_QUEUE_STORE).count();
-        countReq.onsuccess = () => {
-          db.close();
-          resolve(countReq.result);
-        };
-        countReq.onerror = () => {
-          db.close();
-          resolve(0);
-        };
-      };
-      open.onerror = () => resolve(0);
-    } catch {
-      resolve(0);
-    }
-  });
+/** Minimal typing for the Background Sync API extension on ServiceWorkerRegistration. */
+interface ServiceWorkerRegistrationWithSync extends ServiceWorkerRegistration {
+  sync: { register: (tag: string) => Promise<void> };
 }
+
+const hasSyncManager = (
+  reg: ServiceWorkerRegistration,
+): reg is ServiceWorkerRegistrationWithSync =>
+  'sync' in reg &&
+  typeof (reg as ServiceWorkerRegistrationWithSync).sync?.register === 'function';
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<Views>('home');
@@ -67,11 +44,11 @@ export default function Home() {
   const [replaying, setReplaying] = useState(false);
 
   useEffect(() => {
-    readQueueCount().then(setQueueCount);
+    readOfflineQueueCount().then(setQueueCount);
 
     const handleOnline = async () => {
       setIsOnline(true);
-      setQueueCount(await readQueueCount());
+      setQueueCount(await readOfflineQueueCount());
     };
     const handleOffline = () => setIsOnline(false);
 
@@ -79,7 +56,7 @@ export default function Home() {
     window.addEventListener('offline', handleOffline);
 
     const interval = setInterval(async () => {
-      setQueueCount(await readQueueCount());
+      setQueueCount(await readOfflineQueueCount());
     }, 15000);
 
     return () => {
@@ -93,12 +70,13 @@ export default function Home() {
     if (!isOnline || replaying) return;
     setReplaying(true);
     try {
-      if ('serviceWorker' in navigator && 'SyncManager' in window) {
+      if ('serviceWorker' in navigator) {
         const reg = await navigator.serviceWorker.ready;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (reg as any).sync.register(OFFLINE_SYNC_TAG);
+        if (hasSyncManager(reg)) {
+          await reg.sync.register(OFFLINE_SYNC_TAG);
+        }
       }
-      setQueueCount(await readQueueCount());
+      setQueueCount(await readOfflineQueueCount());
     } catch {
       // ignore — sync will retry automatically
     } finally {

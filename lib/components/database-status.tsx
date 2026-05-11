@@ -9,13 +9,14 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Button, Badge, Spinner, Alert } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import {
   OFFLINE_QUEUE_DB,
   OFFLINE_QUEUE_STORE,
   OFFLINE_SYNC_TAG,
+  readOfflineQueueCount,
 } from '@/lib/utils/cache-manager';
 
 interface DatabaseStatus {
@@ -36,6 +37,20 @@ interface ElectronDatabaseAPI {
   }>;
 }
 
+/** Minimal typing for the Background Sync API extension on ServiceWorkerRegistration. */
+interface SyncManager {
+  register: (tag: string) => Promise<void>;
+}
+
+interface ServiceWorkerRegistrationWithSync extends ServiceWorkerRegistration {
+  sync: SyncManager;
+}
+
+const hasSyncManager = (
+  reg: ServiceWorkerRegistration,
+): reg is ServiceWorkerRegistrationWithSync =>
+  'sync' in reg && typeof (reg as ServiceWorkerRegistrationWithSync).sync?.register === 'function';
+
 const getElectronDatabase = (): ElectronDatabaseAPI | null => {
   if (typeof window === 'undefined') {
     return null;
@@ -50,39 +65,6 @@ const getElectronDatabase = (): ElectronDatabaseAPI | null => {
     return bridge.database as ElectronDatabaseAPI;
   }
   return null;
-};
-
-/** Read the number of pending offline-queued operations from IndexedDB. */
-const readQueueCount = (): Promise<number> => {
-  if (typeof window === 'undefined' || !('indexedDB' in window)) {
-    return Promise.resolve(0);
-  }
-  return new Promise<number>((resolve) => {
-    try {
-      const open = window.indexedDB.open(OFFLINE_QUEUE_DB);
-      open.onsuccess = () => {
-        const db = open.result;
-        if (!db.objectStoreNames.contains(OFFLINE_QUEUE_STORE)) {
-          db.close();
-          resolve(0);
-          return;
-        }
-        const tx = db.transaction(OFFLINE_QUEUE_STORE, 'readonly');
-        const countReq = tx.objectStore(OFFLINE_QUEUE_STORE).count();
-        countReq.onsuccess = () => {
-          db.close();
-          resolve(countReq.result);
-        };
-        countReq.onerror = () => {
-          db.close();
-          resolve(0);
-        };
-      };
-      open.onerror = () => resolve(0);
-    } catch {
-      resolve(0);
-    }
-  });
 };
 
 interface QueuedOperation {
@@ -189,12 +171,12 @@ const DatabaseStatus: React.FC = () => {
   const [queueCount, setQueueCount] = useState(0);
   const [replaying, setReplaying] = useState(false);
 
-  const refreshQueueCount = async () => {
-    const count = await readQueueCount();
+  const refreshQueueCount = useCallback(async () => {
+    const count = await readOfflineQueueCount();
     setQueueCount(count);
-  };
+  }, []);
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
       // Check if we're in Electron environment
       const electronDatabase = getElectronDatabase();
@@ -223,7 +205,7 @@ const DatabaseStatus: React.FC = () => {
       setLoading(false);
     }
     await refreshQueueCount();
-  };
+  }, [refreshQueueCount]);
 
   const handleSync = async () => {
     const electronDatabase = getElectronDatabase();
@@ -253,13 +235,17 @@ const DatabaseStatus: React.FC = () => {
   const handleWebSync = async () => {
     setReplaying(true);
     try {
-      if ('serviceWorker' in navigator && 'SyncManager' in window) {
+      if ('serviceWorker' in navigator) {
         const reg = await navigator.serviceWorker.ready;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (reg as any).sync.register(OFFLINE_SYNC_TAG);
-        toast.info('Sync scheduled — queued data will be sent automatically');
+        if (hasSyncManager(reg)) {
+          await reg.sync.register(OFFLINE_SYNC_TAG);
+          toast.info('Sync scheduled — queued data will be sent automatically');
+        } else {
+          // Fallback: replay directly without Background Sync API
+          await replayQueueDirect();
+          toast.success('Queued data replayed successfully');
+        }
       } else {
-        // Fallback: replay directly without Background Sync API
         await replayQueueDirect();
         toast.success('Queued data replayed successfully');
       }
@@ -315,7 +301,7 @@ const DatabaseStatus: React.FC = () => {
       window.removeEventListener('offline', handleOffline);
       clearInterval(interval);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchStatus, refreshQueueCount]);
 
   if (loading) {
     return (
