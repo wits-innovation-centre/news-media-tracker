@@ -1,0 +1,30 @@
+name: integrated-verification
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrated-verification:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app.news-media-tracker/package-lock.json
+
+      - name: Install app dependencies
+        run: npm --prefix app.news-media-tracker ci --legacy-peer-deps
+
+      - name: Run integrated verification gate
+        run: npm run verify.integrated

@@ -1,0 +1,124 @@
+plannedVersion: 3.2.0
+phaseName: Offline sync bridge and single-user deployment readiness
+phaseGoal: Deliver single-user-first offline capture with dual deployment tracks (external Docker server + packaged local server)
+approvalState: approved
+allowedChangeClass: minor
+mergePolicy: eager-after-green
+baseBranch: origin/main
+phaseBranch: phase/3.2.0
+finalPr:
+  number: null
+  status: not-created
+lanes:
+  - laneId: 00-conductor
+    role: conductor
+    branch: phase/3.2.0
+    prNumber: null
+    status: active
+    readiness: waiting
+    ownedSurface:
+      - phase branch governance
+      - manifest lifecycle
+      - integration verification
+      - final PR to origin/main
+    blockers: []
+    verification:
+      - integrated verification pending
+  - laneId: 01-persistence-hardening
+    role: worker
+    branch: lane/3.2.0/01-persistence-hardening
+    prNumber: null
+    status: planned
+    readiness: waiting
+    ownedSurface:
+      - app/layout.tsx
+      - lib/components/boot-pwa.ts
+    blockers: []
+    verification:
+      - offline cache and persist behavior test
+  - laneId: 02-offline-queue
+    role: worker
+    branch: lane/3.2.0/02-offline-queue
+    prNumber: null
+    status: planned
+    readiness: waiting
+    ownedSurface:
+      - public/service-worker.js
+      - app/api/sync/replay.ts
+      - app/api/sync/replay.test.ts
+    blockers: []
+    verification:
+      - queued operation replay and idempotency test
+  - laneId: 03-sync-bridge
+    role: worker
+    branch: lane/3.2.0/03-sync-bridge
+    prNumber: null
+    status: planned
+    readiness: waiting
+    ownedSurface:
+      - app/api/sync/route.ts
+    blockers: []
+    verification:
+      - API contract and acknowledgement behavior test
+  - laneId: 04-local-server-connectivity
+    role: worker
+    branch: lane/3.2.0/04-local-server-connectivity
+    prNumber: null
+    status: planned
+    readiness: waiting
+    ownedSurface:
+      - lib/components/sync-configuration.tsx
+    blockers: []
+    verification:
+      - localhost connectivity and health-check flow test
+  - laneId: 05-external-server-stack
+    role: worker
+    branch: lane/3.2.0/05-external-server-stack
+    prNumber: null
+    status: planned
+    readiness: waiting
+    ownedSurface:
+      - docker-compose.yml
+      - .devcontainer/devcontainer.json
+      - README.md
+    blockers:
+      - docker-compose.yml currently absent; lane must create stack definition
+    verification:
+      - one-command external server startup check
+  - laneId: 06-local-server-packaging
+    role: worker
+    branch: lane/3.2.0/06-local-server-packaging
+    prNumber: null
+    status: planned
+    readiness: waiting
+    ownedSurface:
+      - package.json
+      - scripts/
+    blockers: []
+    verification:
+      - packaged local server install/run smoke check
+  - laneId: 07-workbench-offline-ux
+    role: worker
+    branch: lane/3.2.0/07-workbench-offline-ux
+    prNumber: null
+    status: planned
+    readiness: waiting
+    ownedSurface:
+      - lib/components/database-status.tsx
+      - app/page.tsx
+    blockers: []
+    verification:
+      - offline status and manual sync UX checks
+  - laneId: 08-verification
+    role: worker
+    branch: lane/3.2.0/08-verification
+    prNumber: null
+    status: planned
+    readiness: waiting
+    ownedSurface:
+      - app/api/sync/replay.test.ts
+      - __tests__/
+      - docs/
+    blockers: []
+    verification:
+      - integrated offline reconnect replay regression suite

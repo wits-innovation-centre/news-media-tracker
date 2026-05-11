@@ -1,0 +1,31 @@
+fleet:
+  plannedVersion: 3.1.0
+  phaseBranch: phase/3.1.0
+  allowedChangeClass: major
+  mergePolicy: eager-after-green
+
+lanes:
+  - id: "05"
+    name: "[3.1.0][05-verification-runbook] Add integrated verification gates and local/CI runbook."
+    branch: lane/3.1.0/05-verification-runbook
+    targetBranch: phase/3.1.0
+    readiness: ready-to-merge
+    blockers: []
+    prMetadata:
+      titlePrefix: "[3.1.0][05-verification-runbook]"
+      status: open
+    verification:
+      summary: "Integrated verification gates are executable via npm run verify.integrated and documented for local + CI execution."
+      gates:
+        - id: stack-startup
+          command: npm run verify.integrated
+          result: pass
+        - id: bootstrap
+          command: npm run verify.integrated
+          result: pass
+        - id: plugin-route-health
+          command: npm run verify.integrated
+          result: pass
+        - id: host-shell-access
+          command: npm run verify.integrated
+          result: pass

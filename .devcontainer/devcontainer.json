@@ -1,7 +1,7 @@
 {
     "name": "news-media-tracker",
     "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
-    "workspaceFolder": "/workspace",
+    "workspaceFolder": "/workspaces/Homicide-Media-Tracker",
     "forwardPorts": [
         3000,
         3001
