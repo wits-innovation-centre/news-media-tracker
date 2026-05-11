@@ -369,7 +369,7 @@ export async function replayOfflineOperations(
 
     const ackedQueueIdSet = new Set<number>();
     const ackedRequestIdSet = new Set<string>();
-    const perRequestStatus = new Map<
+    const perRequestMetadata = new Map<
       string,
       {
         replayed: boolean | null;
@@ -404,7 +404,7 @@ export async function replayOfflineOperations(
               ? entry.requestId
               : null;
           if (requestId) {
-            perRequestStatus.set(requestId, {
+            perRequestMetadata.set(requestId, {
               replayed: toBooleanReplayStatus(entry.status),
               stale: isStaleStatus(entry.status),
               currentVersion: toSafeVersion(entry.currentVersion),
@@ -417,8 +417,8 @@ export async function replayOfflineOperations(
 
     for (const operation of pendingOperations) {
       const requestMeta =
-        operation.requestId && perRequestStatus.has(operation.requestId)
-          ? perRequestStatus.get(operation.requestId) ?? null
+        operation.requestId && perRequestMetadata.has(operation.requestId)
+          ? perRequestMetadata.get(operation.requestId) ?? null
           : null;
       const baseVersion = requestMeta?.baseVersion ?? operation.baseVersion ?? null;
       const currentVersion = requestMeta?.currentVersion ?? null;
