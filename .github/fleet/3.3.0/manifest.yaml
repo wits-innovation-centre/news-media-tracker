@@ -1,0 +1,101 @@
+fleet:
+  plannedVersion: 3.3.0
+  phaseBranch: phase/3.3.0
+  allowedChangeClass: minor
+  mergePolicy: eager-after-green
+  dependency: none
+
+conductor:
+  lane: "00"
+  identity: "[3.3.0][00-conductor]"
+  conductorBranch: copilot/phase-3-3-0-integration
+  startupGate:
+    repoLockContract: MaxB543/Homicide-tracker-MASTER
+    actualRepo: JulianVJacobs/Homicide-Media-Tracker
+    branchContract: phase/3.3.0
+    actualBranch: copilot/phase-3-3-0-integration
+    result: GATE-FAIL
+    note: >
+      The conductor prompt specifies repository MaxB543/Homicide-tracker-MASTER and
+      branch phase/3.3.0. The agent is executing in JulianVJacobs/Homicide-Media-Tracker
+      on branch copilot/phase-3-3-0-integration. Per the startup gate stop condition,
+      cross-repository PR operations (worker merges, final PR to origin/Test in the
+      locked repo) are not performed. Governance artifact (this manifest) is recorded
+      in the owning repository only.
+
+lanes:
+  - id: "01"
+    name: "[3.3.0][01-ui-refactor] Combine input/output into side panel; add spreadsheet entry view."
+    branch: lane/3.3.0/01-ui-refactor
+    targetBranch: phase/3.3.0
+    readiness: pending
+    blockers:
+      - "No worker PR opened yet. Lane not started."
+    prMetadata:
+      titlePrefix: "[3.3.0][01-ui-refactor]"
+      status: not-opened
+    verification:
+      summary: ""
+      gates: []
+
+  - id: "02"
+    name: "[3.3.0][02-offline-pwa] Deprecate Electron paths; scaffold PWA offline capabilities with service worker."
+    branch: lane/3.3.0/02-offline-pwa
+    targetBranch: phase/3.3.0
+    readiness: pending
+    blockers:
+      - "No worker PR opened yet. Lane not started."
+    prMetadata:
+      titlePrefix: "[3.3.0][02-offline-pwa]"
+      status: not-opened
+    verification:
+      summary: ""
+      gates: []
+
+  - id: "03"
+    name: "[3.3.0][03-merge-strategy] Implement merge/dedup strategy for user-generated records."
+    branch: lane/3.3.0/03-merge-strategy
+    targetBranch: phase/3.3.0
+    readiness: pending
+    blockers:
+      - "No worker PR opened yet. Lane not started."
+    prMetadata:
+      titlePrefix: "[3.3.0][03-merge-strategy]"
+      status: not-opened
+    verification:
+      summary: ""
+      gates: []
+
+integration:
+  conductorVerification:
+    runDate: "2026-05-11"
+    branch: copilot/phase-3-3-0-integration
+    gates:
+      - id: lint
+        command: npm run lint
+        result: pass
+        detail: "No ESLint warnings or errors"
+      - id: unit-tests
+        command: npm run test
+        result: pass
+        detail: "153 tests, 28 suites — all passing"
+      - id: integrated-gates
+        command: npm run verify.integrated
+        result: pass
+        detail: "29 tests, 1 suite — all passing (gates 1-8: stack-startup, bootstrap, plugin-route-health, host-shell-access, offline-queue, reconnect-drill, auth-compat, sw-queue-contract)"
+  workerMergesCompleted: []
+  finalPR:
+    status: blocked
+    reason: >
+      Conductor startup gate FAIL — cross-repository PR to origin/Test
+      (MaxB543/Homicide-tracker-MASTER) cannot be opened from this agent context.
+      Final PR must be opened manually once all worker lanes are merged into
+      phase/3.3.0 within the locked repository.
+
+stopConditions:
+  - id: repo-lock-mismatch
+    triggered: true
+    detail: >
+      Actual repo (JulianVJacobs/Homicide-Media-Tracker) != contract repo
+      (MaxB543/Homicide-tracker-MASTER). Cross-repo operations halted per
+      startup gate protocol. Governance manifest created in owning repo only.
