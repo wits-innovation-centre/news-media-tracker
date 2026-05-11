@@ -27,10 +27,14 @@ import {
 } from './list-homicides.utils';
 
 interface ListHomicidesProps {
-  onBack: () => void;
+  onBack?: () => void;
+  embedded?: boolean;
+  selectedCaseIds?: string[];
+  onSelectedCaseIdsChange?: (caseIds: string[]) => void;
+  onCasesLoaded?: (cases: DetailedEvent[]) => void;
 }
 
-interface DetailedEvent
+export interface DetailedEvent
   extends Omit<
     Event,
     'participantIds' | 'articleIds' | 'eventTypes' | 'details'
@@ -187,7 +191,13 @@ async function fetchPerpetratorsByArticle(
   }
 }
 
-const ListHomicides: React.FC<ListHomicidesProps> = ({ onBack }) => {
+const ListHomicides: React.FC<ListHomicidesProps> = ({
+  onBack,
+  embedded = false,
+  selectedCaseIds,
+  onSelectedCaseIdsChange,
+  onCasesLoaded,
+}) => {
   const [cases, setCases] = useState<DetailedEvent[]>([]);
   const getVictimsLength = (case_: DetailedEvent) =>
     Array.isArray(case_?.victims) ? case_.victims.length : 0;
@@ -203,6 +213,26 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({ onBack }) => {
   const [totalCases, setTotalCases] = useState(0);
   const [selectedCase, setSelectedCase] = useState<DetailedEvent | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+
+  const selectedCaseIdSet = useMemo(
+    () => new Set(selectedCaseIds ?? []),
+    [selectedCaseIds],
+  );
+
+  const toggleCaseSelection = useCallback(
+    (caseId: string) => {
+      if (!onSelectedCaseIdsChange) {
+        return;
+      }
+      const activeSelection = selectedCaseIds ?? [];
+      if (activeSelection.includes(caseId)) {
+        onSelectedCaseIdsChange(activeSelection.filter((id) => id !== caseId));
+        return;
+      }
+      onSelectedCaseIdsChange([...activeSelection, caseId]);
+    },
+    [onSelectedCaseIdsChange, selectedCaseIds],
+  );
 
   const itemsPerPage = 10;
 
@@ -270,6 +300,7 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({ onBack }) => {
         }),
       );
       setCases(assembledCases);
+      onCasesLoaded?.(assembledCases);
       const resolvedTotalPages = isEventsPayload(payload)
         ? payload.totalPages
         : 1;
@@ -281,9 +312,10 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({ onBack }) => {
     } else {
       setError(result?.error || 'Failed to fetch homicide cases');
       toast.error('Failed to load homicide cases');
+      onCasesLoaded?.([]);
     }
     setLoading(false);
-  }, [currentPage, searchTerm]);
+  }, [currentPage, onCasesLoaded, searchTerm]);
 
   useEffect(() => {
     fetchCases();
@@ -356,15 +388,17 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({ onBack }) => {
   const listCountSummary = listCountSummaryParts.join(' ');
 
   return (
-    <Container fluid className="py-4">
+    <Container fluid className={embedded ? 'py-0' : 'py-4'}>
       <Row>
         <Col>
-          <div className="d-flex justify-content-between align-items-center mb-4">
-            <h2>Homicide Records</h2>
-            <Button variant="outline-secondary" onClick={onBack}>
-              Back to Home
-            </Button>
-          </div>
+          {!embedded && (
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <h2>Homicide Records</h2>
+              <Button variant="outline-secondary" onClick={onBack}>
+                Back to Home
+              </Button>
+            </div>
+          )}
 
           {/* Search and Stats */}
           <Card className="mb-4">
@@ -492,6 +526,7 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({ onBack }) => {
                     <Table striped hover>
                       <thead>
                         <tr>
+                          {onSelectedCaseIdsChange && <th>Select</th>}
                           <th>Date</th>
                           <th>Headline</th>
                           <th>Source</th>
@@ -507,6 +542,20 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({ onBack }) => {
                         {Array.isArray(visibleCases) &&
                           visibleCases.map((case_) => (
                             <tr key={case_.id}>
+                              {onSelectedCaseIdsChange && (
+                                <td>
+                                  <Form.Check
+                                    aria-label={`Select case ${case_.id}`}
+                                    checked={
+                                      Boolean(case_.id) &&
+                                      selectedCaseIdSet.has(case_.id as string)
+                                    }
+                                    onChange={() =>
+                                      case_.id && toggleCaseSelection(case_.id)
+                                    }
+                                  />
+                                </td>
+                              )}
                               <td>
                                 {case_.articleData &&
                                 case_.articleData.dateOfPublication ? (

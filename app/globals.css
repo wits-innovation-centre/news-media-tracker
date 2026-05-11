@@ -20,6 +20,8 @@ body {
     background: linear-gradient(to bottom,
             transparent,
             rgb(var(--background-end-rgb))) rgb(var(--background-start-rgb));
+    font-family: Inter, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.5;
 }
 
 a {
@@ -42,4 +44,96 @@ a {
 .card {
     border-radius: 0.5rem;
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+:root {
+    --workspace-surface-bg: #ffffff;
+    --workspace-surface-border: #dce3ee;
+    --workspace-gap: 1rem;
+    --workspace-title-size: 1.6rem;
+}
+
+.workspace-shell {
+    display: flex;
+    flex-direction: column;
+    gap: var(--workspace-gap);
+}
+
+.workspace-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.workspace-title {
+    font-size: var(--workspace-title-size);
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.workspace-subtitle {
+    color: #6b7280;
+    font-size: 0.95rem;
+}
+
+.workspace-mode-switch {
+    display: inline-flex;
+    gap: 0.5rem;
+}
+
+.workspace-surface {
+    border: 1px solid var(--workspace-surface-border);
+    background-color: var(--workspace-surface-bg);
+}
+
+.workspace-surface-header {
+    background-color: #f8fafc;
+    font-weight: 600;
+}
+
+.workspace-queue-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.workspace-section-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 0;
+}
+
+.graph-canvas {
+    border: 1px dashed #c7d2fe;
+    border-radius: 0.5rem;
+    min-height: 18rem;
+    padding: 0.75rem;
+    overflow: auto;
+    outline: none;
+}
+
+.graph-canvas:focus {
+    box-shadow: 0 0 0 0.2rem rgb(59 130 246 / 25%);
+}
+
+.graph-canvas-inner {
+    transform-origin: top left;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.graph-node {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    padding: 0.65rem 0.75rem;
+    background-color: #f8fafc;
+}
+
+.graph-node.is-active {
+    border-color: #2563eb;
+    background-color: #dbeafe;
 }

@@ -13,7 +13,8 @@ import {
   Spinner,
 } from 'react-bootstrap';
 import InputHomicide from '@/lib/components/input-homicide';
-import ListHomicides from '@/lib/components/list-homicides';
+import ListHomicides, { type DetailedEvent } from '@/lib/components/list-homicides';
+import ConnectedGraphWorkspace from '@/lib/components/connected-graph-workspace';
 import ParticipantMergeQueue from '@/lib/components/participant-merge-queue';
 import SchemaProfileAdmin from '@/lib/components/schema-profile-admin';
 import SysInfo from '@/lib/components/system-information';
@@ -23,7 +24,8 @@ import {
   hasSyncManager,
 } from '@/lib/utils/cache-manager';
 
-type Views = 'home' | 'input' | 'list' | 'merge' | 'profiles' | 'info';
+type Views = 'home' | 'workspace' | 'merge' | 'profiles' | 'info';
+type WorkspaceMode = 'form' | 'graph';
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<Views>('home');
@@ -32,6 +34,9 @@ export default function Home() {
   );
   const [queueCount, setQueueCount] = useState(0);
   const [replaying, setReplaying] = useState(false);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('form');
+  const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
+  const [loadedCases, setLoadedCases] = useState<DetailedEvent[]>([]);
 
   useEffect(() => {
     readOfflineQueueCount().then(setQueueCount);
@@ -102,16 +107,22 @@ export default function Home() {
                     <Button
                       variant="primary"
                       size="lg"
-                      onClick={() => setCurrentView('input')}
+                      onClick={() => {
+                        setWorkspaceMode('form');
+                        setCurrentView('workspace');
+                      }}
                     >
-                      Input New Event
+                      Open Entry Workspace
                     </Button>
                     <Button
                       variant="outline-primary"
                       size="lg"
-                      onClick={() => setCurrentView('list')}
+                      onClick={() => {
+                        setWorkspaceMode('graph');
+                        setCurrentView('workspace');
+                      }}
                     >
-                      View Events
+                      Open Event Ledger + Graph
                     </Button>
                     <Button
                       variant="outline-secondary"
@@ -136,12 +147,114 @@ export default function Home() {
       );
     }
 
-    if (currentView === 'input') {
-      return <InputHomicide onBack={() => setCurrentView('home')} />;
-    }
+    if (currentView === 'workspace') {
+      return (
+        <section className="workspace-shell">
+          <div className="workspace-header">
+            <div>
+              <h2 className="workspace-title">Homicide Workspace</h2>
+              <p className="workspace-subtitle mb-0">
+                Stitch-aligned entry, ledger, and connected graph workflow
+              </p>
+            </div>
+            <Button
+              variant="outline-secondary"
+              onClick={() => setCurrentView('home')}
+              className="workspace-back-button"
+            >
+              Back to Home
+            </Button>
+          </div>
 
-    if (currentView === 'list') {
-      return <ListHomicides onBack={() => setCurrentView('home')} />;
+          <div
+            className="workspace-mode-switch"
+            role="tablist"
+            aria-label="Workspace mode"
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+                event.preventDefault();
+                setWorkspaceMode((previousMode) =>
+                  previousMode === 'form' ? 'graph' : 'form',
+                );
+              }
+            }}
+          >
+            <Button
+              role="tab"
+              aria-selected={workspaceMode === 'form'}
+              variant={workspaceMode === 'form' ? 'primary' : 'outline-primary'}
+              onClick={() => setWorkspaceMode('form')}
+            >
+              Form
+            </Button>
+            <Button
+              role="tab"
+              aria-selected={workspaceMode === 'graph'}
+              variant={workspaceMode === 'graph' ? 'primary' : 'outline-primary'}
+              onClick={() => setWorkspaceMode('graph')}
+            >
+              Graph
+            </Button>
+          </div>
+
+          <Row className="g-3 align-items-stretch">
+            <Col lg={workspaceMode === 'form' ? 8 : 7}>
+              <Card className="workspace-surface h-100">
+                <Card.Header className="workspace-surface-header">
+                  {workspaceMode === 'form'
+                    ? 'Entry Workspace'
+                    : 'Event Ledger'}
+                </Card.Header>
+                <Card.Body>
+                  {workspaceMode === 'form' ? (
+                    <InputHomicide embedded />
+                  ) : (
+                    <ListHomicides
+                      embedded
+                      selectedCaseIds={selectedCaseIds}
+                      onSelectedCaseIdsChange={setSelectedCaseIds}
+                      onCasesLoaded={setLoadedCases}
+                    />
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+            <Col lg={workspaceMode === 'form' ? 4 : 5}>
+              {workspaceMode === 'form' ? (
+                <Card className="workspace-surface h-100">
+                  <Card.Header className="workspace-surface-header">
+                    Workspace Queue
+                  </Card.Header>
+                  <Card.Body className="d-flex flex-column gap-3">
+                    <div className="workspace-queue-item">
+                      <strong>Offline Sync Queue</strong>
+                      <Badge bg="warning" text="dark">
+                        {queueCount}
+                      </Badge>
+                    </div>
+                    <div className="workspace-queue-item">
+                      <strong>Selection Queue</strong>
+                      <Badge bg="dark">{selectedCaseIds.length}</Badge>
+                    </div>
+                    <Button
+                      variant="outline-primary"
+                      onClick={() => setWorkspaceMode('graph')}
+                    >
+                      Go to Graph Mode
+                    </Button>
+                  </Card.Body>
+                </Card>
+              ) : (
+                <ConnectedGraphWorkspace
+                  cases={loadedCases}
+                  selectedCaseIds={selectedCaseIds}
+                  onSelectedCaseIdsChange={setSelectedCaseIds}
+                />
+              )}
+            </Col>
+          </Row>
+        </section>
+      );
     }
 
     if (currentView === 'merge') {
@@ -176,17 +289,31 @@ export default function Home() {
               </Nav.Link>
               <Nav.Link
                 href="#"
-                onClick={() => setCurrentView('input')}
-                className={currentView === 'input' ? 'active' : ''}
+                onClick={() => {
+                  setWorkspaceMode('form');
+                  setCurrentView('workspace');
+                }}
+                className={
+                  currentView === 'workspace' && workspaceMode === 'form'
+                    ? 'active'
+                    : ''
+                }
               >
-                Input Event
+                Entry Workspace
               </Nav.Link>
               <Nav.Link
                 href="#"
-                onClick={() => setCurrentView('list')}
-                className={currentView === 'list' ? 'active' : ''}
+                onClick={() => {
+                  setWorkspaceMode('graph');
+                  setCurrentView('workspace');
+                }}
+                className={
+                  currentView === 'workspace' && workspaceMode === 'graph'
+                    ? 'active'
+                    : ''
+                }
               >
-                View All Events
+                Event Ledger + Graph
               </Nav.Link>
               <Nav.Link
                 href="#"
