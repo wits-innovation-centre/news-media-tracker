@@ -137,8 +137,8 @@ lanes:
     role: worker
     branch: lane/3.2.0/08-verification
     prNumber: null
-    status: planned
-    readiness: waiting
+    status: complete
+    readiness: ready
     ownedSurface:
       - app/api/sync/replay.test.ts
       - __tests__/
@@ -146,3 +146,6 @@ lanes:
     blockers: []
     verification:
       - integrated offline reconnect replay regression suite
+      - replay.test.ts expanded 3 → 18 tests (all pass)
+      - __tests__/integrated-verification-gates.test.ts created (29 gates, all pass)
+      - docs/verification-3.2.0-offline-reconnect.md created
