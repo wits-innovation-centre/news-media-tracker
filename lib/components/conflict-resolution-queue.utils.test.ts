@@ -6,7 +6,7 @@ import {
 } from './conflict-resolution-queue.utils';
 
 describe('conflict resolution queue utils', () => {
-  it('builds queue state with open conflicts for read-only users', () => {
+  it('filters open conflicts and evaluates read-only permissions', () => {
     const conflicts: ConflictRecord[] = [
       { id: 'c1', status: 'open', summary: 'Name mismatch' },
       { id: 'c2', status: 'resolved', summary: 'Alias mismatch' },
@@ -33,5 +33,11 @@ describe('conflict resolution queue utils', () => {
         body: JSON.stringify({ resolution: 'keep_local' }),
       },
     });
+  });
+
+  it('rejects resolve requests when conflict id is empty', () => {
+    expect(() => buildResolveConflictRequest('   ', 'keep_local')).toThrow(
+      'Conflict ID is required',
+    );
   });
 });

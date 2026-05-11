@@ -39,6 +39,26 @@ const jsonLabel = (value: unknown) => {
   }
 };
 
+const parseApiPayload = async (
+  response: Response,
+  parseErrorMessage: string,
+): Promise<Record<string, unknown>> => {
+  try {
+    const payload = (await response.json()) as Record<string, unknown>;
+    return payload;
+  } catch {
+    throw new Error(parseErrorMessage);
+  }
+};
+
+const formatDetectedDate = (value?: string): string => {
+  if (!value) {
+    return 'Unknown date';
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 'Unknown date' : parsed.toLocaleString();
+};
+
 const ConflictResolutionQueue: React.FC<ConflictResolutionQueueProps> = ({
   onBack,
 }) => {
@@ -58,12 +78,18 @@ const ConflictResolutionQueue: React.FC<ConflictResolutionQueueProps> = ({
     setError(null);
     try {
       const response = await fetch('/api/sync/conflicts');
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload?.success) {
-        throw new Error(payload?.error || 'Failed to load conflict queue');
+      const payload = await parseApiPayload(
+        response,
+        'Invalid response format from server',
+      );
+      if (!response.ok || !payload.success) {
+        throw new Error(
+          (typeof payload.error === 'string' && payload.error) ||
+            'Failed to load conflict queue',
+        );
       }
 
-      const data = (payload.data || {}) as ConflictQueuePayload;
+      const data = (payload.data as ConflictQueuePayload | undefined) ?? {};
       setConflicts(Array.isArray(data.conflicts) ? data.conflicts : []);
       setCanResolve(hasResolveCapability(data));
     } catch (loadError) {
@@ -91,9 +117,15 @@ const ConflictResolutionQueue: React.FC<ConflictResolutionQueueProps> = ({
     try {
       const request = buildResolveConflictRequest(conflictId, resolution);
       const response = await fetch(request.url, request.init);
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload?.success) {
-        throw new Error(payload?.error || 'Failed to resolve conflict');
+      const payload = await parseApiPayload(
+        response,
+        'Invalid response format when resolving conflict',
+      );
+      if (!response.ok || !payload.success) {
+        throw new Error(
+          (typeof payload.error === 'string' && payload.error) ||
+            'Failed to resolve conflict',
+        );
       }
       toast.success('Conflict resolved.');
       await loadConflicts();
@@ -214,7 +246,7 @@ const ConflictResolutionQueue: React.FC<ConflictResolutionQueueProps> = ({
                       </p>
                       {conflict.createdAt && (
                         <p className="mb-0 small text-muted">
-                          Detected: {new Date(conflict.createdAt).toLocaleString()}
+                          Detected: {formatDetectedDate(conflict.createdAt)}
                         </p>
                       )}
                     </Card.Body>
@@ -223,7 +255,7 @@ const ConflictResolutionQueue: React.FC<ConflictResolutionQueueProps> = ({
                     <Button
                       size="sm"
                       variant="outline-primary"
-                      aria-label={`Resolve ${conflict.id} with local`}
+                      aria-label={`Keep local value for ${conflict.summary || 'this conflict'}`}
                       onClick={() => resolveConflict(conflict.id, 'keep_local')}
                       disabled={!canResolve || isBusy}
                     >
@@ -232,7 +264,7 @@ const ConflictResolutionQueue: React.FC<ConflictResolutionQueueProps> = ({
                     <Button
                       size="sm"
                       variant="outline-primary"
-                      aria-label={`Resolve ${conflict.id} with remote`}
+                      aria-label={`Keep remote value for ${conflict.summary || 'this conflict'}`}
                       onClick={() => resolveConflict(conflict.id, 'keep_remote')}
                       disabled={!canResolve || isBusy}
                     >

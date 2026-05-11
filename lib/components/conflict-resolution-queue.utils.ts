@@ -48,11 +48,18 @@ export const getOpenConflicts = (conflicts: ConflictRecord[]): ConflictRecord[] 
 export const buildResolveConflictRequest = (
   conflictId: string,
   resolution: ConflictResolutionDecision,
-): { url: string; init: RequestInit } => ({
-  url: `/api/sync/conflicts/${encodeURIComponent(conflictId)}/resolve`,
-  init: {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ resolution }),
-  },
-});
+): { url: string; init: RequestInit } => {
+  const safeConflictId = conflictId.trim();
+  if (!safeConflictId) {
+    throw new Error('Conflict ID is required');
+  }
+
+  return {
+    url: `/api/sync/conflicts/${encodeURIComponent(safeConflictId)}/resolve`,
+    init: {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resolution }),
+    },
+  };
+};
