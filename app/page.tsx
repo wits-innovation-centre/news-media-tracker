@@ -15,6 +15,7 @@ import {
 import InputHomicide from '@/lib/components/input-homicide';
 import ListHomicides from '@/lib/components/list-homicides';
 import ParticipantMergeQueue from '@/lib/components/participant-merge-queue';
+import ConflictResolutionQueue from '@/lib/components/conflict-resolution-queue';
 import SchemaProfileAdmin from '@/lib/components/schema-profile-admin';
 import SysInfo from '@/lib/components/system-information';
 import {
@@ -23,7 +24,14 @@ import {
   hasSyncManager,
 } from '@/lib/utils/cache-manager';
 
-type Views = 'home' | 'input' | 'list' | 'merge' | 'profiles' | 'info';
+type Views =
+  | 'home'
+  | 'input'
+  | 'list'
+  | 'merge'
+  | 'conflicts'
+  | 'profiles'
+  | 'info';
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<Views>('home');
@@ -121,6 +129,13 @@ export default function Home() {
                       Manage Participant Merge Queue
                     </Button>
                     <Button
+                      variant="outline-warning"
+                      size="lg"
+                      onClick={() => setCurrentView('conflicts')}
+                    >
+                      Resolve Sync Conflicts
+                    </Button>
+                    <Button
                       variant="outline-dark"
                       size="lg"
                       onClick={() => setCurrentView('profiles')}
@@ -146,6 +161,10 @@ export default function Home() {
 
     if (currentView === 'merge') {
       return <ParticipantMergeQueue onBack={() => setCurrentView('home')} />;
+    }
+
+    if (currentView === 'conflicts') {
+      return <ConflictResolutionQueue onBack={() => setCurrentView('home')} />;
     }
 
     if (currentView === 'profiles') {
@@ -194,6 +213,13 @@ export default function Home() {
                 className={currentView === 'merge' ? 'active' : ''}
               >
                 Merge Queue
+              </Nav.Link>
+              <Nav.Link
+                href="#"
+                onClick={() => setCurrentView('conflicts')}
+                className={currentView === 'conflicts' ? 'active' : ''}
+              >
+                Conflict Queue
               </Nav.Link>
               <Nav.Link
                 href="#"
