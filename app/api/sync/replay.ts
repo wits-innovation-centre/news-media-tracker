@@ -150,7 +150,7 @@ function buildDeterministicDivergenceKey(
   baseVersion: number | null,
   currentVersion: number | null,
 ): string {
-  return `${operation.method}:${operation.endpoint}:${operation.requestId ?? ''}:${baseVersion ?? 'na'}:${currentVersion ?? 'na'}`;
+  return `${operation.method}:${operation.endpoint}:${operation.requestId ?? ''}:${baseVersion ?? 'null'}:${currentVersion ?? 'null'}`;
 }
 
 function resolveReplaySuccess(
@@ -164,7 +164,7 @@ function resolveReplaySuccess(
   if (stale) {
     return false;
   }
-  if (requestMeta?.replayed !== null && typeof requestMeta?.replayed !== 'undefined') {
+  if (typeof requestMeta?.replayed === 'boolean') {
     return requestMeta.replayed;
   }
   if (typeof operation.queueId === 'number' && ackedQueueIdSet.has(operation.queueId)) {
@@ -281,25 +281,25 @@ export async function replayOfflineOperations(
     if (requestId) {
       const cachedResult = context.replayCache.get(requestId);
       if (cachedResult) {
-        const duplicateResult: ReplayResult = {
+        const cachedDuplicateResult: ReplayResult = {
           ...cachedResult,
           queueId,
           requestId,
           status: 'duplicate',
         };
-        orderedResults[index] = duplicateResult;
+        orderedResults[index] = cachedDuplicateResult;
         continue;
       }
 
       if (seenRequestIds.has(requestId)) {
-        const duplicateResult: ReplayResult = {
+        const inBatchDuplicateResult: ReplayResult = {
           queueId,
           requestId,
           method,
           endpoint,
           status: 'duplicate',
         };
-        orderedResults[index] = duplicateResult;
+        orderedResults[index] = inBatchDuplicateResult;
         continue;
       }
       seenRequestIds.add(requestId);
