@@ -56,13 +56,22 @@ lanes:
     role: worker
     branch: lane/3.2.0/03-sync-bridge
     prNumber: null
-    status: planned
-    readiness: waiting
+    status: complete
+    readiness: ready
     ownedSurface:
       - app/api/sync/route.ts
+      - app/api/sync/route.test.ts
     blockers: []
     verification:
-      - API contract and acknowledgement behavior test
+      - API contract and acknowledgement behavior test: PASSED (10/10 tests)
+      - GET syncStatus derivation (disabled/idle/pending): verified
+      - GET pendingCount forwarding: verified
+      - POST conflictResolution applied to config: verified
+      - PATCH syncStatus in replay response (idle/error): verified
+      - PATCH processed count in queue-flush response: verified
+      - DELETE disables sync via updateConfig: verified
+      - Full test suite (92 tests): no regressions
+      - ESLint: no warnings or errors
   - laneId: 04-local-server-connectivity
     role: worker
     branch: lane/3.2.0/04-local-server-connectivity
