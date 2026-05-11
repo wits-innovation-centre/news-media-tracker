@@ -72,14 +72,19 @@ describe('sync replay bridge', () => {
         }),
       }),
     );
-    expect([...result.ackedQueueIds].sort((left, right) => left - right)).toEqual(
-      [1, 2],
-    );
-    expect(
-      result.results
-        .map((entry) => entry.status)
-        .sort((left, right) => left.localeCompare(right)),
-    ).toEqual(['duplicate', 'replayed']);
+    expect(result.ackedQueueIds).toEqual([1, 2]);
+    expect(result.results).toEqual([
+      expect.objectContaining({
+        queueId: 1,
+        requestId: 'req-1',
+        status: 'replayed',
+      }),
+      expect.objectContaining({
+        queueId: 2,
+        requestId: 'req-1',
+        status: 'duplicate',
+      }),
+    ]);
   });
 
   it('applies forwarded authorization to replayed requests', async () => {
@@ -117,5 +122,114 @@ describe('sync replay bridge', () => {
         }),
       }),
     );
+  });
+
+  it('retains failures and replays only not-yet-successful operations later', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 207,
+        statusText: 'Multi-Status',
+        clone() {
+          return this;
+        },
+        async json() {
+          return {
+            ackedRequestIds: ['req-1'],
+            results: [
+              { requestId: 'req-1', status: 'replayed' },
+              { requestId: 'req-2', status: 'failed' },
+            ],
+          };
+        },
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        clone() {
+          return this;
+        },
+        async json() {
+          return {
+            ackedRequestIds: ['req-2'],
+            results: [{ requestId: 'req-2', status: 'replayed' }],
+          };
+        },
+      } as unknown as Response);
+
+    const replayCache = new Map();
+    const operations = normalizeReplayOperations([
+      {
+        queueId: 1,
+        requestId: 'req-1',
+        method: 'POST',
+        endpoint: '/api/events',
+        body: { id: 'event-1' },
+      },
+      {
+        queueId: 2,
+        requestId: 'req-2',
+        method: 'POST',
+        endpoint: '/api/events',
+        body: { id: 'event-2' },
+      },
+    ]);
+
+    const firstReplay = await replayOfflineOperations(operations, {
+      requestOrigin: 'http://localhost:3000',
+      replayCache,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(firstReplay.ackedQueueIds).toEqual([1]);
+    expect(firstReplay.results).toEqual([
+      expect.objectContaining({
+        queueId: 1,
+        requestId: 'req-1',
+        status: 'replayed',
+      }),
+      expect.objectContaining({
+        queueId: 2,
+        requestId: 'req-2',
+        status: 'failed',
+      }),
+    ]);
+
+    const secondReplay = await replayOfflineOperations(operations, {
+      requestOrigin: 'http://localhost:3000',
+      replayCache,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({
+        body: JSON.stringify({
+          operations: [
+            {
+              requestId: 'req-2',
+              method: 'POST',
+              endpoint: '/api/events',
+              body: { id: 'event-2' },
+            },
+          ],
+        }),
+      }),
+    );
+    expect(secondReplay.ackedQueueIds).toEqual([1, 2]);
+    expect(secondReplay.results).toEqual([
+      expect.objectContaining({
+        queueId: 1,
+        requestId: 'req-1',
+        status: 'duplicate',
+      }),
+      expect.objectContaining({
+        queueId: 2,
+        requestId: 'req-2',
+        status: 'replayed',
+      }),
+    ]);
   });
 });

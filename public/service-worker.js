@@ -6,6 +6,7 @@ const OFFLINE_QUEUE_STORE = 'queue';
 const OFFLINE_QUEUE_DB_VERSION = 2;
 const OFFLINE_SYNC_ENDPOINT = '/api/sync';
 let offlineRequestCounter = 0;
+let queueReplayPromise = null;
 
 const supportsIndexedDB = () => {
   try {
@@ -205,7 +206,11 @@ function syncQueuedPosts() {
   if (!supportsIndexedDB()) {
     return Promise.resolve();
   }
-  return new Promise((resolve, reject) => {
+  if (queueReplayPromise) {
+    return queueReplayPromise;
+  }
+
+  queueReplayPromise = new Promise((resolve, reject) => {
     const open = indexedDB.open(OFFLINE_QUEUE_DB, OFFLINE_QUEUE_DB_VERSION);
     open.onupgradeneeded = () => {
       if (!open.result.objectStoreNames.contains(OFFLINE_QUEUE_STORE)) {
@@ -216,11 +221,27 @@ function syncQueuedPosts() {
       const db = open.result;
       const tx = db.transaction(OFFLINE_QUEUE_STORE, 'readwrite');
       const store = tx.objectStore(OFFLINE_QUEUE_STORE);
+      let closed = false;
+      const closeDb = () => {
+        if (!closed) {
+          closed = true;
+          db.close();
+        }
+      };
+
+      tx.oncomplete = () => {
+        closeDb();
+        resolve();
+      };
+      tx.onerror = () => {
+        closeDb();
+        reject(tx.error);
+      };
+
       const getAll = store.getAll();
       getAll.onsuccess = async () => {
         const posts = getAll.result.sort((left, right) => left.id - right.id);
         if (posts.length === 0) {
-          resolve();
           return;
         }
         try {
@@ -239,13 +260,12 @@ function syncQueuedPosts() {
           });
 
           if (!replayResponse.ok) {
-            resolve();
             return;
           }
 
           const replayResult = await replayResponse.json().catch(() => null);
           const ackedQueueIds = Array.isArray(replayResult?.ackedQueueIds)
-            ? replayResult.ackedQueueIds
+            ? replayResult.ackedQueueIds.filter(queueId => Number.isInteger(queueId))
             : [];
           for (const queueId of ackedQueueIds) {
             store.delete(queueId);
@@ -253,12 +273,20 @@ function syncQueuedPosts() {
         } catch (err) {
           // If still offline, keep in queue
         }
-        resolve();
       };
-      getAll.onerror = () => reject(getAll.error);
+      getAll.onerror = () => {
+        closeDb();
+        reject(getAll.error);
+      };
     };
     open.onerror = () => reject(open.error);
   });
+
+  queueReplayPromise = queueReplayPromise.finally(() => {
+    queueReplayPromise = null;
+  });
+
+  return queueReplayPromise;
 }
 
 self.addEventListener('online', () => {
