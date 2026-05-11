@@ -413,6 +413,29 @@ Spacing follows a 4px base unit. Common operational spacing:
 - 16px for row and control separation
 - 24px for card body padding
 
+### Entry Workspace Mode Switch
+
+The primary data capture surface in this app is dual-purpose. The same central
+workspace region supports:
+
+- Form mode: structured archival data capture
+- Graph mode: connected relationship analysis
+
+This switch is in-place (no route change). Navigation chrome remains fixed in both
+states:
+
+- Fixed top bar stays unchanged
+- Left navigation sidebar stays unchanged
+- Right entry/merge queue panel stays unchanged
+
+Use a segmented control labelled "Workspace Mode" with options:
+
+- Form (default, active style)
+- Graph (inactive style until selected)
+
+The mode transition should be subtle (150-200ms fade) and preserve context so the
+user can switch between capture and analysis without losing their working state.
+
 ## Elevation and Depth
 
 Depth is produced by blue-tinted ambient shadow over warm surfaces.
@@ -462,6 +485,28 @@ Cards are warm parchment containers with blue edge logic:
 
 Inputs sit on creamy parchment fields with silver-gold borders.
 Focus rings are blue, not gold, to align interactive emphasis to accent tone.
+
+### Workspace Mode Toggle
+
+The workspace mode segmented control appears in the top-right of the entry content
+card. States:
+
+- Active mode: gold fill, blue text, clear selected border
+- Inactive mode: ghost/outlined style using accent border
+
+Interaction requirements:
+
+- Switching to Graph replaces only the form body region
+- Switching back to Form restores form section scroll position
+- Queue selection state remains persistent across both modes
+- Keyboard-accessible toggle (left/right arrows and tab focus)
+
+Graph mode content requirements in the same workspace footprint:
+
+- Parchment canvas with soft blue ambient depth
+- Role-based nodes (article, victim, perpetrator)
+- Blue relationship edges with optional gold-highlighted cross-event links
+- Small legend, zoom controls, and node details inspector within the content area
 
 ### Tags and Badges
 

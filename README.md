@@ -2,6 +2,16 @@
 
 Tracker application repository.
 
+## Roadmap Snapshot (next phase)
+
+- Active implementation focus remains `3.2.0` (offline sync bridge and single-user deployment readiness).
+- Next phase target is `3.3.x` (sync governance and controlled sharing).
+- `3.3.x` includes a dedicated UI lane:
+  - `[3.3.x][06-ui-sync-implementation]` UI/UX implementarian lane aligned to Stitch designs.
+  - Scope: in-place `Form | Graph` workspace mode, Event Ledger alignment, and Connected Graph integration patterns.
+  - Constraint: lane owns UI shell/components only; schema/permission engines stay in backend lanes.
+- Conductor lane remains integration governance (`[3.3.x][00-conductor]`) and should not absorb feature implementation unless the phase is explicitly re-contracted.
+
 Owned surfaces:
 
 - Next.js workbench app

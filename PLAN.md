@@ -96,6 +96,7 @@
 - Establish repository-level sharing with clear permissions and merge authority.
 - Support collaborative editing where multiple users can create or modify the same logical record.
 - Keep transfer and sync paths aligned so local-server handoff and multi-user sync use the same contracts.
+- Align sync-governance UX with Stitch-approved workspace patterns, including the in-place Form/Graph workspace mode switch.
 
 ### Role model
 
@@ -126,6 +127,7 @@
 - API contracts for share/invite flows and conflict-resolution actions.
 - Minimal conflict queue UI for authorized users.
 - Policy checks in sync/replay endpoints to enforce repository permissions.
+- UI sync implementation against Stitch designs for Entry Workspace, Event Ledger, and Connected Graph interactions.
 
 ### Suggested lane decomposition (draft)
 
@@ -135,7 +137,36 @@
 - `[3.3.x][03-operation-log]` Add operation-based mutation log and base-version checks.
 - `[3.3.x][04-conflict-engine]` Implement auto-merge rules and conflict record generation.
 - `[3.3.x][05-conflict-resolution-ui]` Ship manual conflict resolution queue and actions.
-- `[3.3.x][06-verification]` Validate permission enforcement and merge outcomes.
+- `[3.3.x][06-ui-sync-implementation]` Implement UI/UX alignment to Stitch designs (UI/UX implementarian lane).
+- `[3.3.x][07-verification]` Validate permission enforcement, UI behavior, and merge outcomes.
+
+### UI sync lane contract (next phase)
+
+- Dedicated lane: `[3.3.x][06-ui-sync-implementation]`.
+- Role: UI/UX implementarian to Stitch's designer (consume approved Stitch screens and map to shipped components).
+- Owned surface:
+	- `app/page.tsx` navigation/view shell behavior.
+	- `lib/components/input-homicide.tsx` entry workspace composition and mode toggle integration.
+	- `lib/components/list-homicides.tsx` Event Ledger table-mode alignment.
+	- New graph workspace component(s) under `lib/components/` for in-place Graph mode.
+	- `app/globals.css` style token application needed for Stitch alignment.
+- Non-owned surface:
+	- Schema and permission engine code owned by lanes 01-04.
+	- Conflict policy enforcement logic owned by lanes 03-05.
+- Acceptance criteria:
+	- Entry Workspace supports in-place `Form | Graph` switching without route changes.
+	- Queue/selection state persists across workspace mode switches.
+	- Event Ledger and Connected Graph states follow Stitch layout hierarchy and token usage.
+	- Keyboard accessibility for mode toggles and primary graph controls.
+
+### Phase dependency notes (3.3.x)
+
+- Lanes 01 and 02 can run in parallel.
+- Lane 03 depends on lane 01.
+- Lane 04 depends on lane 03.
+- Lane 05 depends on lanes 02 and 04.
+- Lane 06 can start after baseline routes/components are stable and should merge after lane 05 API contracts are finalized.
+- Lane 07 runs after all worker lanes merge.
 
 ### Priority note
 
