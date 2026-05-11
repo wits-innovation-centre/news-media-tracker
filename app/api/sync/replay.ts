@@ -159,6 +159,18 @@ function toBooleanReplayStatus(value: unknown): boolean | null {
   return null;
 }
 
+function collectAckedQueueIds(results: ReplayResult[]): number[] {
+  return Array.from(
+    new Set(
+      results.flatMap((result) =>
+        result.status !== 'failed' && typeof result.queueId === 'number'
+          ? [result.queueId]
+          : [],
+      ),
+    ),
+  );
+}
+
 export async function replayOfflineOperations(
   operations: ReplayOperation[],
   context: ReplayContext,
@@ -209,20 +221,12 @@ export async function replayOfflineOperations(
   }
 
   if (pendingOperations.length === 0) {
-    const ackedQueueIds = Array.from(
-      new Set(
-        orderedResults.flatMap((result) =>
-          result && result.status !== 'failed' && typeof result.queueId === 'number'
-            ? [result.queueId]
-            : [],
-        ),
-      ),
+    const results = orderedResults.filter(
+      (result): result is ReplayResult => typeof result !== 'undefined',
     );
     return {
-      ackedQueueIds,
-      results: orderedResults.filter(
-        (result): result is ReplayResult => typeof result !== 'undefined',
-      ),
+      ackedQueueIds: collectAckedQueueIds(results),
+      results,
     };
   }
 
@@ -351,15 +355,7 @@ export async function replayOfflineOperations(
   const results = orderedResults.filter(
     (result): result is ReplayResult => typeof result !== 'undefined',
   );
-  const ackedQueueIds = Array.from(
-    new Set(
-      results.flatMap((result) =>
-        result.status !== 'failed' && typeof result.queueId === 'number'
-          ? [result.queueId]
-          : [],
-      ),
-    ),
-  );
+  const ackedQueueIds = collectAckedQueueIds(results);
 
   return { ackedQueueIds, results };
 }
