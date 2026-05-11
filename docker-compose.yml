@@ -1,0 +1,80 @@
+# Tracker – Docker Compose stack
+#
+# Profiles:
+#   external-server   – bring up the hosted sync target (sqld) and web app.
+#                       One-command bring-up:
+#                         docker compose --profile external-server up -d
+#
+# Required env vars – copy .env.example → .env and fill in before first run.
+# See .env.example for the full list.
+
+name: tracker
+
+services:
+  # ────────────────────────────────────────────────────────────────────────────
+  # tracker-sqld
+  #   LibSQL/sqld server – the persistent, network-accessible sync-target DB.
+  #   The tracker app connects to this service as its remote sync endpoint.
+  # ────────────────────────────────────────────────────────────────────────────
+  tracker-sqld:
+    image: ghcr.io/tursodatabase/libsql-server:latest
+    profiles:
+      - external-server
+    ports:
+      - "${SQLD_HTTP_PORT:-8080}:8080"
+    environment:
+      SQLD_NODE: primary
+      SQLD_HTTP_LISTEN_ADDR: 0.0.0.0:8080
+      # Set SQLD_AUTH_JWT_KEY in .env to enable bearer-token auth.
+      # ⚠️  WARNING: leaving this empty disables auth entirely. Only acceptable
+      # for local development or private, firewalled networks. Always set a key
+      # before exposing sqld on a public network.
+      SQLD_AUTH_JWT_KEY: ${SQLD_AUTH_JWT_KEY:-}
+    volumes:
+      - tracker-sqld-data:/var/lib/sqld
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # tracker-app
+  #   Next.js web server – full hosted deployment of the tracker UI and API.
+  #   After startup, open Settings → Sync and set the remote URL to the sqld
+  #   endpoint: http://<host>:${SQLD_HTTP_PORT:-8080}
+  # ────────────────────────────────────────────────────────────────────────────
+  tracker-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles:
+      - external-server
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3000}
+    volumes:
+      # Persist local SQLite data written by the server-side DB manager.
+      - tracker-app-data:/app/data
+    depends_on:
+      tracker-sqld:
+        condition: service_healthy
+    restart: unless-stopped
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Named volumes – provide durable persistence across container restarts.
+# Run `docker volume inspect tracker_tracker-sqld-data` to find the host path.
+# ──────────────────────────────────────────────────────────────────────────────
+volumes:
+  tracker-sqld-data:
+    driver: local
+    labels:
+      tracker.role: sqld-persistent-store
+  tracker-app-data:
+    driver: local
+    labels:
+      tracker.role: app-data-store
