@@ -11,6 +11,20 @@ const replayCache = new Map<string, ReplayResult>();
 
 /**
  * GET /api/sync - Get sync configuration and status
+ *
+ * Response shape (stable for UI and server-track consumers):
+ * {
+ *   success: boolean,
+ *   data: {
+ *     enabled: boolean,
+ *     remoteUrl: string | null,
+ *     conflictResolution: 'local' | 'remote' | 'manual',
+ *     syncInterval: number,
+ *     lastSync: null,           // not yet tracked; reserved for future metadata
+ *     syncStatus: 'disabled' | 'idle' | 'pending',
+ *     pendingCount: number,     // items waiting to be replayed or flushed
+ *   }
+ * }
  */
 export async function GET() {
   try {
@@ -21,6 +35,18 @@ export async function GET() {
     await dbm.ensureDatabaseInitialised();
     const config = dbm.getConfig();
 
+    let pendingCount = 0;
+    if (config.sync.enabled) {
+      const pending = await dbm.getSyncQueue();
+      pendingCount = pending.length;
+    }
+
+    const syncStatus: 'disabled' | 'idle' | 'pending' = !config.sync.enabled
+      ? 'disabled'
+      : pendingCount > 0
+        ? 'pending'
+        : 'idle';
+
     return NextResponse.json({
       success: true,
       data: {
@@ -28,7 +54,9 @@ export async function GET() {
         remoteUrl: config.remote?.url || null,
         conflictResolution: config.sync.conflictResolution,
         syncInterval: config.remote?.syncInterval || 15,
-        lastSync: null, // Would be populated from sync metadata
+        lastSync: null,
+        syncStatus,
+        pendingCount,
       },
     });
   } catch (error) {
@@ -48,7 +76,12 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const { remoteUrl, authToken, syncInterval = 15 } = await request.json();
+    const {
+      remoteUrl,
+      authToken,
+      syncInterval = 15,
+      conflictResolution = 'local',
+    } = await request.json();
 
     if (!remoteUrl) {
       return NextResponse.json(
@@ -60,10 +93,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Only call configureRemote if running on server (type assertion)
-    if (dbm instanceof DatabaseManagerServer) {
-      await dbm.configureRemote(remoteUrl, authToken);
-    } else {
+    if (!(dbm instanceof DatabaseManagerServer)) {
       return NextResponse.json(
         {
           success: false,
@@ -73,13 +103,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update sync interval
+    await dbm.configureRemote(remoteUrl, authToken);
+
+    // Override any defaults set by configureRemote with caller-supplied values.
     dbm.updateConfig({
-      remote: {
-        url: remoteUrl,
-        authToken,
-        syncInterval,
-      },
+      remote: { url: remoteUrl, authToken, syncInterval },
+      sync: { enabled: true, conflictResolution },
     });
 
     return NextResponse.json({
@@ -127,6 +156,19 @@ export async function DELETE() {
 
 /**
  * PATCH /api/sync - Process sync queue
+ *
+ * With `operations` payload: replay offline operations and acknowledge queue IDs.
+ * Without `operations` payload (or empty array): flush the internal sync queue.
+ *
+ * Stable response shape for both paths:
+ * {
+ *   success: boolean,
+ *   syncStatus: 'idle' | 'error',
+ *   message: string,
+ *   counts: { replayed?, duplicate?, failed?, processed? },
+ *   ackedQueueIds?: number[],
+ *   results?: ReplayResult[],
+ * }
  */
 export async function PATCH(request: NextRequest) {
   try {
@@ -171,6 +213,7 @@ export async function PATCH(request: NextRequest) {
 
         return NextResponse.json({
           success: failed.length === 0,
+          syncStatus: failed.length === 0 ? 'idle' : 'error',
           message: 'Replay batch processed',
           counts: {
             replayed: replayed.length,
@@ -182,10 +225,15 @@ export async function PATCH(request: NextRequest) {
         });
       }
 
+      const pendingBefore = await dbm.getSyncQueue();
       await dbm.processSyncQueue();
       return NextResponse.json({
         success: true,
+        syncStatus: 'idle',
         message: 'Sync queue processed successfully',
+        counts: {
+          processed: pendingBefore.length,
+        },
       });
     } else {
       return NextResponse.json(
