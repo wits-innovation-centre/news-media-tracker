@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Container,
   Card,
@@ -9,17 +9,76 @@ import {
   Col,
   Navbar,
   Nav,
+  Badge,
+  Spinner,
 } from 'react-bootstrap';
 import InputHomicide from '@/lib/components/input-homicide';
 import ListHomicides from '@/lib/components/list-homicides';
 import ParticipantMergeQueue from '@/lib/components/participant-merge-queue';
 import SchemaProfileAdmin from '@/lib/components/schema-profile-admin';
 import SysInfo from '@/lib/components/system-information';
+import {
+  OFFLINE_SYNC_TAG,
+  readOfflineQueueCount,
+  hasSyncManager,
+} from '@/lib/utils/cache-manager';
 
 type Views = 'home' | 'input' | 'list' | 'merge' | 'profiles' | 'info';
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<Views>('home');
+  const [isOnline, setIsOnline] = useState(
+    typeof window !== 'undefined' ? window.navigator.onLine : true,
+  );
+  const [queueCount, setQueueCount] = useState(0);
+  const [replaying, setReplaying] = useState(false);
+
+  useEffect(() => {
+    readOfflineQueueCount().then(setQueueCount);
+
+    const handleOnline = async () => {
+      setIsOnline(true);
+      setQueueCount(await readOfflineQueueCount());
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    const interval = setInterval(async () => {
+      setQueueCount(await readOfflineQueueCount());
+    }, 15000);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      clearInterval(interval);
+    };
+  }, []);
+
+  /**
+   * Trigger a Background Sync registration so the service worker drains the
+   * offline queue. No-ops when offline or already replaying. Errors are
+   * swallowed intentionally — the service worker will retry automatically
+   * when conditions allow.
+   */
+  const handleNavSync = async () => {
+    if (!isOnline || replaying) return;
+    setReplaying(true);
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        if (hasSyncManager(reg)) {
+          await reg.sync.register(OFFLINE_SYNC_TAG);
+        }
+      }
+      setQueueCount(await readOfflineQueueCount());
+    } catch {
+      // ignore — sync will retry automatically
+    } finally {
+      setReplaying(false);
+    }
+  };
 
   const renderContent = () => {
     if (currentView === 'home') {
@@ -150,6 +209,44 @@ export default function Home() {
               >
                 System Information
               </Nav.Link>
+            </Nav>
+
+            {/* Offline / sync status indicator */}
+            <Nav className="ms-auto align-items-center">
+              {!isOnline && (
+                <Nav.Item className="me-2">
+                  <Badge bg="danger" className="px-2 py-1">
+                    <i className="bi bi-wifi-off me-1"></i>Offline
+                  </Badge>
+                </Nav.Item>
+              )}
+              {isOnline && replaying && (
+                <Nav.Item className="me-2">
+                  <Badge bg="info" className="px-2 py-1">
+                    <Spinner
+                      animation="border"
+                      size="sm"
+                      className="me-1"
+                      style={{ width: '0.7rem', height: '0.7rem' }}
+                    />
+                    Syncing
+                  </Badge>
+                </Nav.Item>
+              )}
+              {isOnline && !replaying && queueCount > 0 && (
+                <Nav.Item className="me-2">
+                  <Button
+                    variant="warning"
+                    size="sm"
+                    className="py-0 px-2"
+                    onClick={handleNavSync}
+                    title={`${queueCount} operation${queueCount !== 1 ? 's' : ''} queued — click to sync`}
+                  >
+                    <i className="bi bi-cloud-arrow-up me-1"></i>
+                    {queueCount} queued
+                  </Button>
+                </Nav.Item>
+              )}
             </Nav>
           </Navbar.Collapse>
         </Container>

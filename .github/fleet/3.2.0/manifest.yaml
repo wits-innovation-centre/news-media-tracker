@@ -120,14 +120,19 @@ lanes:
     role: worker
     branch: lane/3.2.0/07-workbench-offline-ux
     prNumber: null
-    status: planned
-    readiness: waiting
+    status: complete
+    readiness: ready
     ownedSurface:
       - lib/components/database-status.tsx
       - app/page.tsx
     blockers: []
     verification:
       - offline status and manual sync UX checks
+      - Connected/Offline/Queued/Replaying badges visible in DatabaseStatus component
+      - Sync Queued Data button with queue count badge for web mode
+      - Navbar offline indicator (Offline badge / N queued button / Syncing spinner)
+      - Background Sync API used when available; direct PATCH /api/sync fallback otherwise
+      - lint clean, 25/25 test suites pass
   - laneId: 08-verification
     role: worker
     branch: lane/3.2.0/08-verification
