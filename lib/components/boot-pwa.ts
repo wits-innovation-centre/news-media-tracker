@@ -1,31 +1,27 @@
 'use client';
 import { useEffect } from 'react';
+import { getStorageHealthReport } from '../storage/persistence-policy';
+
+/** Run the full storage health check and emit structured console output. */
+async function runStorageHealthCheck(): Promise<void> {
+  if (!('storage' in navigator)) {
+    console.warn('[SW] Storage API not available; skipping persistence check.');
+    return;
+  }
+
+  const report = await getStorageHealthReport(navigator.storage);
+
+  if (report.quotaLevel === 'critical') {
+    console.error('[SW] storage health: CRITICAL —', report.reason);
+  } else if (report.quotaLevel === 'low') {
+    console.warn('[SW] storage health: LOW —', report.reason);
+  } else {
+    console.info('[SW] storage health:', report.reason);
+  }
+}
 
 export default function BootPWA() {
   useEffect(() => {
-    const requestPersistentStorage = async () => {
-      if (!('storage' in navigator) || !navigator.storage.persist) {
-        return false;
-      }
-
-      try {
-        if (await navigator.storage.persisted?.()) {
-          return true;
-        }
-
-        const granted = await navigator.storage.persist();
-        if (!granted) {
-          console.warn('[SW] storage persistence not granted');
-        } else {
-          console.info('[SW] storage persistence granted');
-        }
-        return granted;
-      } catch (error) {
-        console.warn('[SW] storage persistence request failed', error);
-        return false;
-      }
-    };
-
     if ('serviceWorker' in navigator) {
       const register = async () => {
         try {
@@ -36,10 +32,14 @@ export default function BootPWA() {
             registration.scope,
             registration.updateViaCache,
           );
-          void requestPersistentStorage();
         } catch (error) {
           console.error('[SW] registration failed', error);
         }
+
+        // Run the storage health check after SW registration so the browser
+        // is more likely to honour a persist() request (some browsers require
+        // the site to be "engaged" or have an installed SW first).
+        await runStorageHealthCheck();
       };
 
       if (document.readyState === 'complete') {
@@ -52,7 +52,9 @@ export default function BootPWA() {
         return () => window.removeEventListener('load', handleLoad);
       }
     } else {
-      void requestPersistentStorage();
+      // No service-worker support; still attempt persist + quota check so the
+      // local IndexedDB data has the best chance of surviving cache eviction.
+      void runStorageHealthCheck();
     }
   }, []);
   return null;

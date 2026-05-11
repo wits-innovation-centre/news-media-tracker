@@ -28,14 +28,17 @@ lanes:
     role: worker
     branch: lane/3.2.0/01-persistence-hardening
     prNumber: null
-    status: planned
-    readiness: waiting
+    status: in-progress
+    readiness: ready
     ownedSurface:
       - app/layout.tsx
       - lib/components/boot-pwa.ts
+      - lib/storage/persistence-policy.ts
     blockers: []
     verification:
       - offline cache and persist behavior test
+      - lib/storage/persistence-policy.test.ts covers requestPersistentStorage, estimateStorageQuota, getStorageHealthReport
+      - boot-pwa.ts delegates to getStorageHealthReport; quota-level-aware log output verified
   - laneId: 02-offline-queue
     role: worker
     branch: lane/3.2.0/02-offline-queue
