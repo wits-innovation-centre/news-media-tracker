@@ -1,0 +1,49 @@
+fleet:
+  plannedVersion: 3.3.0
+  phaseBranch: phase/3.3.0
+  allowedChangeClass: minor
+  mergePolicy: eager-after-green
+
+lanes:
+  - id: "07"
+    name: "[3.3.0][07-verification] Validate permission enforcement, UI behavior, and merge outcomes."
+    branch: lane/3.3.0/07-verification
+    targetBranch: phase/3.3.0
+    readiness: blocked
+    blockers:
+      - "Critical regression: in-place Form|Graph workspace mode switch is not implemented in app/page.tsx and lib/components/input-homicide.tsx."
+      - "Critical regression: graph workspace interactions and keyboard accessibility controls are not implemented in owned UI surfaces."
+      - "Build gate failing: app/api/participants/form-contract/route.ts cannot resolve participant-form contract import."
+    prMetadata:
+      titlePrefix: "[3.3.0][07-verification]"
+      status: open
+    verification:
+      summary: "Permission and conflict/divergence verification gates pass; Stitch UI mode-switch and graph accessibility gates are blocked by missing implementation."
+      gates:
+        - id: permissions
+          command: npm run test -- lib/components/role-visibility.test.ts lib/components/participant-field-visibility.test.ts
+          result: pass
+        - id: conflicts
+          command: npm run test -- lib/components/participant-merge-queue.utils.test.ts app/api/participant-merge-promotion.test.ts
+          result: pass
+        - id: divergence
+          command: npm run test -- app/api/sync/replay.test.ts
+          result: pass
+        - id: ui-mode-switch
+          command: npm run test -- __tests__/verification-3.3.0-gates.test.ts
+          result: blocked
+        - id: graph-a11y
+          command: npm run test -- __tests__/verification-3.3.0-gates.test.ts
+          result: blocked
+        - id: lint
+          command: npm run lint
+          result: pass
+        - id: tests
+          command: npm run test
+          result: pass
+        - id: integrated-verification
+          command: npm run verify.integrated
+          result: pass
+        - id: build-type-path
+          command: npm run build
+          result: fail
