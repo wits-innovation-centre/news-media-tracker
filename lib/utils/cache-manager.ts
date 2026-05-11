@@ -11,7 +11,35 @@ export type OfflineReplayOperation = {
   body?: unknown;
 };
 
-/** Read the number of pending offline-queued operations from IndexedDB. */
+/** Minimal typing for the Background Sync API extension on ServiceWorkerRegistration. */
+interface SyncManager {
+  register: (tag: string) => Promise<void>;
+}
+
+/** ServiceWorkerRegistration extended with the optional Background Sync API. */
+export interface ServiceWorkerRegistrationWithSync extends ServiceWorkerRegistration {
+  sync: SyncManager;
+}
+
+/**
+ * Type guard that checks whether a ServiceWorkerRegistration exposes the
+ * Background Sync API (`reg.sync.register`).
+ */
+export const hasSyncManager = (
+  reg: ServiceWorkerRegistration,
+): reg is ServiceWorkerRegistrationWithSync =>
+  'sync' in reg &&
+  typeof (reg as ServiceWorkerRegistrationWithSync).sync?.register === 'function';
+
+/**
+ * Read the number of pending offline-queued operations from IndexedDB.
+ *
+ * Returns `0` in any of the following cases:
+ * - Running in an SSR context (no `window`)
+ * - The browser does not support IndexedDB
+ * - The offline queue database or store does not exist yet
+ * - Any IndexedDB error occurs
+ */
 export function readOfflineQueueCount(): Promise<number> {
   if (typeof window === 'undefined' || !('indexedDB' in window)) {
     return Promise.resolve(0);

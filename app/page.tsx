@@ -20,20 +20,10 @@ import SysInfo from '@/lib/components/system-information';
 import {
   OFFLINE_SYNC_TAG,
   readOfflineQueueCount,
+  hasSyncManager,
 } from '@/lib/utils/cache-manager';
 
 type Views = 'home' | 'input' | 'list' | 'merge' | 'profiles' | 'info';
-
-/** Minimal typing for the Background Sync API extension on ServiceWorkerRegistration. */
-interface ServiceWorkerRegistrationWithSync extends ServiceWorkerRegistration {
-  sync: { register: (tag: string) => Promise<void> };
-}
-
-const hasSyncManager = (
-  reg: ServiceWorkerRegistration,
-): reg is ServiceWorkerRegistrationWithSync =>
-  'sync' in reg &&
-  typeof (reg as ServiceWorkerRegistrationWithSync).sync?.register === 'function';
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<Views>('home');
@@ -66,6 +56,12 @@ export default function Home() {
     };
   }, []);
 
+  /**
+   * Trigger a Background Sync registration so the service worker drains the
+   * offline queue. No-ops when offline or already replaying. Errors are
+   * swallowed intentionally — the service worker will retry automatically
+   * when conditions allow.
+   */
   const handleNavSync = async () => {
     if (!isOnline || replaying) return;
     setReplaying(true);

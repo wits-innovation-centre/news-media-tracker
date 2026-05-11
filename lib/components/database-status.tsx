@@ -17,6 +17,7 @@ import {
   OFFLINE_QUEUE_STORE,
   OFFLINE_SYNC_TAG,
   readOfflineQueueCount,
+  hasSyncManager,
 } from '@/lib/utils/cache-manager';
 
 interface DatabaseStatus {
@@ -36,20 +37,6 @@ interface ElectronDatabaseAPI {
     error?: string;
   }>;
 }
-
-/** Minimal typing for the Background Sync API extension on ServiceWorkerRegistration. */
-interface SyncManager {
-  register: (tag: string) => Promise<void>;
-}
-
-interface ServiceWorkerRegistrationWithSync extends ServiceWorkerRegistration {
-  sync: SyncManager;
-}
-
-const hasSyncManager = (
-  reg: ServiceWorkerRegistration,
-): reg is ServiceWorkerRegistrationWithSync =>
-  'sync' in reg && typeof (reg as ServiceWorkerRegistrationWithSync).sync?.register === 'function';
 
 const getElectronDatabase = (): ElectronDatabaseAPI | null => {
   if (typeof window === 'undefined') {
@@ -78,6 +65,11 @@ interface QueuedOperation {
 /**
  * Replay queued offline operations directly against the PATCH /api/sync
  * endpoint (fallback for when the Background Sync API is unavailable).
+ *
+ * Reads all pending entries from the IndexedDB offline queue, submits them
+ * as a batch to `/api/sync` (PATCH), and deletes the acknowledged entries
+ * from the store. Any IndexedDB or network error resolves silently so the
+ * UI always regains control — the queue is preserved for the next attempt.
  */
 const replayQueueDirect = (): Promise<void> => {
   if (typeof window === 'undefined' || !('indexedDB' in window)) {
