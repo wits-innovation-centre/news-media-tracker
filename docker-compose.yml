@@ -50,7 +50,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: .devcontainer/Dockerfile
     profiles:
       - external-server
     ports:
@@ -58,9 +58,20 @@ services:
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3000}
+      # Tell pnpm where the shared content-addressable store lives so that
+      # all Node app services use the same cache volume and avoid redundant
+      # downloads across container restarts.
+      npm_config_store_dir: /pnpm/store
     volumes:
       # Persist local SQLite data written by the server-side DB manager.
       - app-data:/app/data
+      # Shared pnpm content-addressable store – mounted read/write so that
+      # `pnpm install` inside the container populates a persistent cache.
+      # Using a named volume (not a bind-mount) is the permission-safe
+      # strategy for containerised dev: Docker initialises the directory
+      # with root ownership on first creation, avoiding host UID/GID
+      # conflicts that bind-mounts would introduce.
+      - pnpm-store:/pnpm/store
     depends_on:
       sqld:
         condition: service_healthy
@@ -79,3 +90,13 @@ volumes:
     driver: local
     labels:
       news-media-tracker.role: app-data-store
+  # Shared pnpm content-addressable store.
+  # Declared once at the compose level so multiple Node app services can
+  # mount it without each container downloading packages independently.
+  # Permission-safe: Docker creates the named-volume directory on first use
+  # with root ownership, which matches the default node image user and
+  # avoids host UID/GID conflicts inherent in bind-mount approaches.
+  pnpm-store:
+    driver: local
+    labels:
+      news-media-tracker.role: pnpm-content-store
