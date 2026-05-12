@@ -27,7 +27,7 @@ Rules:
 7. If dependencies block a lane, clearly state start condition inside that lane prompt.
 8. Do not include explanatory prose between code blocks.
 9. Every lane prompt must include a Repository lock directive section before lane identity.
-10. Repository lock must include startup gates and PR gates that prevent cross-repo drift.
+10. Repository lock must include startup gates and PR gates that enforce working-directory and branch safety.
 
 Repository lock directive (required in every generated lane prompt):
 
@@ -39,15 +39,12 @@ Repository lock directive (required in every generated lane prompt):
   - Final merge target: <final merge target>
 - Forbidden:
   - No branch creation in sibling repositories.
-  - No PRs outside the locked repository.
   - No file edits outside /workspace/<repo name>.
 - Startup gate (required):
   1.  Print repo remote and active branch for /workspace/<repo name>.
-  2.  If repo is not <repo owner>/<repo name>, stop and report blocker.
-  3.  If branch target is not phase/<planned-version> or lane/<planned-version>/<lane-id>, stop and report blocker.
-  4.  Continue only after all gates pass.
+  2.  If branch target is not phase/<planned-version> or lane/<planned-version>/<lane-id>, stop and report blocker.
+  3.  Continue only after all gates pass.
 - PR gate (required):
-  - PR repository must be <repo owner>/<repo name>.
   - PR base must be <phase branch>.
   - PR title must start with lane prefix.
   - Include verification summary and owned-surface confirmation.
@@ -72,14 +69,12 @@ Repository lock directive:
 	- Final merge target: <final merge target>
 - Forbidden:
 	- No branch creation in sibling repositories.
-	- No PRs outside the locked repository.
 	- No file edits outside /workspace/<repo name>.
 - Startup gate:
 	1. Print repo remote and active branch for /workspace/<repo name>.
-	2. Stop if repo or branch target does not match contract.
+  2. Stop if branch target does not match contract.
 	3. Continue only after all gates pass.
 - PR gate:
-	- PR repository must match lock.
 	- PR base must be <phase branch>.
 	- PR title must start with <lane prefix>.
 	- Include verification summary and owned-surface confirmation.
