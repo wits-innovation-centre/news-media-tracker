@@ -697,6 +697,123 @@ export const migrationAppConfig = `CREATE TABLE IF NOT EXISTS app_config (
 export type AppConfig = typeof appConfig.$inferSelect;
 export type NewAppConfig = typeof appConfig.$inferInsert;
 
+// --- Repository ---
+export const REPOSITORY_VISIBILITY_VALUES = ['private', 'internal', 'public'] as const;
+export type RepositoryVisibility = (typeof REPOSITORY_VISIBILITY_VALUES)[number];
+
+export const repositories = sqliteTable('repository', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  visibility: text('visibility').notNull().default('private'),
+  ownerId: text('owner_id').notNull(),
+  createdBy: text('created_by'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+const repositoryVisibilityConstraint = `CHECK (visibility IN (${buildEscapedSqlInList(REPOSITORY_VISIBILITY_VALUES)}))`;
+
+export const migrationRepositories = `CREATE TABLE IF NOT EXISTS repository (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  visibility TEXT NOT NULL DEFAULT 'private' ${repositoryVisibilityConstraint},
+  owner_id TEXT NOT NULL,
+  created_by TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+)`;
+
+export type Repository = typeof repositories.$inferSelect;
+export type NewRepository = typeof repositories.$inferInsert;
+
+// --- Membership ---
+export const MEMBERSHIP_ROLE_VALUES = ['owner', 'admin', 'editor', 'viewer'] as const;
+export type MembershipRole = (typeof MEMBERSHIP_ROLE_VALUES)[number];
+
+export const memberships = sqliteTable(
+  'membership',
+  {
+    id: text('id').primaryKey(),
+    repositoryId: text('repository_id').notNull(),
+    userId: text('user_id').notNull(),
+    role: text('role').notNull().default('viewer'),
+    invitedBy: text('invited_by'),
+    joinedAt: text('joined_at').default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => ({
+    membershipUnique: uniqueIndex('membership_repository_user_unique').on(
+      table.repositoryId,
+      table.userId,
+    ),
+  }),
+);
+
+const membershipRoleConstraint = `CHECK (role IN (${buildEscapedSqlInList(MEMBERSHIP_ROLE_VALUES)}))`;
+
+export const migrationMemberships = `CREATE TABLE IF NOT EXISTS membership (
+  id TEXT PRIMARY KEY,
+  repository_id TEXT NOT NULL REFERENCES repository(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'viewer' ${membershipRoleConstraint},
+  invited_by TEXT,
+  joined_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(repository_id, user_id)
+)`;
+
+export type Membership = typeof memberships.$inferSelect;
+export type NewMembership = typeof memberships.$inferInsert;
+
+// --- Permission Grant ---
+export const permissionGrants = sqliteTable(
+  'permission_grant',
+  {
+    id: text('id').primaryKey(),
+    repositoryId: text('repository_id').notNull(),
+    granteeUserId: text('grantee_user_id').notNull(),
+    resourceType: text('resource_type').notNull(),
+    resourceId: text('resource_id'),
+    action: text('action').notNull(),
+    grantedBy: text('granted_by').notNull(),
+    grantedAt: text('granted_at').default(sql`CURRENT_TIMESTAMP`),
+    expiresAt: text('expires_at'),
+    revokedAt: text('revoked_at'),
+  },
+  (table) => ({
+    permissionGrantUnique: uniqueIndex(
+      'permission_grant_repo_grantee_resource_action_unique',
+    ).on(
+      table.repositoryId,
+      table.granteeUserId,
+      table.resourceType,
+      table.resourceId,
+      table.action,
+    ),
+  }),
+);
+
+export const migrationPermissionGrants = `CREATE TABLE IF NOT EXISTS permission_grant (
+  id TEXT PRIMARY KEY,
+  repository_id TEXT NOT NULL REFERENCES repository(id) ON DELETE CASCADE,
+  grantee_user_id TEXT NOT NULL,
+  resource_type TEXT NOT NULL,
+  resource_id TEXT,
+  action TEXT NOT NULL,
+  granted_by TEXT NOT NULL,
+  granted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  expires_at TEXT,
+  revoked_at TEXT,
+  UNIQUE(repository_id, grantee_user_id, resource_type, resource_id, action)
+)`;
+
+export type PermissionGrant = typeof permissionGrants.$inferSelect;
+export type NewPermissionGrant = typeof permissionGrants.$inferInsert;
+
 // --- Index migrations ---
 export const migrationIndexes = [
   `CREATE INDEX IF NOT EXISTS idx_articles_article_id ON articles(id)`,
@@ -719,6 +836,11 @@ export const migrationIndexes = [
   `CREATE INDEX IF NOT EXISTS idx_claim_subject ON claim(subject_type, subject_id)`,
   `CREATE INDEX IF NOT EXISTS idx_claim_predicate ON claim(predicate_key)`,
   `CREATE INDEX IF NOT EXISTS idx_claim_evidence_claim_id ON claim_evidence(claim_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_repository_owner_id ON repository(owner_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_membership_repository_id ON membership(repository_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_membership_user_id ON membership(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_permission_grant_repository_id ON permission_grant(repository_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_permission_grant_grantee_user_id ON permission_grant(grantee_user_id)`,
 ];
 
 export const migrationVictimAliasColumn = `ALTER TABLE victims ADD COLUMN victim_alias TEXT`;
@@ -956,5 +1078,8 @@ export const migrations = [
   migrationClaimEvidence,
   migrationSyncQueue,
   migrationAppConfig,
+  migrationRepositories,
+  migrationMemberships,
+  migrationPermissionGrants,
   ...migrationIndexes,
 ];
