@@ -5,9 +5,11 @@ import {
   type ReplayResult,
   replayOfflineOperations,
 } from './replay';
+import { createOperationLogStore } from './operation-log';
 
 const replayCache = new Map<string, ReplayResult>();
 // Best-effort in-memory de-duplication for short retry windows.
+const operationLog = createOperationLogStore();
 
 /**
  * GET /api/sync - Get sync configuration and status
@@ -206,6 +208,7 @@ export async function PATCH(request: NextRequest) {
               cookie: request.headers.get('cookie') ?? undefined,
             },
             replayCache,
+            operationLog,
           },
         );
         const replayed = results.filter((result) => result.status === 'replayed');
