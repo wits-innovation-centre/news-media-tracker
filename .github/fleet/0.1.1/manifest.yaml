@@ -1,0 +1,40 @@
+fleet:
+  plannedVersion: 0.1.1
+  phaseBranch: phase/0.1.1
+  allowedChangeClass: patch
+  mergePolicy: eager-after-green
+  dependency: none
+
+lanes:
+  - id: "01"
+    name: "[0.1.1][01-store-policy] Commit shared pnpm policy."
+    branch: lane/0.1.1/01-store-policy
+    targetBranch: phase/0.1.1
+    readiness: complete
+    blockers: []
+    prMetadata:
+      titlePrefix: "[0.1.1][01-store-policy]"
+      status: open
+    verification:
+      summary: >
+        Config parse check and pnpm policy check both pass.
+        All five required policy keys are present and correct in .npmrc.
+        packageManager field and devEngines.packageManager aligned to pnpm@8.
+      gates:
+        - id: config-parse-check
+          command: node scripts/verify-pnpm-policy.js
+          result: pass
+          detail: >
+            All required keys present: store-dir, package-import-method,
+            node-linker, auto-install-peers, shared-workspace-lockfile.
+            Result: OK — all required pnpm policy keys are present and correct.
+        - id: pnpm-policy-check
+          command: npm run policy.check
+          result: pass
+          detail: >
+            Script exits 0. Policy settings reported:
+              store-dir = ~/.local/share/pnpm/store/v3
+              package-import-method = copy
+              node-linker = hoisted
+              auto-install-peers = true
+              shared-workspace-lockfile = true
