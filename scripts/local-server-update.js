@@ -19,5 +19,5 @@ run('npm', ['run', 'build']);
 console.log('');
 console.log('Update complete.');
 console.log(
-  'Restart the server to apply changes: npm run local-server.start',
+  'Restart the server to apply changes: pnpm run local-server.start',
 );

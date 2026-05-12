@@ -23,8 +23,8 @@ if (!fs.existsSync(dataPath)) {
 if (!fs.existsSync(serverScript)) {
   console.error(
     `Error: ${serverScript} not found.\n` +
-      'Please build the app first with the standalone output enabled:\n' +
-      '  npm run build',
+    'Please build the app first with the standalone output enabled:\n' +
+    '  pnpm run build',
   );
   process.exit(1);
 }

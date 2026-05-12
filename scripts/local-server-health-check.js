@@ -45,7 +45,7 @@ req.setTimeout(5000);
 req.on('error', (err) => {
   console.error(`Health check failed: ${err.message}`);
   console.error(
-    'Is the local server running? Start it with: npm run local-server.start',
+    'Is the local server running? Start it with: pnpm run local-server.start',
   );
   process.exit(1);
 });
