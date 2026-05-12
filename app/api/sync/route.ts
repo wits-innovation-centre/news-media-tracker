@@ -5,9 +5,11 @@ import {
   type ReplayResult,
   replayOfflineOperations,
 } from './replay';
+import { createOperationLogStore } from './operation-log';
 
 const replayCache = new Map<string, ReplayResult>();
 // Best-effort in-memory de-duplication for short retry windows.
+const operationLog = createOperationLogStore();
 
 /**
  * GET /api/sync - Get sync configuration and status
@@ -206,6 +208,26 @@ export async function PATCH(request: NextRequest) {
               cookie: request.headers.get('cookie') ?? undefined,
             },
             replayCache,
+            operationLog,
+            persistConflictRecords:
+              typeof dbm.persistSyncConflictRecords === 'function'
+                ? async (records) => {
+                    await dbm.persistSyncConflictRecords(
+                      records.map((record) => ({
+                        id: record.conflictId,
+                        method: record.method,
+                        endpoint: record.endpoint,
+                        requestId: record.requestId,
+                        queueId: record.queueId,
+                        overlappingFields: record.overlappingFields,
+                        winnerOperation: record.winnerOperation,
+                        conflictingOperation: record.conflictingOperation,
+                        decision: record.decision,
+                        decisionMetadata: record.decisionMetadata,
+                      })),
+                    );
+                  }
+                : undefined,
           },
         );
         const replayed = results.filter((result) => result.status === 'replayed');
@@ -213,6 +235,7 @@ export async function PATCH(request: NextRequest) {
           (result) => result.status === 'duplicate',
         );
         const failed = results.filter((result) => result.status === 'failed');
+        const conflicts = failed.filter((result) => result.statusCode === 409);
 
         return NextResponse.json({
           success: failed.length === 0,
@@ -222,6 +245,7 @@ export async function PATCH(request: NextRequest) {
             replayed: replayed.length,
             duplicate: duplicates.length,
             failed: failed.length,
+            conflicts: conflicts.length,
           },
           ackedQueueIds,
           results,

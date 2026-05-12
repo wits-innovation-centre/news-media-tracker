@@ -2,6 +2,7 @@ import {
   normalizeReplayOperations,
   replayOfflineOperations,
 } from './replay';
+import { createOperationLogStore } from './operation-log';
 import { describe, expect, it, jest } from '@jest/globals';
 
 describe('sync replay bridge', () => {
@@ -230,6 +231,131 @@ describe('sync replay bridge', () => {
         queueId: 2,
         requestId: 'req-2',
         status: 'replayed',
+      }),
+    ]);
+  });
+
+  it('auto-merges non-overlapping PATCH operations on the same endpoint', async () => {
+    const fetchMock = jest.fn(async () =>
+      ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        clone: () => ({ json: async () => ({}) }),
+      }) as unknown as Response,
+    );
+
+    const operations = normalizeReplayOperations([
+      {
+        queueId: 91,
+        requestId: 'req-91',
+        method: 'PATCH',
+        endpoint: '/api/events/event-merge',
+        body: { summary: 'merged summary' },
+      },
+      {
+        queueId: 92,
+        requestId: 'req-92',
+        method: 'PATCH',
+        endpoint: '/api/events/event-merge',
+        body: { status: 'verified' },
+      },
+    ]);
+
+    const result = await replayOfflineOperations(operations, {
+      requestOrigin: 'http://localhost:3000',
+      replayCache: new Map(),
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.body).toBe(
+      JSON.stringify({
+        operations: [
+          {
+            requestId: 'req-91',
+            method: 'PATCH',
+            endpoint: '/api/events/event-merge',
+            body: {
+              summary: 'merged summary',
+              status: 'verified',
+            },
+          },
+        ],
+      }),
+    );
+    expect(result.ackedQueueIds).toEqual([91, 92]);
+    expect(result.results).toEqual([
+      expect.objectContaining({ queueId: 91, status: 'replayed' }),
+      expect.objectContaining({ queueId: 92, status: 'replayed' }),
+    ]);
+  });
+
+  it('records conflicts for overlapping edits and does not replay conflicted operations', async () => {
+    const fetchMock = jest.fn(async () =>
+      ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        clone: () => ({ json: async () => ({}) }),
+      }) as unknown as Response,
+    );
+    const persistConflictRecords = jest.fn();
+    const operations = normalizeReplayOperations([
+      {
+        queueId: 93,
+        requestId: 'req-93',
+        method: 'PATCH',
+        endpoint: '/api/events/event-conflict',
+        body: { status: 'draft' },
+      },
+      {
+        queueId: 94,
+        requestId: 'req-94',
+        method: 'PATCH',
+        endpoint: '/api/events/event-conflict',
+        body: { status: 'published' },
+      },
+    ]);
+
+    const result = await replayOfflineOperations(operations, {
+      requestOrigin: 'http://localhost:3000',
+      replayCache: new Map(),
+      persistConflictRecords,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.body).toBe(
+      JSON.stringify({
+        operations: [
+          {
+            requestId: 'req-93',
+            method: 'PATCH',
+            endpoint: '/api/events/event-conflict',
+            body: { status: 'draft' },
+          },
+        ],
+      }),
+    );
+    expect(result.results).toEqual([
+      expect.objectContaining({ queueId: 93, status: 'replayed' }),
+      expect.objectContaining({
+        queueId: 94,
+        status: 'failed',
+        statusCode: 409,
+        error: expect.stringContaining('Conflict detected'),
+      }),
+    ]);
+    expect(result.ackedQueueIds).toEqual([93]);
+    expect(persistConflictRecords).toHaveBeenCalledWith([
+      expect.objectContaining({
+        endpoint: '/api/events/event-conflict',
+        requestId: 'req-94',
+        overlappingFields: ['status'],
+        decision: 'manual',
       }),
     ]);
   });
@@ -662,5 +788,104 @@ describe('sync replay bridge', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(result.ackedQueueIds).toHaveLength(0);
     expect(result.results).toHaveLength(0);
+  });
+
+  it('marks operation failed with deterministic divergence when baseVersion is stale', async () => {
+    const fetchMock = jest.fn(async () =>
+      ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        clone: () => ({
+          json: async () => ({
+            results: [
+              {
+                requestId: 'req-stale',
+                status: 'replayed',
+                currentVersion: 4,
+              },
+            ],
+          }),
+        }),
+      }) as unknown as Response,
+    );
+    const operations = normalizeReplayOperations([
+      {
+        queueId: 90,
+        requestId: 'req-stale',
+        method: 'PATCH',
+        endpoint: '/api/events/event-1',
+        baseVersion: 3,
+        body: { summary: 'outdated edit' },
+      },
+    ]);
+
+    const result = await replayOfflineOperations(operations, {
+      requestOrigin: 'http://localhost:3000',
+      replayCache: new Map(),
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(result.ackedQueueIds).toEqual([]);
+    expect(result.results[0]).toMatchObject({
+      status: 'failed',
+      divergence: {
+        code: 'STALE_BASE_VERSION',
+        deterministicKey:
+          'PATCH:/api/events/event-1:req-stale:3:4',
+      },
+    });
+  });
+
+  it('writes replay outcomes into append-only operation log entries', async () => {
+    const fetchMock = jest.fn(async () =>
+      ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        clone: () => ({ json: async () => ({}) }),
+      }) as unknown as Response,
+    );
+    const operationLog = createOperationLogStore();
+    const operations = normalizeReplayOperations([
+      {
+        queueId: 91,
+        requestId: 'req-log',
+        method: 'POST',
+        endpoint: '/api/events',
+        baseVersion: 0,
+        body: { id: 'event-1' },
+      },
+      {
+        queueId: 92,
+        requestId: 'req-log',
+        method: 'POST',
+        endpoint: '/api/events',
+        baseVersion: 0,
+        body: { id: 'event-1' },
+      },
+    ]);
+
+    await replayOfflineOperations(operations, {
+      requestOrigin: 'http://localhost:3000',
+      replayCache: new Map(),
+      operationLog,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    const entries = operationLog.list();
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      sequence: 1,
+      requestId: 'req-log',
+      status: 'replayed',
+      baseVersion: 0,
+    });
+    expect(entries[1]).toMatchObject({
+      sequence: 2,
+      requestId: 'req-log',
+      status: 'duplicate',
+      baseVersion: 0,
+    });
   });
 });

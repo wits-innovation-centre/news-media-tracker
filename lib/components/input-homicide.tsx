@@ -21,10 +21,14 @@ import { VictimFormValues } from './victim-form';
 import { PerpetratorFormValues } from './perpetrator-form';
 
 interface InputHomicideProps {
-  onBack: () => void;
+  onBack?: () => void;
+  embedded?: boolean;
 }
 
-const InputHomicide: React.FC<InputHomicideProps> = ({ onBack }) => {
+const InputHomicide: React.FC<InputHomicideProps> = ({
+  onBack,
+  embedded = false,
+}) => {
   const [articleData, setArticleData] = useState<ArticleFormValues | null>(
     null,
   );
@@ -216,14 +220,16 @@ const InputHomicide: React.FC<InputHomicideProps> = ({ onBack }) => {
   );
 
   return (
-    <Container fluid className="py-4">
+    <Container fluid className={embedded ? 'py-0' : 'py-4'}>
       <Row>
         <Col>
           <div className="d-flex justify-content-between align-items-center mb-4">
-            <h2>Input New Homicide Case</h2>
-            <Button variant="outline-secondary" onClick={onBack}>
-              Back to Home
-            </Button>
+            <h3 className="workspace-section-title">Input New Homicide Case</h3>
+            {!embedded && (
+              <Button variant="outline-secondary" onClick={onBack}>
+                Back to Home
+              </Button>
+            )}
           </div>
 
           {/* Progress indicator */}

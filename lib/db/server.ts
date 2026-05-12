@@ -24,6 +24,7 @@ import {
   claimEvidence,
   appConfig,
   syncQueue,
+  syncConflictRecords,
   migrations,
 } from './schema';
 import {
@@ -66,6 +67,25 @@ export interface DatabaseConfig {
     conflictResolution: 'local' | 'remote' | 'manual';
   };
 }
+
+type PersistedReplayConflictRecord = {
+  id: string;
+  method: string;
+  endpoint: string;
+  requestId?: string;
+  queueId?: number;
+  overlappingFields: string[];
+  winnerOperation: {
+    requestId?: string;
+    queueId?: number;
+  };
+  conflictingOperation: {
+    requestId?: string;
+    queueId?: number;
+  };
+  decision: string;
+  decisionMetadata: Record<string, unknown>;
+};
 
 class DatabaseManagerServer {
   private getDomainSeedClient(): DomainSeedSqlClient | null {
@@ -186,6 +206,7 @@ class DatabaseManagerServer {
         claimEvidence,
         appConfig,
         syncQueue,
+        syncConflictRecords,
       },
     });
     for (const sql of migrations) {
@@ -301,6 +322,7 @@ class DatabaseManagerServer {
           claimEvidence,
           appConfig,
           syncQueue,
+          syncConflictRecords,
         },
       });
       this.config.remote = { url, authToken, syncInterval: 15 };
@@ -381,6 +403,29 @@ class DatabaseManagerServer {
   async purgeSyncQueue() {
     const db = this.getLocal();
     await db.delete(syncQueue);
+  }
+
+  async persistSyncConflictRecords(
+    records: PersistedReplayConflictRecord[],
+  ): Promise<void> {
+    if (records.length === 0) {
+      return;
+    }
+    const db = this.getLocal();
+    await db.insert(syncConflictRecords).values(
+      records.map((record) => ({
+        id: record.id,
+        method: record.method,
+        endpoint: record.endpoint,
+        requestId: record.requestId,
+        queueId: record.queueId,
+        overlappingFields: record.overlappingFields,
+        winnerOperation: record.winnerOperation,
+        conflictingOperation: record.conflictingOperation,
+        decision: record.decision,
+        decisionMetadata: record.decisionMetadata,
+      })),
+    );
   }
 
   async triggerSyncNow() {
