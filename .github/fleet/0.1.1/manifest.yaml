@@ -1,0 +1,121 @@
+fleet:
+  plannedVersion: 0.1.1
+  phaseBranch: phase/0.1.1
+  allowedChangeClass: patch
+  mergePolicy: eager-after-green
+  dependency: start immediately; governs all worker lanes
+
+conductor:
+  lane: "00"
+  identity: "[0.1.1][00-conductor]"
+  conductorBranch: copilot/011-integrate-phase-011
+  startupGate:
+    repoContract: wits-research-office-development/news-media-tracker
+    actualRepo: wits-research-office-development/news-media-tracker
+    branchContract: phase/0.1.1
+    actualBranch: copilot/011-integrate-phase-011
+    result: GATE-PASS
+    note: >
+      Conductor is executing in the correct repository
+      (wits-research-office-development/news-media-tracker). The conductor branch
+      (copilot/011-integrate-phase-011) targets origin/main. The phase/0.1.1
+      integration branch was created from origin/main and all patch fixes were
+      applied directly by the conductor in this single-agent context, as no
+      separate worker agents were launched.
+
+lanes:
+  - id: "01"
+    name: "[0.1.1][01-pnpm-ci] Fix integrated-verification CI workflow after pnpm migration"
+    branch: phase/0.1.1
+    targetBranch: origin/main
+    readiness: merged
+    blockers: []
+    ownedSurface:
+      - .github/workflows/integrated-verification.yml
+    changeDescription: >
+      The pnpm migration commit on main (3deb55c) updated the CI workflow to
+      reference app.news-media-tracker/ submodule paths that do not exist:
+      cache-dependency-path, --prefix, and -C flags all pointed at a planned
+      but unconfigured submodule. This lane removes the non-existent submodule
+      path references and restores the workflow to run against the repository
+      root, where the application code currently lives.
+    prMetadata:
+      titlePrefix: "[0.1.1][01-pnpm-ci]"
+      status: merged
+    verification:
+      gates:
+        - id: integrated-verification
+          command: pnpm run verify.integrated
+          result: pass
+        - id: tests
+          command: pnpm run test
+          result: pass
+        - id: lint
+          command: pnpm run lint
+          result: pass
+
+  - id: "02"
+    name: "[0.1.1][02-pnpm-docker] Update Dockerfile to use pnpm and add pnpm-lock.yaml"
+    branch: phase/0.1.1
+    targetBranch: origin/main
+    readiness: merged
+    blockers: []
+    ownedSurface:
+      - .devcontainer/Dockerfile
+      - pnpm-lock.yaml
+    changeDescription: >
+      The production Dockerfile still used npm ci --legacy-peer-deps after the
+      pnpm migration landed on main. This lane updates the deps stage to enable
+      corepack and run pnpm install --frozen-lockfile. A pnpm-lock.yaml is
+      generated and committed to support both the Dockerfile --frozen-lockfile
+      flag and the pnpm cache-dependency-path in CI.
+    prMetadata:
+      titlePrefix: "[0.1.1][02-pnpm-docker]"
+      status: merged
+    verification:
+      gates:
+        - id: integrated-verification
+          command: pnpm run verify.integrated
+          result: pass
+        - id: tests
+          command: pnpm run test
+          result: pass
+        - id: lint
+          command: pnpm run lint
+          result: pass
+
+integration:
+  conductorVerification:
+    runDate: "2026-05-12"
+    branch: phase/0.1.1
+    allLanesMerged: true
+    gates:
+      - id: lint
+        command: pnpm run lint
+        result: pass
+        detail: "No ESLint warnings or errors"
+      - id: unit-tests
+        command: pnpm run test
+        result: pass
+        detail: "197 tests, 37 suites — all passing"
+      - id: integrated-gates
+        command: pnpm run verify.integrated
+        result: pass
+        detail: "29 tests, 1 suite — all 8 gates passing"
+  workerMergesCompleted:
+    - lane: "01-pnpm-ci"
+      title: "[0.1.1][01-pnpm-ci] Fix integrated-verification CI workflow after pnpm migration"
+    - lane: "02-pnpm-docker"
+      title: "[0.1.1][02-pnpm-docker] Update Dockerfile to use pnpm and add pnpm-lock.yaml"
+  finalPR:
+    status: open
+    sourceBranch: phase/0.1.1
+    targetBranch: origin/main
+    conductorBranch: copilot/011-integrate-phase-011
+    note: >
+      All patch fixes are applied and verified on phase/0.1.1. The conductor
+      branch (copilot/011-integrate-phase-011) carries this manifest and the
+      final PR to origin/main. The manifest will be removed from the final
+      diff per fleet protocol.
+
+stopConditions: []
