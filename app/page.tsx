@@ -112,20 +112,23 @@ export default function Home() {
           News Report Tracker
         </span>
 
-        {/* View mode toggle */}
+        {/* View mode toggle — Form | Graph | Table */}
         <Nav
           className="view-toggle me-auto"
           as="nav"
-          aria-label="Main view"
+          role="tablist"
+          aria-label="Form | Graph | Table workspace"
         >
           {(['form', 'graph', 'table'] as MainView[]).map((view) => (
             <Nav.Link
               key={view}
               as="button"
               type="button"
+              role="tab"
               className={`view-toggle-link${mainView === view ? ' active' : ''}`}
               onClick={() => setMainView(view)}
-              aria-current={mainView === view ? 'page' : undefined}
+              aria-selected={mainView === view}
+              aria-controls={`workspace-panel-${view}`}
             >
               {viewLabel[view]}
             </Nav.Link>
@@ -229,7 +232,7 @@ export default function Home() {
         {/* Primary content panel */}
         <main className="app-main flex-grow-1 overflow-auto">
           {mainView === 'form' && (
-            <div className="p-3">
+            <div className="p-3" id="workspace-panel-form" role="tabpanel">
               <InputHomicide
                 embedded
                 existingArticle={selectedQueueArticle}
@@ -239,7 +242,7 @@ export default function Home() {
           )}
 
           {mainView === 'graph' && (
-            <Row className="g-0 h-100">
+            <Row className="g-0 h-100" id="workspace-panel-graph" role="tabpanel">
               <Col lg={5} className="h-100 border-end overflow-auto p-3">
                 <ListHomicides
                   embedded
@@ -250,6 +253,7 @@ export default function Home() {
                 />
               </Col>
               <Col lg={7} className="h-100 overflow-auto p-3">
+                {/* Connected Graph workspace — shows relationships between events */}
                 <ConnectedGraphWorkspace
                   cases={loadedCases}
                   selectedCaseIds={selectedCaseIds}
@@ -260,7 +264,7 @@ export default function Home() {
           )}
 
           {mainView === 'table' && (
-            <div className="p-3">
+            <div className="p-3" id="workspace-panel-table" role="tabpanel">
               <ListHomicides
                 embedded
                 selectedCaseIds={selectedCaseIds}
