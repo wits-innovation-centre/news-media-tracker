@@ -68,7 +68,7 @@ echo "SQLD_AUTH_JWT_KEY=${SQLD_AUTH_JWT_KEY}" >> .env
 
 # 2. Generate a HS256 JWT token signed with that key.
 #    Using the `jwt` CLI (npm install -g jsonwebtoken-cli) as an example:
-#    jwt sign '{"sub":"tracker-app"}' "${SQLD_AUTH_JWT_KEY}"
+#    jwt sign '{"sub":"app"}' "${SQLD_AUTH_JWT_KEY}"
 #
 #    Alternatively, generate via a short Node.js snippet:
 node -e "

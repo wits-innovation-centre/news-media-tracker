@@ -1,4 +1,4 @@
-# Tracker – Docker Compose stack
+# News Media Tracker – Docker Compose stack
 #
 # Profiles:
 #   external-server   – bring up the hosted sync target (sqld) and web app.
@@ -8,15 +8,16 @@
 # Required env vars – copy .env.example → .env and fill in before first run.
 # See .env.example for the full list.
 
-name: tracker
+name: news-media-tracker
 
 services:
   # ────────────────────────────────────────────────────────────────────────────
-  # tracker-sqld
+  # sqld
   #   LibSQL/sqld server – the persistent, network-accessible sync-target DB.
-  #   The tracker app connects to this service as its remote sync endpoint.
+  #   The news media tracker app connects to this service as its remote sync
+  #   endpoint.
   # ────────────────────────────────────────────────────────────────────────────
-  tracker-sqld:
+  sqld:
     image: ghcr.io/tursodatabase/libsql-server:latest
     profiles:
       - external-server
@@ -31,7 +32,7 @@ services:
       # before exposing sqld on a public network.
       SQLD_AUTH_JWT_KEY: ${SQLD_AUTH_JWT_KEY:-}
     volumes:
-      - tracker-sqld-data:/var/lib/sqld
+      - sqld-data:/var/lib/sqld
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
       interval: 10s
@@ -41,12 +42,12 @@ services:
     restart: unless-stopped
 
   # ────────────────────────────────────────────────────────────────────────────
-  # tracker-app
+  # app
   #   Next.js web server – full hosted deployment of the tracker UI and API.
   #   After startup, open Settings → Sync and set the remote URL to the sqld
   #   endpoint: http://<host>:${SQLD_HTTP_PORT:-8080}
   # ────────────────────────────────────────────────────────────────────────────
-  tracker-app:
+  app:
     build:
       context: .
       dockerfile: Dockerfile
@@ -59,22 +60,22 @@ services:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3000}
     volumes:
       # Persist local SQLite data written by the server-side DB manager.
-      - tracker-app-data:/app/data
+      - app-data:/app/data
     depends_on:
-      tracker-sqld:
+      sqld:
         condition: service_healthy
     restart: unless-stopped
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Named volumes – provide durable persistence across container restarts.
-# Run `docker volume inspect tracker_tracker-sqld-data` to find the host path.
+# Run `docker volume inspect news-media-tracker_sqld-data` to find the host path.
 # ──────────────────────────────────────────────────────────────────────────────
 volumes:
-  tracker-sqld-data:
+  sqld-data:
     driver: local
     labels:
-      tracker.role: sqld-persistent-store
-  tracker-app-data:
+      news-media-tracker.role: sqld-persistent-store
+  app-data:
     driver: local
     labels:
-      tracker.role: app-data-store
+      news-media-tracker.role: app-data-store
