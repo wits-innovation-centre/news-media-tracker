@@ -51,3 +51,6 @@ npm-debug.log.*
 # remove generated cache
 public/cache.json
 tsconfig.tsbuildinfo
+
+# package lock file (not tracked — generated locally by npm install)
+package-lock.json

@@ -1,0 +1,72 @@
+name: validation-gates
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'phase/0.1.1'
+
+permissions:
+  contents: read
+
+jobs:
+  # ── compose-config-check ──────────────────────────────────────────────────────
+  # Validates docker-compose.yml syntax, structural requirements (services,
+  # profiles, healthchecks, volumes, .env.example completeness), and targeted
+  # service resolution for the external-server profile.
+  compose-config-check:
+    name: Docker compose config check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate compose config (structural + docker compose config)
+        run: node scripts/validate-compose.js
+
+      - name: Verify external-server targeted service list
+        run: |
+          services=$(docker compose --profile external-server config --services)
+          echo "Resolved services: $services"
+          echo "$services" | grep -q "sqld" || (echo "ERROR: sqld not in external-server profile" && exit 1)
+          echo "$services" | grep -q "app"  || (echo "ERROR: app not in external-server profile" && exit 1)
+
+  # ── pnpm-permissions-check ────────────────────────────────────────────────────
+  # Validates that the pnpm store path is accessible by the runtime user and
+  # that a pnpm install invocation succeeds without EACCES errors.
+  # Uses --frozen-lockfile when a pnpm-lock.yaml is present for reproducibility;
+  # falls back to --no-frozen-lockfile when no lockfile exists yet.
+  pnpm-permissions-check:
+    name: pnpm install permission check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Validate pnpm store path and permissions
+        run: node scripts/validate-pnpm-permissions.js
+
+      - name: Verify pnpm install succeeds without EACCES
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install --no-frozen-lockfile
+          fi

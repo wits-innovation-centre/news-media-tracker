@@ -16,20 +16,19 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: app.news-media-tracker/pnpm-lock.yaml
-
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
           version: 8
 
-      - name: Install app dependencies
-        run: pnpm --prefix app.news-media-tracker install
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
 
       - name: Run integrated verification gate
-        run: pnpm -C app.news-media-tracker run verify.integrated
+        run: pnpm run verify.integrated
