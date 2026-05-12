@@ -526,7 +526,7 @@ const collectNormalisedVictimSignals = (
         dateRange: parseEventDateRange(source.dateOfDeath),
         province: normaliseName(source.placeOfDeathProvince),
         town: normaliseName(source.placeOfDeathTown),
-      };
+      } as NormalisedVictimEventSignal;
     })
     .filter(
       (signal): signal is NormalisedVictimEventSignal => signal !== undefined,

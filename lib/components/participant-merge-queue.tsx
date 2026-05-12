@@ -109,11 +109,11 @@ const ParticipantMergeQueue: React.FC<ParticipantMergeQueueProps> = ({ onBack })
       ]);
 
       if (!victimsResponse.success) {
-        throw new Error(victimsResponse.error || 'Failed to load victims');
+        throw new Error((victimsResponse as { error?: string }).error || 'Failed to load victims');
       }
       if (!perpetratorsResponse.success) {
         throw new Error(
-          perpetratorsResponse.error || 'Failed to load perpetrators',
+          (perpetratorsResponse as { error?: string }).error || 'Failed to load perpetrators',
         );
       }
 

@@ -17,7 +17,7 @@ export const CLAIM_EVIDENCE_STRENGTH_VALUES = [
 
 export const buildEscapedSqlInList = (values: readonly string[]): string =>
   values
-    .map((value) => `'${value.replaceAll("'", "''")}'`)
+    .map((value) => `'${value.replace(/'/g, "''")}'`)
     .join(', ');
 
 export const buildConfidenceCheck = (columnName: string): string =>

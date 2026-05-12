@@ -103,6 +103,15 @@ export async function post(req: Request) {
       syncStatus: 'pending',
       failureCount: 0,
       lastSyncAt: null,
+      mergedIntoId: null,
+      mergedAt: null,
+      mergeAudit: null,
+      promotionAudit: null,
+      nationality: null,
+      ageDescriptor: null,
+      dateOfDeathMode: null,
+      dateOfDeathEnd: null,
+      victimAliases: null,
     };
     await db.victims.add(newVictim);
     await dbm.addToSyncQueue('POST', '/api/victims', newVictim);

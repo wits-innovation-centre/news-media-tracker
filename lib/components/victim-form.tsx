@@ -474,7 +474,7 @@ const VictimForm: React.FC<VictimFormProps> = ({
         raceOfVictim: resolvedRace,
         nationalityOfVictim: resolvedNationality,
         ageOfVictim: isAgeUnknown ? null : currentVictim.ageOfVictim,
-        ageRangeOfVictim: deriveAgeRange(currentVictim.ageOfVictim, isAgeUnknown),
+        ageRangeOfVictim: deriveAgeRange(currentVictim.ageOfVictim ?? null, isAgeUnknown),
         dateOfDeathMode: isDateUnknown ? 'unknown' : dateMode,
         dateOfDeath: isDateUnknown ? '' : currentVictim.dateOfDeath,
         dateOfDeathEnd:

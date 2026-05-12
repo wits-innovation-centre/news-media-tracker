@@ -102,6 +102,12 @@ export async function post(req: Request) {
       createdAt: now,
       updatedAt: now,
       lastSyncAt: null,
+      mergedIntoId: null,
+      mergedAt: null,
+      mergeAudit: null,
+      promotionAudit: null,
+      suspectAliases: null,
+      charges: null,
     };
     await db.perpetrators.add(newPerpetrator);
     await dbm.addToSyncQueue('POST', '/api/perpetrators', newPerpetrator);

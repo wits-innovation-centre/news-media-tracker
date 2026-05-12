@@ -20,17 +20,38 @@ import ParticipantForm, {
 import { VictimFormValues } from './victim-form';
 import { PerpetratorFormValues } from './perpetrator-form';
 
+interface ExistingArticle {
+  id: string;
+  formValues: Partial<ArticleFormValues>;
+}
+
 interface InputHomicideProps {
   onBack?: () => void;
   embedded?: boolean;
+  existingArticle?: ExistingArticle | null;
+  onSubmitSuccess?: () => void;
 }
 
 const InputHomicide: React.FC<InputHomicideProps> = ({
   onBack,
   embedded = false,
+  existingArticle,
+  onSubmitSuccess,
 }) => {
   const [articleData, setArticleData] = useState<ArticleFormValues | null>(
-    null,
+    existingArticle
+      ? {
+          newsReportUrl: existingArticle.formValues.newsReportUrl ?? '',
+          newsReportHeadline: existingArticle.formValues.newsReportHeadline ?? '',
+          dateOfPublication: existingArticle.formValues.dateOfPublication ?? '',
+          author: existingArticle.formValues.author ?? '',
+          wireService: existingArticle.formValues.wireService ?? '',
+          language: existingArticle.formValues.language ?? '',
+          typeOfSource: existingArticle.formValues.typeOfSource ?? '',
+          newsReportPlatform: existingArticle.formValues.newsReportPlatform ?? '',
+          notes: existingArticle.formValues.notes ?? '',
+        }
+      : null,
   );
   const [victims, setVictims] = useState<VictimFormValues[]>([]);
   const [perpetrators, setPerpetrators] = useState<PerpetratorFormValues[]>([]);
@@ -41,7 +62,7 @@ const InputHomicide: React.FC<InputHomicideProps> = ({
   const [typeOfMurder, setTypeOfMurder] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(existingArticle ? 2 : 1);
 
   // Calculate progress
   const progress = () => {
@@ -121,13 +142,19 @@ const InputHomicide: React.FC<InputHomicideProps> = ({
         '@/app/api/perpetrators/offline'
       );
       const { post: addEvent } = await import('@/app/api/events/offline');
-      // 1. Add article
-      const articleReq = new Request(getBaseUrl(), {
-        method: 'POST',
-        body: JSON.stringify(articleData),
-      });
-      const articleResponse = await addArticle(articleReq);
-      const articleId = articleResponse?.data?.id;
+
+      // 1. Resolve article ID — use existing article if provided, otherwise create a new one
+      let articleId: string | undefined;
+      if (existingArticle?.id) {
+        articleId = existingArticle.id;
+      } else {
+        const articleReq = new Request(getBaseUrl(), {
+          method: 'POST',
+          body: JSON.stringify(articleData),
+        });
+        const articleResponse = await addArticle(articleReq);
+        articleId = articleResponse?.data?.id;
+      }
 
       if (!articleId) {
         throw new Error('Article creation failed: missing ID');
@@ -185,13 +212,26 @@ const InputHomicide: React.FC<InputHomicideProps> = ({
       await addEvent(eventReq);
       toast.success('Homicide case saved successfully!');
       // Reset form
-      setArticleData(null);
+      setArticleData(existingArticle
+        ? {
+            newsReportUrl: existingArticle.formValues.newsReportUrl ?? '',
+            newsReportHeadline: existingArticle.formValues.newsReportHeadline ?? '',
+            dateOfPublication: existingArticle.formValues.dateOfPublication ?? '',
+            author: existingArticle.formValues.author ?? '',
+            wireService: existingArticle.formValues.wireService ?? '',
+            language: existingArticle.formValues.language ?? '',
+            typeOfSource: existingArticle.formValues.typeOfSource ?? '',
+            newsReportPlatform: existingArticle.formValues.newsReportPlatform ?? '',
+            notes: existingArticle.formValues.notes ?? '',
+          }
+        : null);
       setVictims([]);
       setPerpetrators([]);
       setOtherParticipants([]);
       setTypeOfMurder('');
       setNotes('');
-      setCurrentStep(1);
+      setCurrentStep(existingArticle ? 2 : 1);
+      onSubmitSuccess?.();
     } catch (error) {
       console.error('Error saving homicide case:', error);
       toast.error('Failed to save homicide case. Please try again.');
@@ -224,7 +264,9 @@ const InputHomicide: React.FC<InputHomicideProps> = ({
       <Row>
         <Col>
           <div className="d-flex justify-content-between align-items-center mb-4">
-            <h3 className="workspace-section-title">Input New Homicide Case</h3>
+            <h3 className="workspace-section-title">
+              {existingArticle ? 'Annotate Article' : 'Input New Homicide Case'}
+            </h3>
             {!embedded && (
               <Button variant="outline-secondary" onClick={onBack}>
                 Back to Home
@@ -271,7 +313,7 @@ const InputHomicide: React.FC<InputHomicideProps> = ({
                   className={`btn ${currentStep === 1 ? 'btn-primary' : 'btn-outline-primary'}`}
                   onClick={() => setCurrentStep(1)}
                 >
-                  1. Article Info
+                  1. {existingArticle ? 'Article (Prefilled)' : 'Article Info'}
                 </button>
                 <button
                   type="button"
@@ -442,7 +484,7 @@ const InputHomicide: React.FC<InputHomicideProps> = ({
                     </p>
                     <p className="mb-0">
                       <strong>Authors:</strong>{' '}
-                      {articleData?.newsReportAuthors || '-'}
+                      {articleData?.author || '-'}
                     </p>
                   </Card.Body>
                 </Card>

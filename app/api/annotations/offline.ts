@@ -75,6 +75,7 @@ export async function post(req: Request) {
     const newAnnotation = {
       id,
       ...normalized,
+      notes: normalized.notes ?? null,
       createdAt: now,
       updatedAt: now,
       syncStatus: 'pending' as const,

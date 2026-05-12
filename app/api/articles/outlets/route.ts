@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { and, eq, like, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { dbm, DatabaseManagerServer } from '../../../../lib/db/server';
 import { articles, schemaVocabTerms } from '../../../../lib/db/schema';
 import {
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
         .from(articles)
         .where(
           query
-            ? like(sql`COALESCE(${articles.newsReportPlatform}, '')`, wildcard)
+            ? sql`COALESCE(${articles.newsReportPlatform}, '') LIKE ${wildcard}`
             : sql`${articles.newsReportPlatform} IS NOT NULL`,
         )
         .limit(200),
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
           and(
             eq(schemaVocabTerms.vocabKey, OUTLET_VOCAB_KEY),
             query
-              ? like(sql`COALESCE(${schemaVocabTerms.label}, '')`, wildcard)
+              ? sql`COALESCE(${schemaVocabTerms.label}, '') LIKE ${wildcard}`
               : sql`${schemaVocabTerms.label} IS NOT NULL`,
           ),
         )
