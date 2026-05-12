@@ -1,11 +1,12 @@
 # Homicide Media Tracker Plan
 
-## Active update (2026-05-11)
+## Active update (2026-05-12)
 
 - Direction confirmed: web-first, offline-first, and single-user-first.
 - Electron packaging is deprioritized for now; runtime assumptions should not depend on Electron-specific paths.
 - Primary near-term target: one user can run the full workflow reliably offline and sync on reconnect.
 - Verification update: latest phase-gate artifacts are published and the conductor merge gate status is tracked in the fleet manifest.
+- pnpm shared-store policy is present in `.npmrc`, and local permission validation now passes with no EACCES failures.
 - The primary persistence strategy is:
 	1. Durable local storage and offline queueing in the browser/PWA.
 	2. A user-installable local server with persistent on-disk database.

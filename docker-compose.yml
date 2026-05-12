@@ -50,7 +50,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: .devcontainer/Dockerfile
+      dockerfile: Dockerfile
     profiles:
       - external-server
     ports:
