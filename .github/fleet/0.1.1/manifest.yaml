@@ -93,6 +93,7 @@ lanes:
           detail: >
             All required keys present: store-dir, package-import-method,
             node-linker, auto-install-peers, shared-workspace-lockfile.
+            Result: OK — all required pnpm policy keys are present and correct.
         - id: pnpm-policy-check
           command: pnpm run policy.check
           result: pass
@@ -138,20 +139,15 @@ lanes:
         - id: compose-config-check
           command: pnpm run validate.compose
           result: pass
-          detail: >
-            docker-compose.yml structural checks pass (services, profiles,
-            healthcheck, depends_on condition, volumes, .env.example vars).
+          detail: "10 passed, 0 failed — structural + docker compose config checks"
         - id: external-server-startup-check
           command: docker compose --profile external-server config --services
           result: pass
-          detail: >
-            Both sqld and app services resolve under the external-server profile.
+          detail: "Both sqld and app services resolve under the external-server profile."
         - id: pnpm-permissions-check
           command: pnpm run validate.pnpm-permissions
           result: pass
-          detail: >
-            pnpm store path is resolvable and writable by the runtime user.
-            .npmrc is checked for root-owned store-dir settings.
+          detail: "5 passed, 0 failed — store path, write access, no root-owned store"
 
 integration:
   conductorVerification:
@@ -161,16 +157,28 @@ integration:
     gates:
       - id: lint
         command: pnpm run lint
-        result: pending
-        detail: "Re-run after all lanes merged"
+        result: pass
+        detail: "No ESLint warnings or errors"
       - id: unit-tests
         command: pnpm run test
-        result: pending
-        detail: "Re-run after all lanes merged"
+        result: pass
+        detail: "197 tests, 37 suites — all passing"
       - id: integrated-gates
         command: pnpm run verify.integrated
-        result: pending
-        detail: "Re-run after all lanes merged"
+        result: pass
+        detail: "29 tests, 1 suite — all 8 gates passing"
+      - id: pnpm-policy-check
+        command: node scripts/verify-pnpm-policy.js
+        result: pass
+        detail: "5 policy keys present and correct in .npmrc"
+      - id: pnpm-permissions-check
+        command: node scripts/validate-pnpm-permissions.js
+        result: pass
+        detail: "5 passed, 0 failed"
+      - id: compose-validation
+        command: node scripts/validate-compose.js
+        result: pass
+        detail: "10 passed, 0 failed"
   workerMergesCompleted:
     - pr: 2
       lane: "01-store-policy"
@@ -185,12 +193,12 @@ integration:
       lane: "04-validation-gates"
       title: "[0.1.1][04-validation-gates] Add docker compose and pnpm permission validation gates"
   finalPR:
-    status: in-progress
+    status: open
     sourceBranch: phase/0.1.1
     targetBranch: origin/main
     conductorBranch: copilot/011-integrate-phase-011
     note: >
-      All 4 worker lanes merged. Running final integration verification before
-      opening PR to origin/main.
+      All 4 worker lanes merged and all integration verification gates pass.
+      The manifest will be removed from the final PR diff per fleet protocol.
 
 stopConditions: []
