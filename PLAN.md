@@ -5,6 +5,7 @@
 - Direction confirmed: web-first, offline-first, and single-user-first.
 - Electron packaging is deprioritized for now; runtime assumptions should not depend on Electron-specific paths.
 - Primary near-term target: one user can run the full workflow reliably offline and sync on reconnect.
+- Verification update: latest phase-gate artifacts are published and the conductor merge gate status is tracked in the fleet manifest.
 - The primary persistence strategy is:
 	1. Durable local storage and offline queueing in the browser/PWA.
 	2. A user-installable local server with persistent on-disk database.
@@ -184,4 +185,3 @@
 - Historical planning from the previously deleted plan file has been intentionally condensed here and de-scoped from service-specific integration tracks.
 - Earlier roadmap records included multiple completed fleet orchestration cycles across `2.0.0`, `2.1.0`, and `2.2.0`, which remain acknowledged as completed in this document.
 - The active planning baseline is now the web-first, offline-first local-server strategy captured above.
-

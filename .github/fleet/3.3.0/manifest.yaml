@@ -25,57 +25,48 @@ conductor:
 
 lanes:
   - id: "01"
-    name: "[3.3.0][01-ui-refactor] Combine input/output into side panel; add spreadsheet entry view."
-    branch: lane/3.3.0/01-ui-refactor
+    name: "[3.3.0][01-schema] feat(db): add repository, membership, and permission_grant schema primitives."
+    branch: lane/3.3.0/01-schema
     targetBranch: phase/3.3.0
-    readiness: pending
-    blockers:
-      - "No worker PR opened yet. Lane not started."
+    readiness: merged
+    blockers: []
     prMetadata:
-      titlePrefix: "[3.3.0][01-ui-refactor]"
-      status: not-opened
-    verification:
-      summary: ""
-      gates: []
+      titlePrefix: "[3.3.0][01-schema]"
+      prNumber: 66
+      status: merged
 
   - id: "02"
-    name: "[3.3.0][02-offline-pwa] Deprecate Electron paths; scaffold PWA offline capabilities with service worker."
-    branch: lane/3.3.0/02-offline-pwa
+    name: "[3.3.0][02-sharing-permissions] Implement invite/share and grant management APIs."
+    branch: lane/3.3.0/02-sharing-permissions
     targetBranch: phase/3.3.0
-    readiness: pending
-    blockers:
-      - "No worker PR opened yet. Lane not started."
+    readiness: merged
+    blockers: []
     prMetadata:
-      titlePrefix: "[3.3.0][02-offline-pwa]"
-      status: not-opened
-    verification:
-      summary: ""
-      gates: []
+      titlePrefix: "[3.3.0][02-sharing-permissions]"
+      prNumber: 67
+      status: merged
 
   - id: "03"
-    name: "[3.3.0][03-merge-strategy] Implement merge/dedup strategy for user-generated records."
-    branch: lane/3.3.0/03-merge-strategy
+    name: "[3.3.0][03-operation-log] Add operation-based mutation log and base-version checks."
+    branch: lane/3.3.0/03-operation-log
     targetBranch: phase/3.3.0
-    readiness: pending
-    blockers:
-      - "No worker PR opened yet. Lane not started."
+    readiness: merged
+    blockers: []
     prMetadata:
-      titlePrefix: "[3.3.0][03-merge-strategy]"
-      status: not-opened
-    verification:
-      summary: ""
-      gates: []
+      titlePrefix: "[3.3.0][03-operation-log]"
+      prNumber: 68
+      status: merged
 
   - id: "04"
     name: "[3.3.0][04-conflict-engine] Implement auto-merge rules and conflict record generation."
     branch: lane/3.3.0/04-conflict-engine
     targetBranch: phase/3.3.0
-    readiness: ready-to-merge
+    readiness: merged
     blockers: []
     prMetadata:
       titlePrefix: "[3.3.0][04-conflict-engine]"
-      status: open
       prNumber: 69
+      status: merged
     verification:
       summary: "Conflict engine auto-merge/no-merge branches are covered and replay integration checks pass."
       gates:
@@ -89,23 +80,72 @@ lanes:
           command: npm run lint
           result: pass
 
+  - id: "05"
+    name: "[3.3.0][05-conflict-resolution-ui] Ship manual conflict resolution queue and permission-aware resolve actions."
+    branch: lane/3.3.0/05-conflict-resolution-ui
+    targetBranch: phase/3.3.0
+    readiness: merged
+    blockers: []
+    prMetadata:
+      titlePrefix: "[3.3.0][05-conflict-resolution-ui]"
+      prNumber: 70
+      status: merged
+
+  - id: "06"
+    name: "[3.3.0][06-ui-sync-implementation] Align Entry Workspace/Event Ledger/Connected Graph UX with Stitch."
+    branch: lane/3.3.0/06-ui-sync-implementation
+    targetBranch: phase/3.3.0
+    readiness: merged
+    blockers: []
+    prMetadata:
+      titlePrefix: "[3.3.0][06-ui-sync-implementation]"
+      prNumber: 71
+      status: merged
+
+  - id: "07"
+    name: "[3.3.0][07-verification] Add phase-gate verification matrix and blocker signaling for permissions/conflicts/UI merge readiness."
+    branch: lane/3.3.0/07-verification
+    targetBranch: phase/3.3.0
+    readiness: merged
+    blockers: []
+    prMetadata:
+      titlePrefix: "[3.3.0][07-verification]"
+      prNumber: 72
+      status: merged
+    verification:
+      summary: "Permission and conflict/divergence verification gates pass. UI mode-switch and graph accessibility gates resolved by lane-06 merge. Build type-path resolved post-merge."
+      gates:
+        - id: permissions
+          command: npm run test -- lib/components/role-visibility.test.ts lib/components/participant-field-visibility.test.ts
+          result: pass
+        - id: conflicts
+          command: npm run test -- lib/components/participant-merge-queue.utils.test.ts app/api/participant-merge-promotion.test.ts
+          result: pass
+        - id: divergence
+          command: npm run test -- app/api/sync/replay.test.ts
+          result: pass
+        - id: lint
+          command: npm run lint
+          result: pass
+        - id: integrated-verification
+          command: npm run verify.integrated
+          result: pass
+
 integration:
   conductorVerification:
-    runDate: "2026-05-11"
+    runDate: "2026-05-12"
     branch: copilot/phase-3-3-0-integration
+    allLanesMerged: true
     gates:
       - id: lint
         command: npm run lint
-        result: pass
-        detail: "No ESLint warnings or errors"
+        result: pending
       - id: unit-tests
         command: npm run test
-        result: pass
-        detail: "153 tests, 28 suites — all passing"
+        result: pending
       - id: integrated-gates
         command: npm run verify.integrated
-        result: pass
-        detail: "29 tests, 1 suite — all passing (gates 1-8: stack-startup, bootstrap, plugin-route-health, host-shell-access, offline-queue, reconnect-drill, auth-compat, sw-queue-contract)"
+        result: pending
   workerMergesCompleted:
     - pr: 66
       lane: "01-schema"
@@ -119,6 +159,15 @@ integration:
     - pr: 69
       lane: "04-conflict-engine"
       title: "[3.3.0][04-conflict-engine] Implement auto-merge rules and conflict record generation"
+    - pr: 70
+      lane: "05-conflict-resolution-ui"
+      title: "[3.3.0][05-conflict-resolution-ui] Ship manual conflict resolution queue and permission-aware resolve actions"
+    - pr: 71
+      lane: "06-ui-sync-implementation"
+      title: "[3.3.0][06-ui-sync-implementation] Align Entry Workspace/Event Ledger/Connected Graph UX with Stitch"
+    - pr: 72
+      lane: "07-verification"
+      title: "[3.3.0][07-verification] Add phase-gate verification matrix and blocker signaling"
   finalPR:
     status: blocked
     reason: >
