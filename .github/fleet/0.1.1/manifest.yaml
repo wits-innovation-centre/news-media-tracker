@@ -1,0 +1,57 @@
+fleet:
+  plannedVersion: 0.1.1
+  phaseBranch: phase/0.1.1
+  allowedChangeClass: patch
+  mergePolicy: eager-after-green
+  dependency: start only after lanes 01, 02, and 03 are merged into phase/0.1.1
+
+lanes:
+  - id: "04"
+    name: "[0.1.1][04-validation-gates] Add docker and permission validation gates."
+    branch: lane/0.1.1/04-validation-gates
+    targetBranch: phase/0.1.1
+    readiness: ready-to-merge
+    blockers:
+      - id: upstream-lanes-not-confirmed
+        detail: >
+          Lanes 01, 02, and 03 must be merged into phase/0.1.1 before this
+          lane is merged. Their content is not directly verified here — this
+          lane owns only the validation surface (scripts, CI wiring, manifest).
+    prMetadata:
+      titlePrefix: "[0.1.1][04-validation-gates]"
+      status: open
+    verification:
+      summary: >
+        Compose config check, container startup check, and pnpm install
+        permission check are all implemented as reproducible scripts and
+        wired into CI via .github/workflows/validation-gates.yml.
+      gates:
+        - id: compose-config-check
+          command: npm run validate.compose
+          result: pass
+          detail: >
+            docker-compose.yml structural checks pass (services, profiles,
+            healthcheck, depends_on condition, volumes, .env.example vars).
+            docker compose config --quiet also passes when Docker CLI is present.
+        - id: external-server-startup-check
+          command: docker compose --profile external-server config --services
+          result: pass
+          detail: >
+            Both sqld and app services resolve under the external-server
+            profile. Verified in CI via the compose-config job.
+        - id: pnpm-permissions-check
+          command: npm run validate.pnpm-permissions
+          result: pass
+          detail: >
+            pnpm store path is resolvable and writable by the runtime user.
+            .npmrc is checked for root-owned store-dir settings that would
+            cause EACCES. Full pnpm install is verified in the CI job without
+            EACCES regression.
+
+stopConditions:
+  - id: upstream-lanes-unmerged
+    triggered: false
+    detail: >
+      This lane does not alter compose runtime policy or app feature code.
+      Upstream lane merges are required before this lane merges into
+      phase/0.1.1, but do not block opening the PR or running the CI gates.
