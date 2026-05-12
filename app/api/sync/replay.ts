@@ -393,16 +393,15 @@ export async function replayOfflineOperations(
       method: 'POST',
       headers: requestHeaders,
       body: JSON.stringify({
-          operations: dispatchGroups.map((group) => ({
-            requestId: group.sourceOperations[0]?.requestId,
-            method: group.method,
-            endpoint: group.endpoint,
-            body: group.body,
-            baseVersion: group.sourceOperations[0]?.baseVersion,
-          })),
-          })),
-        }),
-      });
+        operations: dispatchGroups.map((group) => ({
+          requestId: group.sourceOperations[0]?.requestId,
+          method: group.method,
+          endpoint: group.endpoint,
+          body: group.body,
+          baseVersion: group.sourceOperations[0]?.baseVersion,
+        })),
+      }),
+    });
 
     let replayBody: unknown = null;
     try {
@@ -520,8 +519,6 @@ export async function replayOfflineOperations(
           context.replayCache.set(operation.requestId, replayResult);
           trimReplayCache(context.replayCache);
         }
-      }
-    }
       }
     }
   } catch (error) {

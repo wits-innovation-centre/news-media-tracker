@@ -215,10 +215,9 @@ describe('[gate-4] Stitch workspace UI and accessibility checks', () => {
     const hasGraphWorkspaceContract = graphPattern.test(combinedSource);
     const hasKeyboardA11yContract = keyboardPattern.test(combinedSource);
 
-    // This is intentionally a regression detector for verification lane 07.
-    // When lane 06 UI implementation lands, these expectations must be inverted.
-    expect(hasModeToggleContract).toBe(false);
-    expect(hasGraphWorkspaceContract).toBe(false);
-    expect(hasKeyboardA11yContract).toBe(false);
+    // Lane 06 UI implementation has landed — these contracts are now present.
+    expect(hasModeToggleContract).toBe(true);
+    expect(hasGraphWorkspaceContract).toBe(true);
+    expect(hasKeyboardA11yContract).toBe(true);
   });
 });
