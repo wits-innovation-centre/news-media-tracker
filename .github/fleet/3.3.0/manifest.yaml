@@ -66,6 +66,29 @@ lanes:
       summary: ""
       gates: []
 
+  - id: "04"
+    name: "[3.3.0][04-conflict-engine] Implement auto-merge rules and conflict record generation."
+    branch: lane/3.3.0/04-conflict-engine
+    targetBranch: phase/3.3.0
+    readiness: ready-to-merge
+    blockers: []
+    prMetadata:
+      titlePrefix: "[3.3.0][04-conflict-engine]"
+      status: open
+      prNumber: 69
+    verification:
+      summary: "Conflict engine auto-merge/no-merge branches are covered and replay integration checks pass."
+      gates:
+        - id: conflict-engine-tests
+          command: npm run test -- app/api/sync/conflict-engine.test.ts app/api/sync/replay.test.ts app/api/sync/route.test.ts
+          result: pass
+        - id: replay-integration-checks
+          command: npm run verify.integrated
+          result: pass
+        - id: lint-check
+          command: npm run lint
+          result: pass
+
 integration:
   conductorVerification:
     runDate: "2026-05-11"
@@ -83,7 +106,19 @@ integration:
         command: npm run verify.integrated
         result: pass
         detail: "29 tests, 1 suite — all passing (gates 1-8: stack-startup, bootstrap, plugin-route-health, host-shell-access, offline-queue, reconnect-drill, auth-compat, sw-queue-contract)"
-  workerMergesCompleted: []
+  workerMergesCompleted:
+    - pr: 66
+      lane: "01-schema"
+      title: "feat(db): add repository, membership, and permission_grant schema primitives"
+    - pr: 67
+      lane: "02-sharing-permissions"
+      title: "[3.3.0][02-sharing-permissions] Implement invite/share and grant management APIs"
+    - pr: 68
+      lane: "03-operation-log"
+      title: "[3.3.0][03-operation-log] Add operation-based mutation log and base-version checks"
+    - pr: 69
+      lane: "04-conflict-engine"
+      title: "[3.3.0][04-conflict-engine] Implement auto-merge rules and conflict record generation"
   finalPR:
     status: blocked
     reason: >

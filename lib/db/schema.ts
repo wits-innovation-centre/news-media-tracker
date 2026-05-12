@@ -675,6 +675,40 @@ export const migrationSyncQueue = `CREATE TABLE IF NOT EXISTS sync_queue (
 export type SyncQueue = typeof syncQueue.$inferSelect;
 export type NewSyncQueue = typeof syncQueue.$inferInsert;
 
+// --- Sync Conflict Records ---
+export const syncConflictRecords = sqliteTable('sync_conflict_record', {
+  id: text('id').primaryKey(),
+  method: text('method').notNull(),
+  endpoint: text('endpoint').notNull(),
+  requestId: text('request_id'),
+  queueId: integer('queue_id'),
+  overlappingFields: text('overlapping_fields', { mode: 'json' }).$type<
+    string[]
+  >().notNull(),
+  winnerOperation: text('winner_operation', { mode: 'json' }),
+  conflictingOperation: text('conflicting_operation', { mode: 'json' }),
+  decision: text('decision').default('manual'),
+  decisionMetadata: text('decision_metadata', { mode: 'json' }),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const migrationSyncConflictRecords = `CREATE TABLE IF NOT EXISTS sync_conflict_record (
+  id TEXT PRIMARY KEY,
+  method TEXT NOT NULL,
+  endpoint TEXT NOT NULL,
+  request_id TEXT,
+  queue_id INTEGER,
+  overlapping_fields TEXT NOT NULL,
+  winner_operation TEXT,
+  conflicting_operation TEXT,
+  decision TEXT DEFAULT 'manual',
+  decision_metadata TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+)`;
+
+export type SyncConflictRecord = typeof syncConflictRecords.$inferSelect;
+export type NewSyncConflictRecord = typeof syncConflictRecords.$inferInsert;
+
 // --- App Config ---
 export const appConfig = sqliteTable('app_config', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -1077,6 +1111,7 @@ export const migrations = [
   migrationClaims,
   migrationClaimEvidence,
   migrationSyncQueue,
+  migrationSyncConflictRecords,
   migrationAppConfig,
   migrationRepositories,
   migrationMemberships,

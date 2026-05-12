@@ -8,6 +8,25 @@
  */
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
+type PersistedReplayConflictRecord = {
+  id: string;
+  method: string;
+  endpoint: string;
+  requestId?: string;
+  queueId?: number;
+  overlappingFields: string[];
+  winnerOperation: {
+    requestId?: string;
+    queueId?: number;
+  };
+  conflictingOperation: {
+    requestId?: string;
+    queueId?: number;
+  };
+  decision: string;
+  decisionMetadata: Record<string, unknown>;
+};
+
 // ---------------------------------------------------------------------------
 // Mock next/server to avoid Web API dependencies unavailable in jsdom.
 // ---------------------------------------------------------------------------
@@ -49,6 +68,9 @@ jest.mock('../../../lib/db/server', () => {
     processSyncQueue = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
     updateConfig = jest.fn<(updates: object) => void>();
     configureRemote = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    persistSyncConflictRecords = jest
+      .fn<(records: PersistedReplayConflictRecord[]) => Promise<void>>()
+      .mockResolvedValue(undefined);
   }
   return {
     DatabaseManagerServer,
@@ -283,6 +305,66 @@ describe('PATCH /api/sync – syncStatus in responses', () => {
     });
   });
 
+  it('persists auditable conflict metadata when replay reports overlap conflicts', async () => {
+    mockNormalize.mockReturnValue([
+      { queueId: 8, requestId: 'r8', method: 'PATCH', endpoint: '/api/events/e1', body: { status: 'draft' } },
+      { queueId: 9, requestId: 'r9', method: 'PATCH', endpoint: '/api/events/e1', body: { status: 'published' } },
+    ]);
+    mockReplay.mockImplementation(async (_operations, context) => {
+      await context.persistConflictRecords?.([
+        {
+          conflictId: 'conflict:PATCH:/api/events/e1:r9:status',
+          method: 'PATCH',
+          endpoint: '/api/events/e1',
+          requestId: 'r9',
+          queueId: 9,
+          overlappingFields: ['status'],
+          winnerOperation: { requestId: 'r8', queueId: 8 },
+          conflictingOperation: { requestId: 'r9', queueId: 9 },
+          decision: 'manual',
+          decisionMetadata: {
+            engineVersion: '3.3.0',
+            reason: 'overlapping_field_edits',
+            detectedAt: '2026-05-11T13:00:00.000Z',
+          },
+        },
+      ]);
+      return {
+        ackedQueueIds: [8],
+        results: [
+          { queueId: 8, requestId: 'r8', method: 'PATCH', endpoint: '/api/events/e1', status: 'replayed', statusCode: 200 },
+          { queueId: 9, requestId: 'r9', method: 'PATCH', endpoint: '/api/events/e1', status: 'failed', statusCode: 409 },
+        ],
+      };
+    });
+    mockDbm.getConfig.mockReturnValue({
+      sync: { enabled: true, conflictResolution: 'manual' },
+      local: { path: '/tmp/test.db' },
+    });
+
+    const req = buildRequest('http://localhost:3000/api/sync', 'PATCH', {
+      operations: [
+        { queueId: 8, requestId: 'r8', method: 'PATCH', endpoint: '/api/events/e1', body: { status: 'draft' } },
+        { queueId: 9, requestId: 'r9', method: 'PATCH', endpoint: '/api/events/e1', body: { status: 'published' } },
+      ],
+    });
+    const response = await PATCH(req);
+    const body = await jsonBody(response);
+
+    expect(mockDbm.persistSyncConflictRecords).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'conflict:PATCH:/api/events/e1:r9:status',
+        endpoint: '/api/events/e1',
+        decision: 'manual',
+      }),
+    ]);
+    expect(body).toMatchObject({
+      success: false,
+      syncStatus: 'error',
+      counts: { replayed: 1, duplicate: 0, failed: 1, conflicts: 1 },
+    });
+  });
+
   it('returns syncStatus=idle and processed count when no replay operations provided', async () => {
     mockNormalize.mockReturnValue([]);
     mockDbm.getSyncQueue.mockResolvedValue([{ id: 10 }, { id: 11 }]);
@@ -317,4 +399,3 @@ describe('DELETE /api/sync – disables sync', () => {
     );
   });
 });
-

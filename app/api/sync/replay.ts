@@ -1,3 +1,7 @@
+import {
+  buildReplayDispatchPlan,
+  type ReplayConflictRecord,
+} from './conflict-engine';
 import type {
   LoggedMutationOperation,
   LoggedMutationResult,
@@ -46,6 +50,9 @@ type ReplayContext = {
   forwardedHeaders?: Record<string, string | undefined>;
   replayCache: Map<string, ReplayResult>;
   operationLog?: MutationOperationLogStore;
+  persistConflictRecords?: (
+    records: ReplayConflictRecord[],
+  ) => Promise<void> | void;
   fetchImpl?: typeof fetch;
 };
 
@@ -326,6 +333,42 @@ export async function replayOfflineOperations(
     };
   }
 
+  const {
+    dispatchGroups,
+    conflictedOperations,
+    conflictRecords,
+  } = buildReplayDispatchPlan(pendingOperations);
+
+  for (const conflictedOperation of conflictedOperations) {
+    orderedResults[conflictedOperation.index] = {
+      queueId: conflictedOperation.queueId,
+      requestId: conflictedOperation.requestId,
+      method: conflictedOperation.method,
+      endpoint: conflictedOperation.endpoint,
+      status: 'failed',
+      statusCode: 409,
+      error: 'Conflict detected: overlapping edits require manual resolution',
+    };
+  }
+
+  if (conflictRecords.length > 0 && context.persistConflictRecords) {
+    try {
+      await context.persistConflictRecords(conflictRecords);
+    } catch {
+      // Best effort persistence only; replay should continue for mergeable operations.
+    }
+  }
+
+  if (dispatchGroups.length === 0) {
+    const results = orderedResults.filter(
+      (result): result is ReplayResult => typeof result !== 'undefined',
+    );
+    return {
+      ackedQueueIds: collectAckedQueueIds(results),
+      results,
+    };
+  }
+
   const requestHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Offline-Replay': '1',
@@ -350,12 +393,13 @@ export async function replayOfflineOperations(
       method: 'POST',
       headers: requestHeaders,
       body: JSON.stringify({
-          operations: pendingOperations.map((operation) => ({
-            requestId: operation.requestId,
-            method: operation.method,
-            endpoint: operation.endpoint,
-            body: operation.body,
-            baseVersion: operation.baseVersion,
+          operations: dispatchGroups.map((group) => ({
+            requestId: group.sourceOperations[0]?.requestId,
+            method: group.method,
+            endpoint: group.endpoint,
+            body: group.body,
+            baseVersion: group.sourceOperations[0]?.baseVersion,
+          })),
           })),
         }),
       });
@@ -415,12 +459,16 @@ export async function replayOfflineOperations(
       }
     }
 
-    for (const operation of pendingOperations) {
+    for (const group of dispatchGroups) {
+      const primaryOperation = group.sourceOperations[0];
+      if (!primaryOperation) {
+        continue;
+      }
       const requestMeta =
-        operation.requestId && perRequestMetadata.has(operation.requestId)
-          ? perRequestMetadata.get(operation.requestId) ?? null
+        primaryOperation.requestId && perRequestMetadata.has(primaryOperation.requestId)
+          ? perRequestMetadata.get(primaryOperation.requestId) ?? null
           : null;
-      const baseVersion = requestMeta?.baseVersion ?? operation.baseVersion ?? null;
+      const baseVersion = requestMeta?.baseVersion ?? primaryOperation.baseVersion ?? null;
       const currentVersion = requestMeta?.currentVersion ?? null;
       const hasVersionMismatch =
         baseVersion !== null &&
@@ -429,59 +477,65 @@ export async function replayOfflineOperations(
       const stale = (requestMeta?.stale ?? false) || hasVersionMismatch;
       const replayed = resolveReplaySuccess(
         stale,
-        operation,
+        primaryOperation,
         requestMeta ? { replayed: requestMeta.replayed } : null,
         ackedQueueIdSet,
         ackedRequestIdSet,
         response.ok,
       );
 
-      const replayResult: ReplayResult = {
-        queueId: operation.queueId,
-        requestId: operation.requestId,
-        method: operation.method,
-        endpoint: operation.endpoint,
-        status: replayed ? 'replayed' : 'failed',
-        statusCode: response.status,
-        error: replayed
-          ? undefined
-          : buildReplayErrorMessage(
-              stale,
-              response.status,
-              response.statusText,
-              baseVersion,
-              currentVersion,
-            ),
-        divergence: stale
-          ? {
-              code: 'STALE_BASE_VERSION',
-              deterministicKey: buildDeterministicDivergenceKey(
-                operation,
+      for (const operation of group.sourceOperations) {
+        const replayResult: ReplayResult = {
+          queueId: operation.queueId,
+          requestId: operation.requestId,
+          method: operation.method,
+          endpoint: operation.endpoint,
+          status: replayed ? 'replayed' : 'failed',
+          statusCode: response.status,
+          error: replayed
+            ? undefined
+            : buildReplayErrorMessage(
+                stale,
+                response.status,
+                response.statusText,
                 baseVersion,
                 currentVersion,
               ),
-              baseVersion,
-              currentVersion,
-            }
-          : undefined,
-      };
+          divergence: stale
+            ? {
+                code: 'STALE_BASE_VERSION',
+                deterministicKey: buildDeterministicDivergenceKey(
+                  operation,
+                  baseVersion,
+                  currentVersion,
+                ),
+                baseVersion,
+                currentVersion,
+              }
+            : undefined,
+        };
 
-      orderedResults[operation.index] = replayResult;
-      if (replayed && operation.requestId) {
-        context.replayCache.set(operation.requestId, replayResult);
-        trimReplayCache(context.replayCache);
+        orderedResults[operation.index] = replayResult;
+        if (replayed && operation.requestId) {
+          context.replayCache.set(operation.requestId, replayResult);
+          trimReplayCache(context.replayCache);
+        }
+      }
+    }
       }
     }
   } catch (error) {
-    for (const operation of pendingOperations) {
-      orderedResults[operation.index] = {
-        queueId: operation.queueId,
-        requestId: operation.requestId,
-        method: operation.method,
-        endpoint: operation.endpoint,
-        status: 'failed',
-        error: error instanceof Error ? error.message : String(error),
-      };
+    for (const group of dispatchGroups) {
+      for (const operation of group.sourceOperations) {
+        orderedResults[operation.index] = {
+          queueId: operation.queueId,
+          requestId: operation.requestId,
+          method: operation.method,
+          endpoint: operation.endpoint,
+          status: 'failed',
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
     }
   }
 
