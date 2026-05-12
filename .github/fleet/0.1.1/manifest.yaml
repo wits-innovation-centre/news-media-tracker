@@ -32,13 +32,6 @@ lanes:
     blockers: []
     ownedSurface:
       - .github/workflows/integrated-verification.yml
-    changeDescription: >
-      The pnpm migration commit on main (3deb55c) updated the CI workflow to
-      reference app.news-media-tracker/ submodule paths that do not exist:
-      cache-dependency-path, --prefix, and -C flags all pointed at a planned
-      but unconfigured submodule. This lane removes the non-existent submodule
-      path references and restores the workflow to run against the repository
-      root, where the application code currently lives.
     prMetadata:
       titlePrefix: "[0.1.1][01-pnpm-ci]"
       status: merged
@@ -63,12 +56,6 @@ lanes:
     ownedSurface:
       - .devcontainer/Dockerfile
       - pnpm-lock.yaml
-    changeDescription: >
-      The production Dockerfile still used npm ci --legacy-peer-deps after the
-      pnpm migration landed on main. This lane updates the deps stage to enable
-      corepack and run pnpm install --frozen-lockfile. A pnpm-lock.yaml is
-      generated and committed to support both the Dockerfile --frozen-lockfile
-      flag and the pnpm cache-dependency-path in CI.
     prMetadata:
       titlePrefix: "[0.1.1][02-pnpm-docker]"
       status: merged
@@ -106,83 +93,104 @@ lanes:
           detail: >
             All required keys present: store-dir, package-import-method,
             node-linker, auto-install-peers, shared-workspace-lockfile.
-            Result: OK — all required pnpm policy keys are present and correct.
         - id: pnpm-policy-check
           command: pnpm run policy.check
           result: pass
-          detail: >
-            Script exits 0. Policy settings reported:
-              store-dir = ~/.local/share/pnpm/store/v3
-              package-import-method = copy
-              node-linker = hoisted
-              auto-install-peers = true
-              shared-workspace-lockfile = true
 
   - id: "02"
     name: "[0.1.1][02-news-devcontainer] Align news tracker devcontainer to pnpm"
     branch: lane/0.1.1/02-news-devcontainer
     targetBranch: phase/0.1.1
-    readiness: pending
+    readiness: merged
     blockers: []
     prMetadata:
       titlePrefix: "[0.1.1][02-news-devcontainer]"
       prNumber: 3
-      status: open
+      status: merged
 
   - id: "03"
     name: "[0.1.1][03-compose-runtime] Wire shared pnpm store volume in Docker Compose"
     branch: lane/0.1.1/03-compose-runtime
     targetBranch: phase/0.1.1
-    readiness: pending
+    readiness: merged
     blockers: []
     prMetadata:
       titlePrefix: "[0.1.1][03-compose-runtime]"
       prNumber: 4
-      status: open
+      status: merged
 
   - id: "04"
     name: "[0.1.1][04-validation-gates] Add docker compose and pnpm permission validation gates"
     branch: lane/0.1.1/04-validation-gates
     targetBranch: phase/0.1.1
-    readiness: pending
-    blockers:
-      - "lane 01 must merge first"
-      - "lane 02 must merge first"
-      - "lane 03 must merge first"
+    readiness: merged
+    blockers: []
     prMetadata:
       titlePrefix: "[0.1.1][04-validation-gates]"
       prNumber: 5
-      status: open
+      status: merged
+    verification:
+      summary: >
+        Compose config check, container startup check, and pnpm install
+        permission check are all implemented as reproducible scripts and
+        wired into CI via .github/workflows/validation-gates.yml.
+      gates:
+        - id: compose-config-check
+          command: pnpm run validate.compose
+          result: pass
+          detail: >
+            docker-compose.yml structural checks pass (services, profiles,
+            healthcheck, depends_on condition, volumes, .env.example vars).
+        - id: external-server-startup-check
+          command: docker compose --profile external-server config --services
+          result: pass
+          detail: >
+            Both sqld and app services resolve under the external-server profile.
+        - id: pnpm-permissions-check
+          command: pnpm run validate.pnpm-permissions
+          result: pass
+          detail: >
+            pnpm store path is resolvable and writable by the runtime user.
+            .npmrc is checked for root-owned store-dir settings.
 
 integration:
   conductorVerification:
     runDate: "2026-05-12"
     branch: phase/0.1.1
-    allLanesMerged: false
+    allLanesMerged: true
     gates:
       - id: lint
         command: pnpm run lint
-        result: pass
-        detail: "No ESLint warnings or errors"
+        result: pending
+        detail: "Re-run after all lanes merged"
       - id: unit-tests
         command: pnpm run test
-        result: pass
-        detail: "197 tests, 37 suites — all passing"
+        result: pending
+        detail: "Re-run after all lanes merged"
       - id: integrated-gates
         command: pnpm run verify.integrated
-        result: pass
-        detail: "29 tests, 1 suite — all 8 gates passing"
+        result: pending
+        detail: "Re-run after all lanes merged"
   workerMergesCompleted:
     - pr: 2
       lane: "01-store-policy"
       title: "[0.1.1][01-store-policy] Commit shared pnpm policy"
+    - pr: 3
+      lane: "02-news-devcontainer"
+      title: "[0.1.1][02-news-devcontainer] Align news tracker devcontainer to pnpm"
+    - pr: 4
+      lane: "03-compose-runtime"
+      title: "[0.1.1][03-compose-runtime] Wire shared pnpm store volume in Docker Compose"
+    - pr: 5
+      lane: "04-validation-gates"
+      title: "[0.1.1][04-validation-gates] Add docker compose and pnpm permission validation gates"
   finalPR:
     status: in-progress
     sourceBranch: phase/0.1.1
     targetBranch: origin/main
     conductorBranch: copilot/011-integrate-phase-011
     note: >
-      Worker lanes 02-04 still merging. Final PR will be opened after all
-      required lanes are merged and integration verification re-runs clean.
+      All 4 worker lanes merged. Running final integration verification before
+      opening PR to origin/main.
 
 stopConditions: []
