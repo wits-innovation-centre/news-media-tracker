@@ -207,6 +207,10 @@ describe('[gate-4] Stitch workspace UI and accessibility checks', () => {
     const keyboardPattern = /ArrowLeft|ArrowRight|onKeyDown|aria-controls/i;
     const themeTogglePattern =
       /workspace-theme|Switch to (light|dark) theme|bi-moon-stars|bi-sun/i;
+    const sidebarFilterPattern = /aria-label=['"]Filter annotations['"]/i;
+    const sidebarSummaryPattern = /Completed[\s\S]*Drafted[\s\S]*Queued/i;
+    const topbarFilterPattern = /aria-label=['"]Filter events['"]/i;
+    const graphSplitPattern = /id=['"]workspace-panel-graph['"][\s\S]*<Row/i;
 
     const combinedSource = `${pageSource}\n${inputSource}\n${globalCss}`;
 
@@ -223,5 +227,9 @@ describe('[gate-4] Stitch workspace UI and accessibility checks', () => {
     expect(hasGraphWorkspaceContract).toBe(true);
     expect(hasKeyboardA11yContract).toBe(true);
     expect(hasThemeToggleContract).toBe(true);
+    expect(sidebarFilterPattern.test(pageSource)).toBe(true);
+    expect(sidebarSummaryPattern.test(pageSource)).toBe(true);
+    expect(topbarFilterPattern.test(pageSource)).toBe(false);
+    expect(graphSplitPattern.test(pageSource)).toBe(false);
   });
 });

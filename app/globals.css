@@ -273,6 +273,30 @@ html[data-theme='light'] {
     overflow: hidden;
 }
 
+.app-sidebar > .article-queue {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto !important;
+}
+
+.annotation-sidebar-tools {
+    background: var(--app-sidebar-bg);
+    flex-shrink: 0;
+}
+
+.annotation-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.annotation-summary-item {
+    border: 1px solid var(--article-queue-header-border);
+    border-radius: 0.375rem;
+    padding: 0.4rem 0.5rem;
+    background: var(--article-queue-header-bg);
+}
+
 /* Main panel */
 .app-main {
     min-width: 0;

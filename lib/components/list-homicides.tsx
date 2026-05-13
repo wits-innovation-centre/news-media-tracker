@@ -33,6 +33,7 @@ interface ListHomicidesProps {
   onSelectedCaseIdsChange?: (caseIds: string[]) => void;
   onCasesLoaded?: (cases: DetailedEvent[]) => void;
   externalSearchTerm?: string;
+  syncStatusFilter?: 'all' | 'completed' | 'drafted';
 }
 
 export interface DetailedEvent
@@ -199,6 +200,7 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
   onSelectedCaseIdsChange,
   onCasesLoaded,
   externalSearchTerm,
+  syncStatusFilter = 'all',
 }) => {
   const [cases, setCases] = useState<DetailedEvent[]>([]);
   const getVictimsLength = (case_: DetailedEvent) =>
@@ -374,16 +376,25 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
   };
 
   const visibleCases = useMemo(() => {
-    const filtered = cases.filter((case_) =>
-      matchesParticipantTypeFilter(case_, participantTypeFilter),
-    );
+    const filtered = cases.filter((case_) => {
+      if (!matchesParticipantTypeFilter(case_, participantTypeFilter)) {
+        return false;
+      }
+      if (syncStatusFilter === 'all') {
+        return true;
+      }
+      if (syncStatusFilter === 'completed') {
+        return case_.syncStatus === 'synced';
+      }
+      return case_.syncStatus !== 'synced';
+    });
     if (participantTypeSort === 'none') {
       return filtered;
     }
     return [...filtered].sort((a, b) =>
       compareCasesByParticipantType(a, b, participantTypeSort),
     );
-  }, [cases, participantTypeFilter, participantTypeSort]);
+  }, [cases, participantTypeFilter, participantTypeSort, syncStatusFilter]);
   const isParticipantTypeFilterActive = participantTypeFilter !== 'all';
   const hasActiveFilters = Boolean(searchTerm) || isParticipantTypeFilterActive;
   const listCountSummaryParts = [
