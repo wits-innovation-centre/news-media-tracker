@@ -139,6 +139,7 @@ export default function Home() {
     graph: 'Graph',
     table: 'Table',
   };
+  const nextThemeMode: ThemeMode = themeMode === 'dark' ? 'light' : 'dark';
 
   return (
     <div className="app-shell d-flex flex-column vh-100">
@@ -223,11 +224,11 @@ export default function Home() {
             size="sm"
             className="topbar-icon-button py-1 px-2"
             onClick={() => {
-              setUseSystemTheme(false);
-              setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'));
+              if (useSystemTheme) setUseSystemTheme(false);
+              setThemeMode(nextThemeMode);
             }}
-            title={`Switch to ${themeMode === 'dark' ? 'day' : 'night'} mode`}
-            aria-label={`Switch to ${themeMode === 'dark' ? 'day' : 'night'} mode`}
+            title={`Switch to ${nextThemeMode} mode`}
+            aria-label={`Switch to ${nextThemeMode} mode`}
           >
             <i className={`bi ${themeMode === 'dark' ? 'bi-sun' : 'bi-moon-stars'}`} />
           </Button>
