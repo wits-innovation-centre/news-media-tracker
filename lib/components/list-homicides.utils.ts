@@ -3,6 +3,7 @@ import type { Perpetrator, Victim } from '../db/schema';
 export type ParticipantType = 'victim' | 'perpetrator' | 'other';
 export type ParticipantTypeFilter = 'all' | ParticipantType;
 export type ParticipantTypeSort = 'none' | 'asc' | 'desc';
+export type AnnotationSyncStatusFilter = 'all' | 'completed' | 'drafted';
 
 export const participantTypeOrder: Record<ParticipantType, number> = {
   victim: 0,
@@ -77,3 +78,13 @@ export const compareCasesByParticipantType = (
       : participantTypeOrder.other;
   return participantTypeSort === 'asc' ? aOrder - bOrder : bOrder - aOrder;
 };
+
+export const isCompletedSyncStatus = (syncStatus: unknown) =>
+  syncStatus === 'synced';
+
+export const isDraftedSyncStatus = (syncStatus: unknown) =>
+  syncStatus === 'pending' ||
+  syncStatus === 'failed' ||
+  syncStatus === 'draft' ||
+  syncStatus === null ||
+  syncStatus === undefined;

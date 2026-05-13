@@ -1,18 +1,20 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Badge,
   Button,
-  Col,
   Form,
   InputGroup,
   Nav,
-  Row,
   Spinner,
 } from 'react-bootstrap';
 import InputHomicide from '@/lib/components/input-homicide';
 import ListHomicides, { type DetailedEvent } from '@/lib/components/list-homicides';
+import {
+  isCompletedSyncStatus,
+  isDraftedSyncStatus,
+} from '@/lib/components/list-homicides.utils';
 import ConnectedGraphWorkspace from '@/lib/components/connected-graph-workspace';
 import ArticleQueue, { type QueueArticle } from '@/lib/components/article-queue';
 import SettingsPanel from '@/lib/components/settings-panel';
@@ -24,6 +26,7 @@ import {
 
 type MainView = 'form' | 'graph' | 'table';
 type ThemeMode = 'light' | 'dark';
+type AnnotationStatusFilter = 'all' | 'completed' | 'drafted' | 'queued';
 
 export default function Home() {
   const [mainView, setMainView] = useState<MainView>('form');
@@ -38,12 +41,15 @@ export default function Home() {
   const [selectedQueueArticle, setSelectedQueueArticle] =
     useState<QueueArticle | null>(null);
   const [queueRefreshKey, setQueueRefreshKey] = useState(0);
+  const [annotationsRefreshKey, setAnnotationsRefreshKey] = useState(0);
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
   const [useSystemTheme, setUseSystemTheme] = useState(true);
 
   // Search/filter state shared between graph and table views
   const [searchTerm, setSearchTerm] = useState('');
   const [pendingSearch, setPendingSearch] = useState('');
+  const [annotationStatusFilter, setAnnotationStatusFilter] =
+    useState<AnnotationStatusFilter>('all');
 
   useEffect(() => {
     readOfflineQueueCount().then(setQueueCount);
@@ -135,6 +141,50 @@ export default function Home() {
     setSearchTerm(pendingSearch);
   };
 
+  const handleMainViewChange = useCallback(
+    (view: MainView) => {
+      setMainView(view);
+      if (view !== 'form' && annotationStatusFilter === 'queued') {
+        setAnnotationStatusFilter('all');
+      }
+    },
+    [annotationStatusFilter],
+  );
+
+  const cycleAnnotationStatusFilter = useCallback(() => {
+    const filterSequence: AnnotationStatusFilter[] =
+      mainView === 'form'
+        ? ['all', 'completed', 'drafted', 'queued']
+        : ['all', 'completed', 'drafted'];
+    const currentIndex = filterSequence.indexOf(annotationStatusFilter);
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % filterSequence.length : 0;
+    setAnnotationStatusFilter(filterSequence[nextIndex]);
+  }, [annotationStatusFilter, mainView]);
+
+  const listStatusFilter = useMemo(() => {
+    if (annotationStatusFilter === 'completed') {
+      return 'completed' as const;
+    }
+    if (annotationStatusFilter === 'drafted') {
+      return 'drafted' as const;
+    }
+    return 'all' as const;
+  }, [annotationStatusFilter]);
+
+  const graphCases = useMemo(() => {
+    if (listStatusFilter === 'completed') {
+      return loadedCases.filter((case_) => isCompletedSyncStatus(case_.syncStatus));
+    }
+    if (listStatusFilter === 'drafted') {
+      return loadedCases.filter((case_) => isDraftedSyncStatus(case_.syncStatus));
+    }
+    return loadedCases;
+  }, [listStatusFilter, loadedCases]);
+  const handleRefreshQueueAndAnnotations = () => {
+    setQueueRefreshKey((k) => k + 1);
+    setAnnotationsRefreshKey((k) => k + 1);
+  };
+
   const viewLabel: Record<MainView, string> = {
     form: 'Form',
     graph: 'Graph',
@@ -150,43 +200,6 @@ export default function Home() {
           News Report Tracker
         </span>
         <div className="me-auto" />
-
-        {/* Search/filter — affects graph and table */}
-        {(mainView === 'graph' || mainView === 'table') && (
-          <Form
-            className="d-flex me-3"
-            onSubmit={handleSearchSubmit}
-            style={{ maxWidth: '320px' }}
-            role="search"
-            aria-label="Filter events"
-          >
-            <InputGroup size="sm">
-              <Form.Control
-                type="search"
-                placeholder="Search events…"
-                value={pendingSearch}
-                onChange={(e) => setPendingSearch(e.target.value)}
-                aria-label="Search events"
-              />
-              <Button type="submit" variant="outline-secondary" size="sm">
-                <i className="bi bi-search" />
-              </Button>
-              {searchTerm && (
-                <Button
-                  variant="outline-secondary"
-                  size="sm"
-                  onClick={() => {
-                    setPendingSearch('');
-                    setSearchTerm('');
-                  }}
-                  aria-label="Clear search"
-                >
-                  <i className="bi bi-x" />
-                </Button>
-              )}
-            </InputGroup>
-          </Form>
-        )}
 
         {/* Status indicators */}
         <div className="d-flex align-items-center gap-2">
@@ -248,46 +261,107 @@ export default function Home() {
         </div>
       </header>
 
-      {/* View tabs */}
-      <div className="app-view-tabs border-bottom px-3">
-        <Nav
-          className="view-toggle"
-          as="nav"
-          role="tablist"
-          aria-label="Form | Graph | Table workspace"
-        >
-          {(['form', 'graph', 'table'] as MainView[]).map((view) => (
-            <Nav.Link
-              key={view}
-              as="button"
-              type="button"
-              role="tab"
-              className={`view-toggle-link${mainView === view ? ' active' : ''}`}
-              onClick={() => setMainView(view)}
-              aria-selected={mainView === view}
-              aria-controls={`workspace-panel-${view}`}
-            >
-              {viewLabel[view]}
-            </Nav.Link>
-          ))}
-        </Nav>
-      </div>
-
       {/* Main content area */}
       <div className="app-body d-flex flex-grow-1 overflow-hidden">
-        {/* Sidebar — article queue */}
-        <aside className="app-sidebar border-end d-flex flex-column">
-          <ArticleQueue
-            key={queueRefreshKey}
-            onSelectArticle={handleSelectQueueArticle}
-            selectedArticleId={selectedQueueArticle?.id ?? null}
-          />
-        </aside>
+        {mainView !== 'table' && (
+          <aside className="app-sidebar border-end d-flex flex-column">
+            <div className="annotation-sidebar-tools border-bottom p-3">
+              <Form
+                onSubmit={handleSearchSubmit}
+                role="search"
+                aria-label="Filter annotations"
+              >
+                <div className="d-flex align-items-center gap-2">
+                  <InputGroup size="sm">
+                    <Form.Control
+                      type="search"
+                      placeholder="Search"
+                      value={pendingSearch}
+                      onChange={(e) => setPendingSearch(e.target.value)}
+                      aria-label="Search"
+                    />
+                    <Button type="submit" variant="outline-secondary" size="sm">
+                      <i className="bi bi-search" />
+                    </Button>
+                  </InputGroup>
+                  <Button
+                    type="button"
+                    variant="outline-secondary"
+                    size="sm"
+                    className="px-2"
+                    onClick={cycleAnnotationStatusFilter}
+                    aria-label="Cycle annotation filter"
+                    title={`Annotation filter: ${annotationStatusFilter}`}
+                  >
+                    <i className="bi bi-funnel" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline-secondary"
+                    size="sm"
+                    className="px-2"
+                    onClick={handleRefreshQueueAndAnnotations}
+                    aria-label="Refresh sidebar data"
+                    title="Refresh queue and annotation data"
+                  >
+                    <i className="bi bi-arrow-clockwise" />
+                  </Button>
+                </div>
+              </Form>
+            </div>
+            <ArticleQueue
+              key={queueRefreshKey}
+              onSelectArticle={handleSelectQueueArticle}
+              selectedArticleId={selectedQueueArticle?.id ?? null}
+            />
+          </aside>
+        )}
 
         {/* Primary content panel */}
-        <main className="app-main flex-grow-1 overflow-auto">
+        <main className="app-main flex-grow-1 overflow-hidden d-flex flex-column">
+          <div className="app-view-tabs border-bottom px-3">
+            <Nav
+              className="view-toggle"
+              as="nav"
+              role="tablist"
+              aria-label="Form | Graph | Table workspace"
+            >
+              {(['form', 'graph', 'table'] as MainView[]).map((view) => (
+                <Nav.Link
+                  key={view}
+                  as="button"
+                  type="button"
+                  role="tab"
+                  className={`view-toggle-link${mainView === view ? ' active' : ''}`}
+                  onClick={() => handleMainViewChange(view)}
+                  aria-selected={mainView === view}
+                  aria-controls={`workspace-panel-${view}`}
+                >
+                  {viewLabel[view]}
+                </Nav.Link>
+              ))}
+            </Nav>
+          </div>
+
+          {(mainView === 'form' || mainView === 'graph') && (
+            <div className="d-none" aria-hidden key={annotationsRefreshKey}>
+              <ListHomicides
+                embedded
+                selectedCaseIds={selectedCaseIds}
+                onSelectedCaseIdsChange={setSelectedCaseIds}
+                onCasesLoaded={setLoadedCases}
+                externalSearchTerm={searchTerm}
+                syncStatusFilter={listStatusFilter}
+              />
+            </div>
+          )}
+
           {mainView === 'form' && (
-            <div className="p-3" id="workspace-panel-form" role="tabpanel">
+            <div
+              className="p-3 overflow-auto"
+              id="workspace-panel-form"
+              role="tabpanel"
+            >
               <InputHomicide
                 embedded
                 existingArticle={selectedQueueArticle}
@@ -297,35 +371,34 @@ export default function Home() {
           )}
 
           {mainView === 'graph' && (
-            <Row className="g-0 h-100" id="workspace-panel-graph" role="tabpanel">
-              <Col lg={5} className="h-100 border-end overflow-auto p-3">
-                <ListHomicides
-                  embedded
-                  selectedCaseIds={selectedCaseIds}
-                  onSelectedCaseIdsChange={setSelectedCaseIds}
-                  onCasesLoaded={setLoadedCases}
-                  externalSearchTerm={searchTerm}
-                />
-              </Col>
-              <Col lg={7} className="h-100 overflow-auto p-3">
-                {/* Connected Graph workspace — shows relationships between events */}
-                <ConnectedGraphWorkspace
-                  cases={loadedCases}
-                  selectedCaseIds={selectedCaseIds}
-                  onSelectedCaseIdsChange={setSelectedCaseIds}
-                />
-              </Col>
-            </Row>
+            <div
+              className="p-3 h-100 overflow-auto"
+              id="workspace-panel-graph"
+              role="tabpanel"
+            >
+              {/* Connected Graph workspace — shows relationships between events */}
+              <ConnectedGraphWorkspace
+                cases={graphCases}
+                selectedCaseIds={selectedCaseIds}
+                onSelectedCaseIdsChange={setSelectedCaseIds}
+              />
+            </div>
           )}
 
           {mainView === 'table' && (
-            <div className="p-3" id="workspace-panel-table" role="tabpanel">
+            <div
+              className="p-3 h-100 overflow-auto"
+              id="workspace-panel-table"
+              role="tabpanel"
+            >
               <ListHomicides
+                key={annotationsRefreshKey}
                 embedded
                 selectedCaseIds={selectedCaseIds}
                 onSelectedCaseIdsChange={setSelectedCaseIds}
                 onCasesLoaded={setLoadedCases}
                 externalSearchTerm={searchTerm}
+                syncStatusFilter={listStatusFilter}
               />
             </div>
           )}

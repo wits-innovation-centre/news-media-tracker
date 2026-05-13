@@ -17,8 +17,11 @@ import { toast } from 'react-toastify';
 import { getBaseUrl } from '../platform';
 import type { Article, Event, Victim, Perpetrator } from '../db/schema';
 import {
+  type AnnotationSyncStatusFilter,
   compareCasesByParticipantType,
   getCaseParticipantTypes,
+  isCompletedSyncStatus,
+  isDraftedSyncStatus,
   matchesParticipantTypeFilter,
   participantTypeBadge,
   participantTypeLabel,
@@ -33,6 +36,7 @@ interface ListHomicidesProps {
   onSelectedCaseIdsChange?: (caseIds: string[]) => void;
   onCasesLoaded?: (cases: DetailedEvent[]) => void;
   externalSearchTerm?: string;
+  syncStatusFilter?: AnnotationSyncStatusFilter;
 }
 
 export interface DetailedEvent
@@ -199,6 +203,7 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
   onSelectedCaseIdsChange,
   onCasesLoaded,
   externalSearchTerm,
+  syncStatusFilter = 'all',
 }) => {
   const [cases, setCases] = useState<DetailedEvent[]>([]);
   const getVictimsLength = (case_: DetailedEvent) =>
@@ -374,16 +379,25 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
   };
 
   const visibleCases = useMemo(() => {
-    const filtered = cases.filter((case_) =>
-      matchesParticipantTypeFilter(case_, participantTypeFilter),
-    );
+    const filtered = cases.filter((case_) => {
+      if (!matchesParticipantTypeFilter(case_, participantTypeFilter)) {
+        return false;
+      }
+      if (syncStatusFilter === 'all') {
+        return true;
+      }
+      if (syncStatusFilter === 'completed') {
+        return isCompletedSyncStatus(case_.syncStatus);
+      }
+      return isDraftedSyncStatus(case_.syncStatus);
+    });
     if (participantTypeSort === 'none') {
       return filtered;
     }
     return [...filtered].sort((a, b) =>
       compareCasesByParticipantType(a, b, participantTypeSort),
     );
-  }, [cases, participantTypeFilter, participantTypeSort]);
+  }, [cases, participantTypeFilter, participantTypeSort, syncStatusFilter]);
   const isParticipantTypeFilterActive = participantTypeFilter !== 'all';
   const hasActiveFilters = Boolean(searchTerm) || isParticipantTypeFilterActive;
   const listCountSummaryParts = [

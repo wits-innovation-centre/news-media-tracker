@@ -207,6 +207,12 @@ describe('[gate-4] Stitch workspace UI and accessibility checks', () => {
     const keyboardPattern = /ArrowLeft|ArrowRight|onKeyDown|aria-controls/i;
     const themeTogglePattern =
       /workspace-theme|Switch to (light|dark) theme|bi-moon-stars|bi-sun/i;
+    const sidebarFilterPattern = /aria-label=['"]Filter annotations['"]/i;
+    const sidebarFilterTogglePattern =
+      /aria-label=['"]Cycle annotation filter['"]/i;
+    const sidebarRefreshPattern = /aria-label=['"]Refresh sidebar data['"]/i;
+    const topbarFilterPattern = /aria-label=['"]Filter events['"]/i;
+    const graphSplitPattern = /id=['"]workspace-panel-graph['"][\s\S]*<Row/i;
 
     const combinedSource = `${pageSource}\n${inputSource}\n${globalCss}`;
 
@@ -223,5 +229,10 @@ describe('[gate-4] Stitch workspace UI and accessibility checks', () => {
     expect(hasGraphWorkspaceContract).toBe(true);
     expect(hasKeyboardA11yContract).toBe(true);
     expect(hasThemeToggleContract).toBe(true);
+    expect(sidebarFilterPattern.test(pageSource)).toBe(true);
+    expect(sidebarFilterTogglePattern.test(pageSource)).toBe(true);
+    expect(sidebarRefreshPattern.test(pageSource)).toBe(true);
+    expect(topbarFilterPattern.test(pageSource)).toBe(false);
+    expect(graphSplitPattern.test(pageSource)).toBe(false);
   });
 });

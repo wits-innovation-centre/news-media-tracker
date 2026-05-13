@@ -273,6 +273,17 @@ html[data-theme='light'] {
     overflow: hidden;
 }
 
+.app-sidebar > .article-queue {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto !important;
+}
+
+.annotation-sidebar-tools {
+    background: var(--app-sidebar-bg);
+    flex-shrink: 0;
+}
+
 /* Main panel */
 .app-main {
     min-width: 0;
