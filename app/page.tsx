@@ -275,10 +275,10 @@ export default function Home() {
                   <InputGroup size="sm">
                     <Form.Control
                       type="search"
-                      placeholder="Search annotations…"
+                      placeholder="Search"
                       value={pendingSearch}
                       onChange={(e) => setPendingSearch(e.target.value)}
-                      aria-label="Search annotations"
+                      aria-label="Search"
                     />
                     <Button type="submit" variant="outline-secondary" size="sm">
                       <i className="bi bi-search" />
