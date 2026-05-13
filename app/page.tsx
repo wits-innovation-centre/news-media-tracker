@@ -227,8 +227,8 @@ export default function Home() {
               if (useSystemTheme) setUseSystemTheme(false);
               setThemeMode(nextThemeMode);
             }}
-            title={`Switch to ${nextThemeMode} mode`}
-            aria-label={`Switch to ${nextThemeMode} mode`}
+            title={`Switch to ${nextThemeMode} theme`}
+            aria-label={`Switch to ${nextThemeMode} theme`}
           >
             <i className={`bi ${themeMode === 'dark' ? 'bi-sun' : 'bi-moon-stars'}`} />
           </Button>

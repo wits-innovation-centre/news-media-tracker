@@ -206,7 +206,7 @@ describe('[gate-4] Stitch workspace UI and accessibility checks', () => {
     const graphPattern = /Connected Graph|graph workspace|graph legend|graph controls/i;
     const keyboardPattern = /ArrowLeft|ArrowRight|onKeyDown|aria-controls/i;
     const themeTogglePattern =
-      /workspace-theme|Switch to (day|night) mode|bi-moon-stars|bi-sun/i;
+      /workspace-theme|Switch to (light|dark) theme|bi-moon-stars|bi-sun/i;
 
     const combinedSource = `${pageSource}\n${inputSource}\n${globalCss}`;
 
