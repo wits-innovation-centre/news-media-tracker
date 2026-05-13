@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import 'bootstrap-icons/font/bootstrap-icons.css';
 import 'react-toastify/dist/ReactToastify.css';
 import './globals.css';
 import { ToastContainer } from 'react-toastify';

@@ -205,6 +205,8 @@ describe('[gate-4] Stitch workspace UI and accessibility checks', () => {
       /aria-label=['"][^'"]*(Form|Graph|Workspace Mode)[^'"]*['"]/i;
     const graphPattern = /Connected Graph|graph workspace|graph legend|graph controls/i;
     const keyboardPattern = /ArrowLeft|ArrowRight|onKeyDown|aria-controls/i;
+    const themeTogglePattern =
+      /workspace-theme|Switch to (light|dark) theme|bi-moon-stars|bi-sun/i;
 
     const combinedSource = `${pageSource}\n${inputSource}\n${globalCss}`;
 
@@ -214,10 +216,12 @@ describe('[gate-4] Stitch workspace UI and accessibility checks', () => {
       modeAriaLabelPattern.test(combinedSource);
     const hasGraphWorkspaceContract = graphPattern.test(combinedSource);
     const hasKeyboardA11yContract = keyboardPattern.test(combinedSource);
+    const hasThemeToggleContract = themeTogglePattern.test(combinedSource);
 
     // Lane 06 UI implementation has landed — these contracts are now present.
     expect(hasModeToggleContract).toBe(true);
     expect(hasGraphWorkspaceContract).toBe(true);
     expect(hasKeyboardA11yContract).toBe(true);
+    expect(hasThemeToggleContract).toBe(true);
   });
 });
