@@ -23,6 +23,7 @@ import {
 } from '@/lib/utils/cache-manager';
 
 type MainView = 'form' | 'graph' | 'table';
+type ThemeMode = 'light' | 'dark';
 
 export default function Home() {
   const [mainView, setMainView] = useState<MainView>('form');
@@ -37,6 +38,7 @@ export default function Home() {
   const [selectedQueueArticle, setSelectedQueueArticle] =
     useState<QueueArticle | null>(null);
   const [queueRefreshKey, setQueueRefreshKey] = useState(0);
+  const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
 
   // Search/filter state shared between graph and table views
   const [searchTerm, setSearchTerm] = useState('');
@@ -64,6 +66,22 @@ export default function Home() {
       clearInterval(interval);
     };
   }, []);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem('workspace-theme');
+    if (savedTheme === 'light' || savedTheme === 'dark') {
+      setThemeMode(savedTheme);
+      return;
+    }
+
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    setThemeMode(prefersDark ? 'dark' : 'light');
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', themeMode);
+    window.localStorage.setItem('workspace-theme', themeMode);
+  }, [themeMode]);
 
   const handleNavSync = async () => {
     if (!isOnline || replaying) return;
@@ -111,29 +129,7 @@ export default function Home() {
         <span className="app-topbar-brand fw-bold me-4">
           News Report Tracker
         </span>
-
-        {/* View mode toggle — Form | Graph | Table */}
-        <Nav
-          className="view-toggle me-auto"
-          as="nav"
-          role="tablist"
-          aria-label="Form | Graph | Table workspace"
-        >
-          {(['form', 'graph', 'table'] as MainView[]).map((view) => (
-            <Nav.Link
-              key={view}
-              as="button"
-              type="button"
-              role="tab"
-              className={`view-toggle-link${mainView === view ? ' active' : ''}`}
-              onClick={() => setMainView(view)}
-              aria-selected={mainView === view}
-              aria-controls={`workspace-panel-${view}`}
-            >
-              {viewLabel[view]}
-            </Nav.Link>
-          ))}
-        </Nav>
+        <div className="me-auto" />
 
         {/* Search/filter — affects graph and table */}
         {(mainView === 'graph' || mainView === 'table') && (
@@ -204,11 +200,24 @@ export default function Home() {
             </Button>
           )}
 
+          <Button
+            variant="outline-secondary"
+            size="sm"
+            className="topbar-icon-button py-1 px-2"
+            onClick={() =>
+              setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'))
+            }
+            title={`Switch to ${themeMode === 'dark' ? 'day' : 'night'} mode`}
+            aria-label={`Switch to ${themeMode === 'dark' ? 'day' : 'night'} mode`}
+          >
+            <i className={`bi ${themeMode === 'dark' ? 'bi-sun' : 'bi-moon-stars'}`} />
+          </Button>
+
           {/* Settings gear */}
           <Button
             variant="outline-secondary"
             size="sm"
-            className="py-1 px-2"
+            className="topbar-icon-button py-1 px-2"
             onClick={() => setShowSettings(true)}
             title="Configuration &amp; Administration"
             aria-label="Open settings"
@@ -217,6 +226,31 @@ export default function Home() {
           </Button>
         </div>
       </header>
+
+      {/* View tabs */}
+      <div className="app-view-tabs border-bottom px-3">
+        <Nav
+          className="view-toggle"
+          as="nav"
+          role="tablist"
+          aria-label="Form | Graph | Table workspace"
+        >
+          {(['form', 'graph', 'table'] as MainView[]).map((view) => (
+            <Nav.Link
+              key={view}
+              as="button"
+              type="button"
+              role="tab"
+              className={`view-toggle-link${mainView === view ? ' active' : ''}`}
+              onClick={() => setMainView(view)}
+              aria-selected={mainView === view}
+              aria-controls={`workspace-panel-${view}`}
+            >
+              {viewLabel[view]}
+            </Nav.Link>
+          ))}
+        </Nav>
+      </div>
 
       {/* Main content area */}
       <div className="app-body d-flex flex-grow-1 overflow-hidden">
