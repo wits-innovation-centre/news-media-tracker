@@ -115,8 +115,8 @@ devDependencies:
     specifier: ^7.0.3
     version: 7.0.3
   css-loader:
-    specifier: ^6.8.1
-    version: 6.11.0(webpack@5.106.2)
+    specifier: ^7.1.4
+    version: 7.1.4(webpack@5.106.2)
   css-minimizer-webpack-plugin:
     specifier: ^5.0.1
     version: 5.0.1(esbuild@0.19.12)(webpack@5.106.2)
@@ -6140,12 +6140,12 @@ packages:
       postcss: 8.5.14
     dev: true
 
-  /css-loader@6.11.0(webpack@5.106.2):
-    resolution: {integrity: sha512-CTJ+AEQJjq5NzLga5pE39qdiSV56F8ywCIsqNIRF0r7BDgWsN25aazToqAFg7ZrtA/U016xudB3ffgweORxX7g==}
-    engines: {node: '>= 12.13.0'}
+  /css-loader@7.1.4(webpack@5.106.2):
+    resolution: {integrity: sha512-vv3J9tlOl04WjiMvHQI/9tmIrCxVrj6PFbHemBB1iihpeRbi/I4h033eoFIhwxBBqLhI0KYFS7yvynBFhIZfTw==}
+    engines: {node: '>= 18.12.0'}
     peerDependencies:
-      '@rspack/core': 0.x || 1.x
-      webpack: ^5.0.0
+      '@rspack/core': 0.x || ^1.0.0 || ^2.0.0-0
+      webpack: ^5.27.0
     peerDependenciesMeta:
       '@rspack/core':
         optional: true
