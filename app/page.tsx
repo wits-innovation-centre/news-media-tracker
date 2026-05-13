@@ -50,7 +50,6 @@ export default function Home() {
   const [pendingSearch, setPendingSearch] = useState('');
   const [annotationStatusFilter, setAnnotationStatusFilter] =
     useState<AnnotationStatusFilter>('all');
-  const [showSidebarFilters, setShowSidebarFilters] = useState(true);
 
   useEffect(() => {
     readOfflineQueueCount().then(setQueueCount);
@@ -151,6 +150,16 @@ export default function Home() {
     },
     [annotationStatusFilter],
   );
+
+  const cycleAnnotationStatusFilter = useCallback(() => {
+    const filterSequence: AnnotationStatusFilter[] =
+      mainView === 'form'
+        ? ['all', 'completed', 'drafted', 'queued']
+        : ['all', 'completed', 'drafted'];
+    const currentIndex = filterSequence.indexOf(annotationStatusFilter);
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % filterSequence.length : 0;
+    setAnnotationStatusFilter(filterSequence[nextIndex]);
+  }, [annotationStatusFilter, mainView]);
 
   const listStatusFilter = useMemo(() => {
     if (annotationStatusFilter === 'completed') {
@@ -256,18 +265,13 @@ export default function Home() {
       <div className="app-body d-flex flex-grow-1 overflow-hidden">
         {mainView !== 'table' && (
           <aside className="app-sidebar border-end d-flex flex-column">
-            <ArticleQueue
-              key={queueRefreshKey}
-              onSelectArticle={handleSelectQueueArticle}
-              selectedArticleId={selectedQueueArticle?.id ?? null}
-            />
-            <div className="annotation-sidebar-tools border-top p-3">
+            <div className="annotation-sidebar-tools border-bottom p-3">
               <Form
                 onSubmit={handleSearchSubmit}
                 role="search"
                 aria-label="Filter annotations"
               >
-                <div className="d-flex align-items-center gap-2 mb-2">
+                <div className="d-flex align-items-center gap-2">
                   <InputGroup size="sm">
                     <Form.Control
                       type="search"
@@ -285,9 +289,9 @@ export default function Home() {
                     variant="outline-secondary"
                     size="sm"
                     className="px-2"
-                    onClick={() => setShowSidebarFilters((shown) => !shown)}
-                    aria-label="Toggle annotation filters"
-                    title="Toggle filters"
+                    onClick={cycleAnnotationStatusFilter}
+                    aria-label="Cycle annotation filter"
+                    title={`Annotation filter: ${annotationStatusFilter}`}
                   >
                     <i className="bi bi-funnel" />
                   </Button>
@@ -303,27 +307,13 @@ export default function Home() {
                     <i className="bi bi-arrow-clockwise" />
                   </Button>
                 </div>
-                {showSidebarFilters && (
-                  <Form.Select
-                    size="sm"
-                    value={annotationStatusFilter}
-                    onChange={(e) =>
-                      setAnnotationStatusFilter(
-                        e.target.value as AnnotationStatusFilter,
-                      )
-                    }
-                    aria-label="Filter annotations by status"
-                  >
-                    <option value="all">All annotations</option>
-                    <option value="completed">Completed annotations</option>
-                    <option value="drafted">Drafted annotations</option>
-                    {mainView === 'form' && (
-                      <option value="queued">Queued annotations</option>
-                    )}
-                  </Form.Select>
-                )}
               </Form>
             </div>
+            <ArticleQueue
+              key={queueRefreshKey}
+              onSelectArticle={handleSelectQueueArticle}
+              selectedArticleId={selectedQueueArticle?.id ?? null}
+            />
           </aside>
         )}
 

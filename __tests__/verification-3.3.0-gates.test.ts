@@ -209,7 +209,7 @@ describe('[gate-4] Stitch workspace UI and accessibility checks', () => {
       /workspace-theme|Switch to (light|dark) theme|bi-moon-stars|bi-sun/i;
     const sidebarFilterPattern = /aria-label=['"]Filter annotations['"]/i;
     const sidebarFilterTogglePattern =
-      /aria-label=['"]Toggle annotation filters['"]/i;
+      /aria-label=['"]Cycle annotation filter['"]/i;
     const sidebarRefreshPattern = /aria-label=['"]Refresh sidebar data['"]/i;
     const topbarFilterPattern = /aria-label=['"]Filter events['"]/i;
     const graphSplitPattern = /id=['"]workspace-panel-graph['"][\s\S]*<Row/i;
