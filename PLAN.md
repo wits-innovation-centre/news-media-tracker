@@ -7,11 +7,13 @@
 - Primary near-term target: one user can run the full workflow reliably offline and sync on reconnect.
 - Verification update: latest phase-gate artifacts are published and the conductor merge gate status is tracked in the fleet manifest.
 - pnpm shared-store policy is present in `.npmrc`, and local permission validation now passes with no EACCES failures.
+- UI direction update: app-specific DESIGN.md now reflects the queue-first workspace and dark-mode brand rules for News Media Tracker.
+- Stitch update: the dark-mode design-system session for the active project has been started; if the session propagation lags, refresh the project record before treating it as final.
 - The primary persistence strategy is:
-	1. Durable local storage and offline queueing in the browser/PWA.
-	2. A user-installable local server with persistent on-disk database.
-	3. An external server profile in the Docker stack for team/hosted sync.
-	4. Optional upstream multi-user synchronization after single-user reliability is complete.
+  1.  Durable local storage and offline queueing in the browser/PWA.
+  2.  A user-installable local server with persistent on-disk database.
+  3.  An external server profile in the Docker stack for team/hosted sync.
+  4.  Optional upstream multi-user synchronization after single-user reliability is complete.
 
 ## Current architecture decisions
 
@@ -42,31 +44,31 @@
 - Allowed change class: minor.
 - Phase branch: `phase/3.2.0`.
 - Scope guardrail:
-	- Include offline queue, replay, status UX, and single-user deployment surfaces.
-	- Include both deployment tracks: Docker external server profile and packaged local server.
-	- Exclude graph/reproducibility feature expansion and advanced multi-user governance features.
+  - Include offline queue, replay, status UX, and single-user deployment surfaces.
+  - Include both deployment tracks: Docker external server profile and packaged local server.
+  - Exclude graph/reproducibility feature expansion and advanced multi-user governance features.
 - Target merge: `origin/main` after integrated verification.
 
 ### Lane decomposition
 
 - `[3.2.0][00-conductor]` Integrate phase 3.2.0 fleet
-	- Owned surface: `phase/3.2.0` governance, manifest, final PR orchestration.
+  - Owned surface: `phase/3.2.0` governance, manifest, final PR orchestration.
 - `[3.2.0][01-persistence-hardening]` Harden durable local persistence
-	- Owned surface: browser storage durability policy, quota/persist handling, fallback behavior.
+  - Owned surface: browser storage durability policy, quota/persist handling, fallback behavior.
 - `[3.2.0][02-offline-queue]` Implement robust offline queue and replay
-	- Owned surface: queue state machine, retry backoff, idempotency, conflict-resolution stubs.
+  - Owned surface: queue state machine, retry backoff, idempotency, conflict-resolution stubs.
 - `[3.2.0][03-sync-bridge]` Finalize sync bridge endpoints and status
-	- Owned surface: sync/replay API behavior, status reporting, queue acknowledgment contract.
+  - Owned surface: sync/replay API behavior, status reporting, queue acknowledgment contract.
 - `[3.2.0][04-local-server-connectivity]` Add localhost connector and config UX
-	- Owned surface: local endpoint configuration, health checks, connection diagnostics.
+  - Owned surface: local endpoint configuration, health checks, connection diagnostics.
 - `[3.2.0][05-external-server-stack]` Add external server profile to Docker stack
-	- Owned surface: docker-compose services, persistent volume defaults, env contract, startup docs.
+  - Owned surface: docker-compose services, persistent volume defaults, env contract, startup docs.
 - `[3.2.0][06-local-server-packaging]` Ship packaged local-server runtime
-	- Owned surface: install/run scripts, local data path defaults, health-check command, update path.
+  - Owned surface: install/run scripts, local data path defaults, health-check command, update path.
 - `[3.2.0][07-workbench-offline-ux]` Integrate offline indicators and manual sync controls
-	- Owned surface: sync status UI, pending-queue surfaces, manual retry triggers.
+  - Owned surface: sync status UI, pending-queue surfaces, manual retry triggers.
 - `[3.2.0][08-verification]` Verify single-user offline and reconnect behavior across both deployment tracks
-	- Owned surface: integration tests, replay correctness tests, local-server/external-server recovery drills.
+  - Owned surface: integration tests, replay correctness tests, local-server/external-server recovery drills.
 
 ### Dependency notes
 
@@ -103,17 +105,17 @@
 ### Role model
 
 - Global roles:
-	- `admin`
-	- `standard`
+  - `admin`
+  - `standard`
 - Repository membership permissions:
-	- `read`
-	- `write`
-	- `share`
-	- `resolve_conflicts`
-	- `manage_members`
+  - `read`
+  - `write`
+  - `share`
+  - `resolve_conflicts`
+  - `manage_members`
 - Baseline policy:
-	- Repository owner can delegate conflict resolution without granting full administrative control.
-	- Conflict decisions are limited to users with `resolve_conflicts` (or equivalent owner/admin override).
+  - Repository owner can delegate conflict resolution without granting full administrative control.
+  - Conflict decisions are limited to users with `resolve_conflicts` (or equivalent owner/admin override).
 
 ### Data and sync model
 
@@ -147,19 +149,19 @@
 - Dedicated lane: `[3.3.x][06-ui-sync-implementation]`.
 - Role: UI/UX implementarian to Stitch's designer (consume approved Stitch screens and map to shipped components).
 - Owned surface:
-	- `app/page.tsx` navigation/view shell behavior.
-	- `lib/components/input-homicide.tsx` entry workspace composition and mode toggle integration.
-	- `lib/components/list-homicides.tsx` Event Ledger table-mode alignment.
-	- New graph workspace component(s) under `lib/components/` for in-place Graph mode.
-	- `app/globals.css` style token application needed for Stitch alignment.
+  - `app/page.tsx` navigation/view shell behavior.
+  - `lib/components/input-homicide.tsx` entry workspace composition and mode toggle integration.
+  - `lib/components/list-homicides.tsx` Event Ledger table-mode alignment.
+  - New graph workspace component(s) under `lib/components/` for in-place Graph mode.
+  - `app/globals.css` style token application needed for Stitch alignment.
 - Non-owned surface:
-	- Schema and permission engine code owned by lanes 01-04.
-	- Conflict policy enforcement logic owned by lanes 03-05.
+  - Schema and permission engine code owned by lanes 01-04.
+  - Conflict policy enforcement logic owned by lanes 03-05.
 - Acceptance criteria:
-	- Entry Workspace supports in-place `Form | Graph` switching without route changes.
-	- Queue/selection state persists across workspace mode switches.
-	- Event Ledger and Connected Graph states follow Stitch layout hierarchy and token usage.
-	- Keyboard accessibility for mode toggles and primary graph controls.
+  - Entry Workspace supports in-place `Form | Graph` switching without route changes.
+  - Queue/selection state persists across workspace mode switches.
+  - Event Ledger and Connected Graph states follow Stitch layout hierarchy and token usage.
+  - Keyboard accessibility for mode toggles and primary graph controls.
 
 ### Phase dependency notes (3.3.x)
 
