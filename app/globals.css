@@ -58,6 +58,8 @@ html[data-theme='light'] {
     --app-view-tab-text: #64748b;
     --app-view-tab-active-bg: #e2e8f0;
     --app-view-tab-hover-bg: #f1f5f9;
+    --app-view-tab-hover-text: #0f172a;
+    --app-view-tab-active-text: #0f172a;
     --app-sidebar-bg: #fafafa;
     --article-queue-header-bg: #f1f5f9;
     --article-queue-header-border: #e2e8f0;
@@ -85,6 +87,8 @@ html[data-theme='light'] {
     --app-view-tab-text: #94a3b8;
     --app-view-tab-active-bg: #1e293b;
     --app-view-tab-hover-bg: #1e293b;
+    --app-view-tab-hover-text: #f8fafc;
+    --app-view-tab-active-text: #f8fafc;
     --app-sidebar-bg: #0b1220;
     --article-queue-header-bg: #111827;
     --article-queue-header-border: #1f2937;
@@ -244,12 +248,12 @@ html[data-theme='light'] {
 }
 
 .view-toggle-link:hover {
-    color: var(--app-topbar-text) !important;
+    color: var(--app-view-tab-hover-text) !important;
     background: var(--app-view-tab-hover-bg);
 }
 
 .view-toggle-link.active {
-    color: var(--app-topbar-text) !important;
+    color: var(--app-view-tab-active-text) !important;
     background: var(--app-view-tab-active-bg);
     font-weight: 600;
 }

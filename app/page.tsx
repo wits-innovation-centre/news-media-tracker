@@ -77,6 +77,7 @@ export default function Home() {
     }
 
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    setUseSystemTheme(true);
     setThemeMode(prefersDark ? 'dark' : 'light');
   }, []);
 
