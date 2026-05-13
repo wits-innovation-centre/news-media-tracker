@@ -32,6 +32,7 @@ interface ListHomicidesProps {
   selectedCaseIds?: string[];
   onSelectedCaseIdsChange?: (caseIds: string[]) => void;
   onCasesLoaded?: (cases: DetailedEvent[]) => void;
+  externalSearchTerm?: string;
 }
 
 export interface DetailedEvent
@@ -197,13 +198,14 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
   selectedCaseIds,
   onSelectedCaseIdsChange,
   onCasesLoaded,
+  externalSearchTerm,
 }) => {
   const [cases, setCases] = useState<DetailedEvent[]>([]);
   const getVictimsLength = (case_: DetailedEvent) =>
     Array.isArray(case_?.victims) ? case_.victims.length : 0;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(externalSearchTerm ?? '');
   const [participantTypeFilter, setParticipantTypeFilter] =
     useState<ParticipantTypeFilter>('all');
   const [participantTypeSort, setParticipantTypeSort] =
@@ -213,6 +215,14 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
   const [totalCases, setTotalCases] = useState(0);
   const [selectedCase, setSelectedCase] = useState<DetailedEvent | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+
+  // Sync internal search term when external search term changes
+  useEffect(() => {
+    if (externalSearchTerm !== undefined) {
+      setSearchTerm(externalSearchTerm);
+      setCurrentPage(1);
+    }
+  }, [externalSearchTerm]);
 
   const selectedCaseIdSet = useMemo(
     () => new Set(selectedCaseIds ?? []),

@@ -9,7 +9,7 @@ import {
   CONFIDENCE_MIN,
 } from '../../../../../lib/db/domain-constants';
 
-const VALUE_TYPES = new Set(CLAIM_VALUE_TYPES);
+const VALUE_TYPES = new Set<string>(CLAIM_VALUE_TYPES);
 
 const ensureServerDatabase = async () => {
   if (!(dbm instanceof DatabaseManagerServer)) {
@@ -76,9 +76,11 @@ export async function POST(
         ? null
         : Number(payload.confidence);
     const schemaFieldId =
-      typeof payload.schemaFieldId === 'string'
+      typeof payload.schemaFieldId === 'string' && payload.schemaFieldId.trim()
         ? payload.schemaFieldId.trim()
-        : null;
+        : typeof payload.schemaFieldId === 'number'
+          ? String(payload.schemaFieldId)
+          : null;
 
     if (!predicateKey) {
       return NextResponse.json(
@@ -129,10 +131,11 @@ export async function POST(
     }
 
     if (schemaFieldId) {
+      const parsedFieldId = parseInt(schemaFieldId, 10);
       const fieldExists = await db
         .select()
         .from(schemaFields)
-        .where(eq(schemaFields.id, schemaFieldId))
+        .where(eq(schemaFields.id, parsedFieldId))
         .limit(1);
       if (!fieldExists[0]) {
         return NextResponse.json(

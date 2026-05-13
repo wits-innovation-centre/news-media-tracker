@@ -5,6 +5,7 @@ export type ConflictEngineOperation = {
   method: string;
   endpoint: string;
   body?: unknown;
+  baseVersion?: number;
 };
 
 export type ReplayConflictRecord = {
@@ -76,7 +77,7 @@ function createMergeGroup(operation: ConflictEngineOperation): MergeableReplayGr
   const mergedBody = { ...(operation.body as Record<string, unknown>) };
   const mergedKeys = new Set<string>(Object.keys(mergedBody));
   const fieldOwners = new Map<string, ConflictEngineOperation>();
-  for (const key of mergedKeys) {
+  for (const key of Array.from(mergedKeys)) {
     fieldOwners.set(key, operation);
   }
   return {

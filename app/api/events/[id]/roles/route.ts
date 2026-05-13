@@ -15,7 +15,7 @@ import {
 } from '../../../../../lib/db/domain-constants';
 import { EVENT_ACTOR_ROLE_VOCAB_KEY } from '../../../../../lib/db/role-vocabulary';
 
-const CERTAINTY_VALUES = new Set(EVENT_ACTOR_ROLE_CERTAINTY_VALUES);
+const CERTAINTY_VALUES = new Set<string>(EVENT_ACTOR_ROLE_CERTAINTY_VALUES);
 
 const ensureServerDatabase = async () => {
   if (!(dbm instanceof DatabaseManagerServer)) {

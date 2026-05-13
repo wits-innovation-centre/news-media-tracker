@@ -5,39 +5,15 @@ import {
   parseRepositoryInviteCreateDto,
   parseRepositoryInviteResponseDto,
   REPOSITORY_PERMISSION_KEYS,
-  type RepositoryGrantableRole,
   type RepositoryMemberRole,
   type RepositoryPermission,
 } from '../../../../../lib/contracts/repository-sharing-permissions';
-
-type RepositoryMembership = {
-  userId: string;
-  role: RepositoryMemberRole;
-  permissions: RepositoryPermission[];
-  explicitPermissions: RepositoryPermission[];
-  createdAt: string;
-  updatedAt: string;
-};
-
-type RepositoryInvite = {
-  id: string;
-  inviteeUserId: string;
-  invitedByUserId: string;
-  role: RepositoryGrantableRole;
-  permissions: RepositoryPermission[];
-  status: 'pending' | 'accepted' | 'declined';
-  createdAt: string;
-  respondedAt: string | null;
-};
-
-type RepositorySharingState = {
-  memberships: RepositoryMembership[];
-  invites: RepositoryInvite[];
-};
-
-// Temporary in-memory state for repository sharing APIs. This lane avoids schema
-// changes, so production deployments should replace this with persistent storage.
-const repositoryStateStore = new Map<string, RepositorySharingState>();
+import {
+  repositoryStateStore,
+  type RepositoryMembership,
+  type RepositoryInvite,
+  type RepositorySharingState,
+} from './state';
 
 const ALL_PERMISSIONS = [...REPOSITORY_PERMISSION_KEYS];
 const STANDARD_BASE_PERMISSIONS: RepositoryPermission[] = ['read', 'write'];
@@ -471,6 +447,3 @@ export async function PATCH(
   }
 }
 
-export const __resetRepositorySharingStateForTests = () => {
-  repositoryStateStore.clear();
-};

@@ -1,12 +1,9 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'react-toastify/dist/ReactToastify.css';
 import './globals.css';
 import { ToastContainer } from 'react-toastify';
 import BootPWA from '@/lib/components/boot-pwa';
-
-const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'News Report Tracker',
@@ -64,7 +61,7 @@ export default function RootLayout({
           href="/icons/windows11/Square150x150Logo.scale-100.png"
         />
       </head>
-      <body className={inter.className}>
+      <body>
         <BootPWA />
         {children}
         <ToastContainer

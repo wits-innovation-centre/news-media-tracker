@@ -20,8 +20,8 @@ import {
   PATCH,
   POST,
   PUT,
-  __resetRepositorySharingStateForTests,
 } from './route';
+import { repositoryStateStore } from './state';
 
 const buildRequest = (url: string, method: string, body?: unknown): Request =>
   ({
@@ -42,7 +42,7 @@ const jsonBody = async (response: {
 
 describe('repository sharing and permissions API', () => {
   beforeEach(() => {
-    __resetRepositorySharingStateForTests();
+    repositoryStateStore.clear();
     jest.clearAllMocks();
   });
 
