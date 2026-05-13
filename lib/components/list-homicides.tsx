@@ -17,8 +17,11 @@ import { toast } from 'react-toastify';
 import { getBaseUrl } from '../platform';
 import type { Article, Event, Victim, Perpetrator } from '../db/schema';
 import {
+  type AnnotationSyncStatusFilter,
   compareCasesByParticipantType,
   getCaseParticipantTypes,
+  isCompletedSyncStatus,
+  isDraftedSyncStatus,
   matchesParticipantTypeFilter,
   participantTypeBadge,
   participantTypeLabel,
@@ -33,7 +36,7 @@ interface ListHomicidesProps {
   onSelectedCaseIdsChange?: (caseIds: string[]) => void;
   onCasesLoaded?: (cases: DetailedEvent[]) => void;
   externalSearchTerm?: string;
-  syncStatusFilter?: 'all' | 'completed' | 'drafted';
+  syncStatusFilter?: AnnotationSyncStatusFilter;
 }
 
 export interface DetailedEvent
@@ -46,15 +49,6 @@ export interface DetailedEvent
   perpetrators: Perpetrator[];
   typeOfMurder: string;
 }
-
-const isCompletedSyncStatus = (syncStatus: unknown) => syncStatus === 'synced';
-
-const isDraftedSyncStatus = (syncStatus: unknown) =>
-  syncStatus === 'pending' ||
-  syncStatus === 'failed' ||
-  syncStatus === 'draft' ||
-  syncStatus === null ||
-  syncStatus === undefined;
 
 interface EventsApiPayload {
   events: Event[];

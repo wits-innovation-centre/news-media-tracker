@@ -11,6 +11,10 @@ import {
 } from 'react-bootstrap';
 import InputHomicide from '@/lib/components/input-homicide';
 import ListHomicides, { type DetailedEvent } from '@/lib/components/list-homicides';
+import {
+  isCompletedSyncStatus,
+  isDraftedSyncStatus,
+} from '@/lib/components/list-homicides.utils';
 import ConnectedGraphWorkspace from '@/lib/components/connected-graph-workspace';
 import ArticleQueue, { type QueueArticle } from '@/lib/components/article-queue';
 import SettingsPanel from '@/lib/components/settings-panel';
@@ -158,19 +162,19 @@ export default function Home() {
   }, [annotationStatusFilter]);
 
   const completedAnnotations = useMemo(
-    () => loadedCases.filter((case_) => case_.syncStatus === 'synced').length,
+    () => loadedCases.filter((case_) => isCompletedSyncStatus(case_.syncStatus)).length,
     [loadedCases],
   );
   const draftedAnnotations = useMemo(
-    () => loadedCases.filter((case_) => case_.syncStatus !== 'synced').length,
+    () => loadedCases.filter((case_) => isDraftedSyncStatus(case_.syncStatus)).length,
     [loadedCases],
   );
   const graphCases = useMemo(() => {
     if (listStatusFilter === 'completed') {
-      return loadedCases.filter((case_) => case_.syncStatus === 'synced');
+      return loadedCases.filter((case_) => isCompletedSyncStatus(case_.syncStatus));
     }
     if (listStatusFilter === 'drafted') {
-      return loadedCases.filter((case_) => case_.syncStatus !== 'synced');
+      return loadedCases.filter((case_) => isDraftedSyncStatus(case_.syncStatus));
     }
     return loadedCases;
   }, [listStatusFilter, loadedCases]);
