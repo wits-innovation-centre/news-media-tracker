@@ -158,7 +158,7 @@ const ArticleQueue: React.FC<ArticleQueueProps> = ({
     <div className="article-queue d-flex flex-column h-100">
       <div className="article-queue-header d-flex align-items-center justify-content-between px-3 py-2">
         <span className="fw-semibold small text-uppercase letter-spacing-wide">
-          Unannotated Queue
+          Article Queue
         </span>
         <div className="d-flex align-items-center gap-2">
           {unannotated.length > 0 && (

@@ -41,7 +41,7 @@ export default function Home() {
   const [selectedQueueArticle, setSelectedQueueArticle] =
     useState<QueueArticle | null>(null);
   const [queueRefreshKey, setQueueRefreshKey] = useState(0);
-  const [queuedAnnotationCount, setQueuedAnnotationCount] = useState(0);
+  const [casesRefreshKey, setCasesRefreshKey] = useState(0);
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
   const [useSystemTheme, setUseSystemTheme] = useState(true);
 
@@ -50,6 +50,7 @@ export default function Home() {
   const [pendingSearch, setPendingSearch] = useState('');
   const [annotationStatusFilter, setAnnotationStatusFilter] =
     useState<AnnotationStatusFilter>('all');
+  const [showSidebarFilters, setShowSidebarFilters] = useState(true);
 
   useEffect(() => {
     readOfflineQueueCount().then(setQueueCount);
@@ -161,14 +162,6 @@ export default function Home() {
     return 'all' as const;
   }, [annotationStatusFilter]);
 
-  const completedAnnotations = useMemo(
-    () => loadedCases.filter((case_) => isCompletedSyncStatus(case_.syncStatus)).length,
-    [loadedCases],
-  );
-  const draftedAnnotations = useMemo(
-    () => loadedCases.filter((case_) => isDraftedSyncStatus(case_.syncStatus)).length,
-    [loadedCases],
-  );
   const graphCases = useMemo(() => {
     if (listStatusFilter === 'completed') {
       return loadedCases.filter((case_) => isCompletedSyncStatus(case_.syncStatus));
@@ -178,6 +171,10 @@ export default function Home() {
     }
     return loadedCases;
   }, [listStatusFilter, loadedCases]);
+  const handleSidebarRefresh = () => {
+    setQueueRefreshKey((k) => k + 1);
+    setCasesRefreshKey((k) => k + 1);
+  };
 
   const viewLabel: Record<MainView, string> = {
     form: 'Form',
@@ -263,58 +260,68 @@ export default function Home() {
               key={queueRefreshKey}
               onSelectArticle={handleSelectQueueArticle}
               selectedArticleId={selectedQueueArticle?.id ?? null}
-              onCountChange={setQueuedAnnotationCount}
             />
             <div className="annotation-sidebar-tools border-top p-3">
-              <div className="annotation-summary-grid mb-3">
-                <div className="annotation-summary-item">
-                  <span className="text-muted small d-block">Completed</span>
-                  <span className="fw-semibold">{completedAnnotations}</span>
-                </div>
-                <div className="annotation-summary-item">
-                  <span className="text-muted small d-block">Drafted</span>
-                  <span className="fw-semibold">{draftedAnnotations}</span>
-                </div>
-                <div className="annotation-summary-item">
-                  <span className="text-muted small d-block">Queued</span>
-                  <span className="fw-semibold">{queuedAnnotationCount}</span>
-                </div>
-              </div>
-
               <Form
                 onSubmit={handleSearchSubmit}
                 role="search"
                 aria-label="Filter annotations"
               >
-                <InputGroup size="sm" className="mb-2">
-                  <Form.Control
-                    type="search"
-                    placeholder="Search annotations…"
-                    value={pendingSearch}
-                    onChange={(e) => setPendingSearch(e.target.value)}
-                    aria-label="Search annotations"
-                  />
-                  <Button type="submit" variant="outline-secondary" size="sm">
-                    <i className="bi bi-search" />
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <InputGroup size="sm">
+                    <Form.Control
+                      type="search"
+                      placeholder="Search annotations…"
+                      value={pendingSearch}
+                      onChange={(e) => setPendingSearch(e.target.value)}
+                      aria-label="Search annotations"
+                    />
+                    <Button type="submit" variant="outline-secondary" size="sm">
+                      <i className="bi bi-search" />
+                    </Button>
+                  </InputGroup>
+                  <Button
+                    type="button"
+                    variant="outline-secondary"
+                    size="sm"
+                    className="px-2"
+                    onClick={() => setShowSidebarFilters((shown) => !shown)}
+                    aria-label="Toggle annotation filters"
+                    title="Toggle filters"
+                  >
+                    <i className="bi bi-funnel" />
                   </Button>
-                </InputGroup>
-                <Form.Select
-                  size="sm"
-                  value={annotationStatusFilter}
-                  onChange={(e) =>
-                    setAnnotationStatusFilter(
-                      e.target.value as AnnotationStatusFilter,
-                    )
-                  }
-                  aria-label="Filter annotations by status"
-                >
-                  <option value="all">All annotations</option>
-                  <option value="completed">Completed annotations</option>
-                  <option value="drafted">Drafted annotations</option>
-                  {mainView === 'form' && (
-                    <option value="queued">Queued annotations</option>
-                  )}
-                </Form.Select>
+                  <Button
+                    type="button"
+                    variant="outline-secondary"
+                    size="sm"
+                    className="px-2"
+                    onClick={handleSidebarRefresh}
+                    aria-label="Refresh sidebar data"
+                    title="Refresh queue and annotation data"
+                  >
+                    <i className="bi bi-arrow-clockwise" />
+                  </Button>
+                </div>
+                {showSidebarFilters && (
+                  <Form.Select
+                    size="sm"
+                    value={annotationStatusFilter}
+                    onChange={(e) =>
+                      setAnnotationStatusFilter(
+                        e.target.value as AnnotationStatusFilter,
+                      )
+                    }
+                    aria-label="Filter annotations by status"
+                  >
+                    <option value="all">All annotations</option>
+                    <option value="completed">Completed annotations</option>
+                    <option value="drafted">Drafted annotations</option>
+                    {mainView === 'form' && (
+                      <option value="queued">Queued annotations</option>
+                    )}
+                  </Form.Select>
+                )}
               </Form>
             </div>
           </aside>
@@ -347,7 +354,7 @@ export default function Home() {
           </div>
 
           {(mainView === 'form' || mainView === 'graph') && (
-            <div className="d-none" aria-hidden>
+            <div className="d-none" aria-hidden key={casesRefreshKey}>
               <ListHomicides
                 embedded
                 selectedCaseIds={selectedCaseIds}
@@ -395,6 +402,7 @@ export default function Home() {
               role="tabpanel"
             >
               <ListHomicides
+                key={casesRefreshKey}
                 embedded
                 selectedCaseIds={selectedCaseIds}
                 onSelectedCaseIdsChange={setSelectedCaseIds}
