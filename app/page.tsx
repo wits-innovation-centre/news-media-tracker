@@ -39,6 +39,7 @@ export default function Home() {
     useState<QueueArticle | null>(null);
   const [queueRefreshKey, setQueueRefreshKey] = useState(0);
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
+  const [useSystemTheme, setUseSystemTheme] = useState(true);
 
   // Search/filter state shared between graph and table views
   const [searchTerm, setSearchTerm] = useState('');
@@ -71,6 +72,7 @@ export default function Home() {
     const savedTheme = window.localStorage.getItem('workspace-theme');
     if (savedTheme === 'light' || savedTheme === 'dark') {
       setThemeMode(savedTheme);
+      setUseSystemTheme(false);
       return;
     }
 
@@ -79,9 +81,25 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!useSystemTheme) return;
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (event: MediaQueryListEvent) => {
+      setThemeMode(event.matches ? 'dark' : 'light');
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [useSystemTheme]);
+
+  useEffect(() => {
     document.documentElement.setAttribute('data-theme', themeMode);
-    window.localStorage.setItem('workspace-theme', themeMode);
-  }, [themeMode]);
+    if (useSystemTheme) {
+      window.localStorage.removeItem('workspace-theme');
+    } else {
+      window.localStorage.setItem('workspace-theme', themeMode);
+    }
+  }, [themeMode, useSystemTheme]);
 
   const handleNavSync = async () => {
     if (!isOnline || replaying) return;
@@ -204,9 +222,10 @@ export default function Home() {
             variant="outline-secondary"
             size="sm"
             className="topbar-icon-button py-1 px-2"
-            onClick={() =>
-              setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'))
-            }
+            onClick={() => {
+              setUseSystemTheme(false);
+              setThemeMode((current) => (current === 'dark' ? 'light' : 'dark'));
+            }}
             title={`Switch to ${themeMode === 'dark' ? 'day' : 'night'} mode`}
             aria-label={`Switch to ${themeMode === 'dark' ? 'day' : 'night'} mode`}
           >
