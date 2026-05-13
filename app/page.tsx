@@ -137,11 +137,15 @@ export default function Home() {
     setSearchTerm(pendingSearch);
   };
 
-  useEffect(() => {
-    if (mainView !== 'form' && annotationStatusFilter === 'queued') {
-      setAnnotationStatusFilter('all');
-    }
-  }, [annotationStatusFilter, mainView]);
+  const handleMainViewChange = useCallback(
+    (view: MainView) => {
+      setMainView(view);
+      if (view !== 'form' && annotationStatusFilter === 'queued') {
+        setAnnotationStatusFilter('all');
+      }
+    },
+    [annotationStatusFilter],
+  );
 
   const listStatusFilter = useMemo(() => {
     if (annotationStatusFilter === 'completed') {
@@ -328,7 +332,7 @@ export default function Home() {
                   type="button"
                   role="tab"
                   className={`view-toggle-link${mainView === view ? ' active' : ''}`}
-                  onClick={() => setMainView(view)}
+                  onClick={() => handleMainViewChange(view)}
                   aria-selected={mainView === view}
                   aria-controls={`workspace-panel-${view}`}
                 >

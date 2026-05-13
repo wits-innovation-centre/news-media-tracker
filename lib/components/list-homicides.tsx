@@ -47,6 +47,15 @@ export interface DetailedEvent
   typeOfMurder: string;
 }
 
+const isCompletedSyncStatus = (syncStatus: unknown) => syncStatus === 'synced';
+
+const isDraftedSyncStatus = (syncStatus: unknown) =>
+  syncStatus === 'pending' ||
+  syncStatus === 'failed' ||
+  syncStatus === 'draft' ||
+  syncStatus === null ||
+  syncStatus === undefined;
+
 interface EventsApiPayload {
   events: Event[];
   total: number;
@@ -384,9 +393,9 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
         return true;
       }
       if (syncStatusFilter === 'completed') {
-        return case_.syncStatus === 'synced';
+        return isCompletedSyncStatus(case_.syncStatus);
       }
-      return case_.syncStatus !== 'synced';
+      return isDraftedSyncStatus(case_.syncStatus);
     });
     if (participantTypeSort === 'none') {
       return filtered;
