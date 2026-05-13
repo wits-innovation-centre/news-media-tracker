@@ -41,7 +41,7 @@ export default function Home() {
   const [selectedQueueArticle, setSelectedQueueArticle] =
     useState<QueueArticle | null>(null);
   const [queueRefreshKey, setQueueRefreshKey] = useState(0);
-  const [casesRefreshKey, setCasesRefreshKey] = useState(0);
+  const [annotationsRefreshKey, setAnnotationsRefreshKey] = useState(0);
   const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
   const [useSystemTheme, setUseSystemTheme] = useState(true);
 
@@ -171,9 +171,9 @@ export default function Home() {
     }
     return loadedCases;
   }, [listStatusFilter, loadedCases]);
-  const handleSidebarRefresh = () => {
+  const handleRefreshQueueAndAnnotations = () => {
     setQueueRefreshKey((k) => k + 1);
-    setCasesRefreshKey((k) => k + 1);
+    setAnnotationsRefreshKey((k) => k + 1);
   };
 
   const viewLabel: Record<MainView, string> = {
@@ -296,7 +296,7 @@ export default function Home() {
                     variant="outline-secondary"
                     size="sm"
                     className="px-2"
-                    onClick={handleSidebarRefresh}
+                    onClick={handleRefreshQueueAndAnnotations}
                     aria-label="Refresh sidebar data"
                     title="Refresh queue and annotation data"
                   >
@@ -354,7 +354,7 @@ export default function Home() {
           </div>
 
           {(mainView === 'form' || mainView === 'graph') && (
-            <div className="d-none" aria-hidden key={casesRefreshKey}>
+            <div className="d-none" aria-hidden key={annotationsRefreshKey}>
               <ListHomicides
                 embedded
                 selectedCaseIds={selectedCaseIds}
@@ -402,7 +402,7 @@ export default function Home() {
               role="tabpanel"
             >
               <ListHomicides
-                key={casesRefreshKey}
+                key={annotationsRefreshKey}
                 embedded
                 selectedCaseIds={selectedCaseIds}
                 onSelectedCaseIdsChange={setSelectedCaseIds}
