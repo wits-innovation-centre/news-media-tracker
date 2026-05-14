@@ -51,6 +51,7 @@
     "local-server.start": "node scripts/local-server-start.js",
     "local-server.health": "node scripts/local-server-health-check.js",
     "local-server.update": "node scripts/local-server-update.js",
+    "seed.sample": "node scripts/seed-sample-data.js",
     "lint": "next lint",
     "lint.fix": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx --fix",
     "validate.compose": "node scripts/validate-compose.js",
