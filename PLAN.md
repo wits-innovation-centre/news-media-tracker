@@ -15,6 +15,14 @@
   3.  An external server profile in the Docker stack for team/hosted sync.
   4.  Optional upstream multi-user synchronization after single-user reliability is complete.
 
+## Active update (2026-05-27)
+
+- Completed: pnpm permission guardrails are now enforced before local dev/start via script hooks, and validation includes root-ownership drift checks for critical paths and workspace node_modules trees.
+- Completed: ownership scanning logic in `scripts/validate-pnpm-permissions.js` was optimized to a bounded top-level scan so validation does not stall on large dependency trees.
+- Verification: `node scripts/validate-pnpm-permissions.js` now completes successfully with all checks passing.
+- Remaining: monitor during stash re-apply to confirm no additional workflow-specific paths need to be added to critical ownership checks.
+- Risk/follow-up: bounded node_modules scan targets the high-probability drift locations (root + top-level + scoped package level) and may not detect deeply nested root-owned files created by unusual toolchains.
+
 ## Current architecture decisions
 
 ### 1) Local-first source of truth
