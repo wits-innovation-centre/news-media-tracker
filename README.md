@@ -162,8 +162,13 @@ git push origin v3.1.2
 
 ### 3) Deploy by pulling from GHCR
 
-Minimal compose (app-only) is provided in
-[`docker-compose.ghcr.yml`](docker-compose.ghcr.yml):
+GHCR compose in [`docker-compose.ghcr.yml`](docker-compose.ghcr.yml) now starts
+both services required for a full runtime:
+
+- `app` (tracker web/API)
+- `sqld` (remote sync target)
+
+Run:
 
 ```bash
 docker compose -f docker-compose.ghcr.yml pull
@@ -171,6 +176,15 @@ docker compose -f docker-compose.ghcr.yml up -d
 ```
 
 Open `http://localhost:3000`.
+
+sqld is available at `http://localhost:${SQLD_HTTP_PORT:-8080}`.
+
+If you already have an external sqld server and do not want a bundled one,
+start only the app service:
+
+```bash
+docker compose -f docker-compose.ghcr.yml up -d app
+```
 
 ### 4) Pull/run without compose (single command)
 
