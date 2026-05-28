@@ -25,7 +25,7 @@ COPY . .
 ENV NODE_ENV=production
 # Build with npx next build to avoid the generate-public-cache helper script
 # which requires the fast-glob dev dependency not present at runtime.
-RUN npx next build
+RUN ./node_modules/.bin/next build
 
 # ── Stage 3: production runner ────────────────────────────────────────────────
 FROM node:20-bookworm-slim AS runner
@@ -46,4 +46,4 @@ RUN mkdir -p /app/data
 
 EXPOSE 3000
 # Next.js start respects the PORT environment variable set above.
-ENTRYPOINT ["npx", "next", "start"]
+ENTRYPOINT ["./node_modules/.bin/next", "start"]
