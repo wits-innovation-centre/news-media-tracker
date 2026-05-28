@@ -3,7 +3,7 @@
 # Used by docker-compose.yml (external-server profile).
 
 # ── Stage 1: install dependencies ────────────────────────────────────────────
-FROM node:20-bookworm-slim AS deps
+FROM node:26-bookworm-slim AS deps
 WORKDIR /app
 # Enable corepack to use the pnpm version declared in package.json.
 RUN corepack enable
@@ -11,14 +11,14 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --ignore-workspace --frozen-lockfile
 
 # ── Stage 1b: production-only dependencies ──────────────────────────────────
-FROM node:20-bookworm-slim AS prod-deps
+FROM node:26-bookworm-slim AS prod-deps
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --ignore-workspace --prod --frozen-lockfile
 
 # ── Stage 2: build the Next.js app ───────────────────────────────────────────
-FROM node:20-bookworm-slim AS builder
+FROM node:26-bookworm-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -28,7 +28,7 @@ ENV NODE_ENV=production
 RUN ./node_modules/.bin/next build
 
 # ── Stage 3: production runner ────────────────────────────────────────────────
-FROM node:20-bookworm-slim AS runner
+FROM node:26-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 # PORT is read by `next start`; override at runtime via -e PORT=<n>.
