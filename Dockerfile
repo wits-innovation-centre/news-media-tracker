@@ -10,6 +10,13 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
+# ── Stage 1b: production-only dependencies ──────────────────────────────────
+FROM node:20-bookworm-slim AS prod-deps
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --prod --frozen-lockfile
+
 # ── Stage 2: build the Next.js app ───────────────────────────────────────────
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app
@@ -30,7 +37,7 @@ ENV PORT=3000
 # Copy only what Next.js needs to serve in production.
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/next.config.js ./next.config.js
 

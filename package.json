@@ -1,6 +1,6 @@
 {
   "name": "app.news-media-tracker",
-  "version": "3.1.2",
+  "version": "1.0.0",
   "description": "An application to track (homicide) media.",
   "keywords": [
     "electron",

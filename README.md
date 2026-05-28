@@ -31,10 +31,10 @@ Typical commands:
 The `external-server` Docker Compose profile brings up a fully self-hosted
 deployment of the tracker in a single command. It includes:
 
-| Service | Image / Build | Default port | Description |
-|---|---|---|---|
-| `tracker-sqld` | `ghcr.io/tursodatabase/libsql-server:latest` | `8080` | LibSQL/sqld sync-target database |
-| `tracker-app` | Built from `Dockerfile` | `3000` | Next.js tracker web UI and API |
+| Service        | Image / Build                                | Default port | Description                      |
+| -------------- | -------------------------------------------- | ------------ | -------------------------------- |
+| `tracker-sqld` | `ghcr.io/tursodatabase/libsql-server:latest` | `8080`       | LibSQL/sqld sync-target database |
+| `tracker-app`  | Built from `Dockerfile`                      | `3000`       | Next.js tracker web UI and API   |
 
 ### One-command bring-up
 
@@ -90,10 +90,10 @@ docker compose --profile external-server up -d
 Docker named volumes provide durable storage across container restarts and
 upgrades:
 
-| Volume | Stores |
-|---|---|
+| Volume                      | Stores                                        |
+| --------------------------- | --------------------------------------------- |
 | `tracker_tracker-sqld-data` | sqld WAL and database files (`/var/lib/sqld`) |
-| `tracker_tracker-app-data` | Server-side local SQLite data (`/app/data`) |
+| `tracker_tracker-app-data`  | Server-side local SQLite data (`/app/data`)   |
 
 Inspect a volume's host path:
 
@@ -128,10 +128,54 @@ docker compose --profile external-server up -d
 
 Copy `.env.example` to `.env` and adjust as needed:
 
-| Variable | Default | Description |
-|---|---|---|
-| `SQLD_AUTH_JWT_KEY` | _(empty)_ | JWT key for sqld auth; leave empty to disable |
-| `DATABASE_AUTH_TOKEN` | _(empty)_ | Bearer token the app sends to sqld |
-| `SQLD_HTTP_PORT` | `8080` | Host port for the sqld HTTP endpoint |
-| `APP_PORT` | `3000` | Host port for the tracker web UI |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:3000` | Public base URL for the app |
+| Variable                   | Default                 | Description                                   |
+| -------------------------- | ----------------------- | --------------------------------------------- |
+| `SQLD_AUTH_JWT_KEY`        | _(empty)_               | JWT key for sqld auth; leave empty to disable |
+| `DATABASE_AUTH_TOKEN`      | _(empty)_               | Bearer token the app sends to sqld            |
+| `SQLD_HTTP_PORT`           | `8080`                  | Host port for the sqld HTTP endpoint          |
+| `APP_PORT`                 | `3000`                  | Host port for the tracker web UI              |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:3000` | Public base URL for the app                   |
+
+## GHCR Minimal Deploy (Prebuilt App Container)
+
+Use this when you want the smallest operational path: pull one app image from
+GHCR and run it directly.
+
+### 1) Enable package publishing permissions in GitHub
+
+- Workflow file: [`.github/workflows/publish-ghcr.yml`](.github/workflows/publish-ghcr.yml)
+- It uses `GITHUB_TOKEN` with `packages: write` and pushes to:
+  - `ghcr.io/<owner>/<repo>:<tag>`
+  - `ghcr.io/<owner>/<repo>:latest` (default branch only)
+
+No extra PAT is required for workflow publishing inside this repository.
+
+### 2) Publish an image
+
+Trigger the workflow manually (**Actions → publish-ghcr → Run workflow**) or
+push a version tag:
+
+```bash
+git tag v3.1.2
+git push origin v3.1.2
+```
+
+### 3) Deploy by pulling from GHCR
+
+Minimal compose (app-only) is provided in
+[`docker-compose.ghcr.yml`](docker-compose.ghcr.yml):
+
+```bash
+docker compose -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+Open `http://localhost:3000`.
+
+### 4) Pull/run without compose (single command)
+
+```bash
+docker run -d --name news-media-tracker \
+  -p 3000:3000 \
+  ghcr.io/wits-research-office-development/news-media-tracker:latest
+```

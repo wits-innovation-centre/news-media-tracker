@@ -23,6 +23,15 @@
 - Remaining: monitor during stash re-apply to confirm no additional workflow-specific paths need to be added to critical ownership checks.
 - Risk/follow-up: bounded node_modules scan targets the high-probability drift locations (root + top-level + scoped package level) and may not detect deeply nested root-owned files created by unusual toolchains.
 
+## Active update (2026-05-28)
+
+- Completed: added GHCR publishing workflow at `.github/workflows/publish-ghcr.yml` for a minimal app container delivery path.
+- Completed: optimized `Dockerfile` runner stage to use production-only dependencies (`prod-deps` stage) to reduce final image size.
+- Completed: added `docker-compose.ghcr.yml` for pull-and-run deployment from GHCR without local image build.
+- Completed: documented GHCR publish/deploy steps in `README.md`.
+- Remaining: optional follow-up to add authenticated pull guidance for private packages or organization package visibility defaults.
+- Risk/follow-up: current GHCR compose file is app-only by design; deployments needing sqld must continue to use `docker-compose.yml` external-server profile.
+
 ## Current architecture decisions
 
 ### 1) Local-first source of truth
