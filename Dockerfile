@@ -46,4 +46,4 @@ RUN mkdir -p /app/data
 
 EXPOSE 3000
 # Next.js start respects the PORT environment variable set above.
-CMD ["npx", "next", "start"]
+ENTRYPOINT ["npx", "next", "start"]
