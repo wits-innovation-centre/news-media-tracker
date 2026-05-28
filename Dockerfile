@@ -8,14 +8,14 @@ WORKDIR /app
 # Enable corepack to use the pnpm version declared in package.json.
 RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --ignore-workspace --frozen-lockfile
 
 # ── Stage 1b: production-only dependencies ──────────────────────────────────
 FROM node:20-bookworm-slim AS prod-deps
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --prod --frozen-lockfile
+RUN pnpm install --ignore-workspace --prod --frozen-lockfile
 
 # ── Stage 2: build the Next.js app ───────────────────────────────────────────
 FROM node:20-bookworm-slim AS builder

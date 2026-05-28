@@ -33,14 +33,6 @@ dependencies:
     specifier: ^6.21.2
     version: 6.30.3(react-dom@18.3.1)(react@18.3.1)
 
-optionalDependencies:
-  '@libsql/darwin-arm64':
-    specifier: ^0.5.6
-    version: 0.5.29
-  '@libsql/darwin-x64':
-    specifier: ^0.5.6
-    version: 0.5.29
-
 devDependencies:
   '@electron/notarize':
     specifier: ^2.3.2
@@ -2926,24 +2918,8 @@ packages:
     dev: false
     optional: true
 
-  /@libsql/darwin-arm64@0.5.29:
-    resolution: {integrity: sha512-K+2RIB1OGFPYQbfay48GakLhqf3ArcbHqPFu7EZiaUcRgFcdw8RoltsMyvbj5ix2fY0HV3Q3Ioa/ByvQdaSM0A==}
-    cpu: [arm64]
-    os: [darwin]
-    requiresBuild: true
-    dev: false
-    optional: true
-
   /@libsql/darwin-x64@0.3.19:
     resolution: {integrity: sha512-q9O55B646zU+644SMmOQL3FIfpmEvdWpRpzubwFc2trsa+zoBlSkHuzU9v/C+UNoPHQVRMP7KQctJ455I/h/xw==}
-    cpu: [x64]
-    os: [darwin]
-    requiresBuild: true
-    dev: false
-    optional: true
-
-  /@libsql/darwin-x64@0.5.29:
-    resolution: {integrity: sha512-OtT+KFHsKFy1R5FVadr8FJ2Bb1mghtXTyJkxv0trocq7NuHntSki1eUbxpO5ezJesDvBlqFjnWaYYY516QNLhQ==}
     cpu: [x64]
     os: [darwin]
     requiresBuild: true

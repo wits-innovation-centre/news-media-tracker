@@ -32,6 +32,14 @@
 - Remaining: optional follow-up to add authenticated pull guidance for private packages or organization package visibility defaults.
 - Risk/follow-up: current GHCR compose file is app-only by design; deployments needing sqld must continue to use `docker-compose.yml` external-server profile.
 
+## Active update (2026-05-28b)
+
+- Completed: deterministic deploy-path repair for GHCR by aligning `package.json` and `pnpm-lock.yaml` so `pnpm install --prod --frozen-lockfile` succeeds.
+- Completed: Docker install steps now explicitly use `--ignore-workspace` to prevent parent monorepo workspace detection from affecting this app's image build.
+- Verification: `pnpm install --ignore-workspace --prod --frozen-lockfile` passes locally after lockfile regeneration.
+- Remaining: run GHCR publish workflow again to confirm remote build parity.
+- Risk/follow-up: if cross-platform prebuilt libsql optional packages are required later, reintroduce them with a lockfile/tooling strategy that preserves frozen-lockfile integrity.
+
 ## Current architecture decisions
 
 ### 1) Local-first source of truth
