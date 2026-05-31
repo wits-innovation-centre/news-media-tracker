@@ -113,7 +113,7 @@
     "chart.js": "^4.4.1",
     "concurrently": "^8.2.1",
     "core-js": "^3.32.2",
-    "cross-env": "^7.0.3",
+    "cross-env": "^10.1.0",
     "css-loader": "^6.8.1",
     "css-minimizer-webpack-plugin": "^5.0.1",
     "detect-port": "^1.5.1",
