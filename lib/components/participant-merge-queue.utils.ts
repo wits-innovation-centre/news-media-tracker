@@ -11,6 +11,8 @@ export interface MergeParticipantRecord {
 export interface MergeQueueCandidate {
   id: string;
   sharedValue: string;
+  similarity: number;
+  matchReason: 'exact-name' | 'alias-overlap' | 'name-similarity';
   left: MergeParticipantRecord;
   right: MergeParticipantRecord;
 }
@@ -23,6 +25,7 @@ export type MergeQueueSortOrder =
   | 'role-desc';
 
 const NAME_DELIMITER = /[,;|]+/;
+const MERGE_SIMILARITY_THRESHOLD = 0.9;
 
 export const normaliseName = (value: string | null | undefined): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -54,17 +57,99 @@ const candidateNames = (participant: MergeParticipantRecord): string[] => {
   return uniqueNames([participant.primaryName, ...splitAliasValues(participant.alias)]);
 };
 
-const sharedName = (
-  left: MergeParticipantRecord,
-  right: MergeParticipantRecord,
-): string | null => {
-  const rightSet = new Set(candidateNames(right).map((value) => value.toLowerCase()));
-  for (const value of candidateNames(left)) {
-    if (rightSet.has(value.toLowerCase())) {
-      return value;
+const calculateSimilarity = (sourceValue: string, targetValue: string): number => {
+  const source = normaliseName(sourceValue);
+  const target = normaliseName(targetValue);
+
+  if (!source || !target) {
+    return 0;
+  }
+
+  if (source === target) {
+    return 1;
+  }
+
+  const matrix: number[][] = [];
+  for (let rowIndex = 0; rowIndex <= source.length; rowIndex += 1) {
+    matrix[rowIndex] = [rowIndex];
+  }
+  for (let columnIndex = 0; columnIndex <= target.length; columnIndex += 1) {
+    matrix[0][columnIndex] = columnIndex;
+  }
+
+  for (let rowIndex = 1; rowIndex <= source.length; rowIndex += 1) {
+    for (let columnIndex = 1; columnIndex <= target.length; columnIndex += 1) {
+      const substitutionCost =
+        source[rowIndex - 1] === target[columnIndex - 1] ? 0 : 1;
+      matrix[rowIndex][columnIndex] = Math.min(
+        matrix[rowIndex - 1][columnIndex] + 1,
+        matrix[rowIndex][columnIndex - 1] + 1,
+        matrix[rowIndex - 1][columnIndex - 1] + substitutionCost,
+      );
     }
   }
-  return null;
+
+  const maxLength = Math.max(source.length, target.length);
+  return 1 - matrix[source.length][target.length] / maxLength;
+};
+
+const buildSimilarityMatch = (
+  left: MergeParticipantRecord,
+  right: MergeParticipantRecord,
+): MergeQueueCandidate | null => {
+  const leftNames = candidateNames(left);
+  const rightNames = candidateNames(right);
+
+  let bestMatch:
+    | {
+        sharedValue: string;
+        similarity: number;
+        matchReason: MergeQueueCandidate['matchReason'];
+      }
+    | null = null;
+
+  for (const leftName of leftNames) {
+    const leftIsAlias =
+      normaliseName(left.primaryName) !== normaliseName(leftName);
+    for (const rightName of rightNames) {
+      const rightIsAlias =
+        normaliseName(right.primaryName) !== normaliseName(rightName);
+      const similarity = calculateSimilarity(leftName, rightName);
+
+      if (similarity < MERGE_SIMILARITY_THRESHOLD) {
+        continue;
+      }
+
+      const exactMatch = normaliseName(leftName) === normaliseName(rightName);
+      const matchReason: MergeQueueCandidate['matchReason'] = exactMatch
+        ? leftIsAlias || rightIsAlias
+          ? 'alias-overlap'
+          : 'exact-name'
+        : 'name-similarity';
+      const sharedValue = exactMatch ? leftName : `${leftName} ~ ${rightName}`;
+
+      if (!bestMatch || similarity > bestMatch.similarity) {
+        bestMatch = {
+          sharedValue,
+          similarity,
+          matchReason,
+        };
+      }
+    }
+  }
+
+  if (!bestMatch) {
+    return null;
+  }
+
+  return {
+    id: [left.id, right.id].sort().join('::'),
+    left,
+    right,
+    sharedValue: bestMatch.sharedValue,
+    similarity: bestMatch.similarity,
+    matchReason: bestMatch.matchReason,
+  };
 };
 
 export const buildMergeQueueCandidates = (
@@ -80,14 +165,9 @@ export const buildMergeQueueCandidates = (
       const left = participants[leftIndex];
       const right = participants[rightIndex];
       if (left.role !== right.role) continue;
-      const sharedValue = sharedName(left, right);
-      if (!sharedValue) continue;
-      candidates.push({
-        id: [left.id, right.id].sort().join('::'),
-        left,
-        right,
-        sharedValue,
-      });
+      const candidate = buildSimilarityMatch(left, right);
+      if (!candidate) continue;
+      candidates.push(candidate);
     }
   }
   return candidates;
@@ -104,6 +184,7 @@ const candidateMatchesSearch = (
     candidate.left.alias,
     candidate.right.primaryName,
     candidate.right.alias,
+    candidate.matchReason,
     candidate.left.id,
     candidate.right.id,
   ];

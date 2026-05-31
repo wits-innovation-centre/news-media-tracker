@@ -8,8 +8,6 @@
 # Required env vars – copy .env.example → .env and fill in before first run.
 # See .env.example for the full list.
 
-name: news-media-tracker
-
 services:
   # ────────────────────────────────────────────────────────────────────────────
   # sqld
@@ -50,7 +48,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: .ghcr/Dockerfile
     profiles:
       - external-server
     ports:

@@ -3,14 +3,33 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import 'react-toastify/dist/ReactToastify.css';
 import './globals.css';
-import { ToastContainer } from 'react-toastify';
 import BootPWA from '@/lib/components/boot-pwa';
+import ToastProvider from '@/lib/components/toast-provider';
 
 export const metadata: Metadata = {
   title: 'News Report Tracker',
   description: 'A utility tool to collect, track, and analyse news reports.',
   manifest: '/manifest.webmanifest',
 };
+
+const devServiceWorkerCleanupScript = `
+(() => {
+  if (typeof window === 'undefined') return;
+  if (!('serviceWorker' in navigator)) return;
+
+  navigator.serviceWorker
+    .getRegistrations()
+    .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+    .catch(() => undefined);
+
+  if ('caches' in window) {
+    window.caches
+      .keys()
+      .then((keys) => Promise.all(keys.map((key) => window.caches.delete(key))))
+      .catch(() => undefined);
+  }
+})();
+`;
 
 export default function RootLayout({
   children,
@@ -20,6 +39,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {process.env.NODE_ENV !== 'production' && (
+          <script dangerouslySetInnerHTML={{ __html: devServiceWorkerCleanupScript }} />
+        )}
         <link rel="manifest" href="/manifest.webmanifest" />
         <meta name="theme-color" content="#111827" />
         {/* Favicon */}
@@ -65,17 +87,7 @@ export default function RootLayout({
       <body>
         <BootPWA />
         {children}
-        <ToastContainer
-          position="top-right"
-          autoClose={5000}
-          hideProgressBar={false}
-          newestOnTop={false}
-          closeOnClick
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-        />
+        <ToastProvider />
       </body>
     </html>
   );

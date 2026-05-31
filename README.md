@@ -26,6 +26,36 @@ Typical commands:
 - `npm run start`
 - `npm run test`
 
+## Devcontainer ownership-safe dependency mounts
+
+The workspace-level devcontainer configuration now isolates dependency paths
+from the source bind mount:
+
+- `node_modules` is mounted as a Docker named volume.
+- workspace root `node_modules` is mounted as a Docker named volume.
+- pnpm store is mounted as a Docker named volume.
+- container user UID/GID is synchronized to the host user.
+
+This avoids expensive recursive ownership repair on bind-mounted dependency
+trees and prevents most `EACCES` ownership drift loops.
+
+Configuration files:
+
+- `/workspace/.devcontainer/apps.news-media-tracker/devcontainer.json`
+- `/workspace/.devcontainer/devcontainer.json`
+
+How to apply:
+
+1. Run `Dev Containers: Rebuild and Reopen in Container` in VS Code.
+2. Let the post-create install complete once.
+3. Use `pnpm`/`npm` commands without `sudo` inside the container.
+
+If you need a clean dependency reset, remove the named volumes and rebuild:
+
+```bash
+docker volume rm wits-research-platform-root-node-modules news-media-tracker-node-modules wits-research-platform-pnpm-store
+```
+
 ## Docker Deployment (External Server Profile)
 
 The `external-server` Docker Compose profile brings up a fully self-hosted
@@ -34,7 +64,7 @@ deployment of the tracker in a single command. It includes:
 | Service        | Image / Build                                | Default port | Description                      |
 | -------------- | -------------------------------------------- | ------------ | -------------------------------- |
 | `tracker-sqld` | `ghcr.io/tursodatabase/libsql-server:latest` | `8080`       | LibSQL/sqld sync-target database |
-| `tracker-app`  | Built from `Dockerfile`                      | `3000`       | Next.js tracker web UI and API   |
+| `tracker-app`  | Built from `.ghcr/Dockerfile`                | `3000`       | Next.js tracker web UI and API   |
 
 ### One-command bring-up
 
@@ -50,6 +80,68 @@ open http://localhost:3000
 ```
 
 The sqld database is immediately reachable at `http://localhost:8080`.
+
+## Docker Dev Profile (Auto-seeded)
+
+Use the `dev` profile when you want test-ready data without manual capture.
+
+```bash
+# Start sqld + app + one-shot seeder
+npm run dev.stack.up
+
+# Open the app
+open http://localhost:3000
+```
+
+The dev stack uses a dedicated compose project name (`nmt-dev`) to avoid
+colliding with stale default networks from other compose runs.
+It also builds local images on startup, so you do not need GHCR login just to
+run the dev profile.
+The dev profile uses isolated host ports to avoid clashes with other stacks:
+`http://localhost:13000` for the app and `http://localhost:18080` for sqld.
+
+The `seed-sqld` container runs automatically on startup and exits after seeding.
+Seed data includes intentional duplicate victim/perpetrator records so you can
+test merge and alias-promotion flows immediately.
+
+```bash
+# Stop and reset dev volumes
+npm run dev.stack.down
+```
+
+If you only want seeded data quickly (without building/running the app
+container), use:
+
+```bash
+npm run dev.seed.up
+```
+
+### Local Server Profile (for dev containers)
+
+If your dev container already has PostgreSQL but you also need a reachable app
+server for this project, start the `local-server` profile:
+
+```bash
+docker compose --profile local-server up -d
+```
+
+What it starts:
+
+| Service        | Default port | Purpose                             |
+| -------------- | ------------ | ----------------------------------- |
+| `sqld`         | `8080`       | LibSQL sync-target used by this app |
+| `local-server` | `3001`       | Container-local tracker app server  |
+
+Container/network endpoints:
+
+- From host machine: `http://localhost:3001`
+- From another compose service on the same network: `http://local-server:3000`
+
+To stop it:
+
+```bash
+docker compose --profile local-server down
+```
 
 ### Connecting the tracker app to the hosted sqld instance
 
@@ -162,7 +254,7 @@ git push origin v3.1.2
 
 ### 3) Deploy by pulling from GHCR
 
-GHCR compose in [`docker-compose.ghcr.yml`](docker-compose.ghcr.yml) now starts
+GHCR compose in [`.ghcr/docker-compose.yml`](.ghcr/docker-compose.yml) now starts
 both services required for a full runtime:
 
 - `app` (tracker web/API)
@@ -171,19 +263,35 @@ both services required for a full runtime:
 Run:
 
 ```bash
-docker compose -f docker-compose.ghcr.yml pull
-docker compose -f docker-compose.ghcr.yml up -d
+docker compose -f .ghcr/docker-compose.yml pull
+docker compose -f .ghcr/docker-compose.yml up -d
 ```
 
 Open `http://localhost:3000`.
 
 sqld is available at `http://localhost:${SQLD_HTTP_PORT:-8080}`.
 
+### Dev Profile With Seeded Data
+
+For local testing without manual data capture, use the `dev` profile. It starts
+`sqld` and `app`, then runs a one-shot `seed-sqld` job that applies migrations
+and inserts idempotent sample data.
+
+```bash
+docker compose -f .ghcr/docker-compose.yml --profile dev up -d
+```
+
+Re-run seeding at any time:
+
+```bash
+docker compose -f .ghcr/docker-compose.yml --profile dev run --rm seed-sqld
+```
+
 If you already have an external sqld server and do not want a bundled one,
 start only the app service:
 
 ```bash
-docker compose -f docker-compose.ghcr.yml up -d app
+docker compose -f .ghcr/docker-compose.yml up -d app
 ```
 
 ### 4) Pull/run without compose (single command)

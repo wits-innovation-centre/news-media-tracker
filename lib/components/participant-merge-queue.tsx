@@ -385,6 +385,9 @@ const ParticipantMergeQueue: React.FC<ParticipantMergeQueueProps> = ({ onBack })
                 <Card.Header className="d-flex justify-content-between align-items-center">
                   <div>
                     Potential duplicate <Badge bg="warning">{candidate.sharedValue}</Badge>
+                    <small className="text-muted d-block mt-1">
+                      Similarity {Math.round(candidate.similarity * 100)}% · {candidate.matchReason}
+                    </small>
                   </div>
                   <ButtonGroup size="sm">
                     <Button

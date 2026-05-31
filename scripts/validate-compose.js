@@ -1,11 +1,11 @@
 /* eslint-disable import/no-commonjs, @typescript-eslint/no-var-requires */
 // Validates docker-compose.yml configuration and structural requirements.
-// Runs `docker compose config` when the Docker CLI is available; otherwise
-// falls back to file-based structural checks only.
+// Runs the repo compose wrapper when Docker is available; otherwise falls
+// back to file-based structural checks only.
 // Lightweight — suitable for local and CI execution.
 // Exit 0 on all checks passed, 1 on any failure.
 
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { check: _check, commandAvailable } = require('./lib/validation-utils');
@@ -13,6 +13,7 @@ const { check: _check, commandAvailable } = require('./lib/validation-utils');
 const ROOT = path.resolve(__dirname, '..');
 const COMPOSE_FILE = path.join(ROOT, 'docker-compose.yml');
 const ENV_EXAMPLE = path.join(ROOT, '.env.example');
+const COMPOSE_SCRIPT = path.join(ROOT, 'scripts', 'compose.js');
 
 const counters = { passed: 0, failed: 0 };
 const check = (label, fn) => _check(counters, label, fn);
@@ -102,7 +103,10 @@ check('.env.example documents all required variables', () => {
 if (commandAvailable('docker')) {
   check('docker compose config --quiet', () => {
     try {
-      execSync('docker compose config --quiet', { cwd: ROOT, stdio: 'pipe' });
+      execFileSync(process.execPath, [COMPOSE_SCRIPT, 'config', '--quiet'], {
+        cwd: ROOT,
+        stdio: 'pipe',
+      });
     } catch (err) {
       const stderr = (err.stderr || Buffer.alloc(0)).toString();
       throw new Error(`docker compose config failed:\n${stderr.slice(0, 500)}`);
@@ -111,8 +115,9 @@ if (commandAvailable('docker')) {
 
   check('external-server profile resolves cleanly', () => {
     try {
-      const out = execSync(
-        'docker compose --profile external-server config --services',
+      const out = execFileSync(
+        process.execPath,
+        [COMPOSE_SCRIPT, '--profile', 'external-server', 'config', '--services'],
         { cwd: ROOT, stdio: 'pipe' },
       )
         .toString()

@@ -1,8 +1,9 @@
-name: news-media-tracker
-
 services:
   sqld:
     image: ghcr.io/tursodatabase/libsql-server:latest
+    profiles:
+      - external-server
+      - dev
     ports:
       - "${SQLD_HTTP_PORT:-8080}:8080"
     environment:
@@ -11,16 +12,17 @@ services:
       SQLD_AUTH_JWT_KEY: ${SQLD_AUTH_JWT_KEY:-}
     volumes:
       - sqld-data:/var/lib/sqld
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
     restart: unless-stopped
 
   app:
+    build:
+      context: ..
+      dockerfile: .ghcr/Dockerfile
+      target: runner
     image: ${APP_IMAGE:-ghcr.io/wits-research-office-development/news-media-tracker:latest}
+    profiles:
+      - external-server
+      - dev
     ports:
       - "${APP_PORT:-3000}:3000"
     environment:
@@ -32,8 +34,23 @@ services:
       - app-data:/app/data
     depends_on:
       sqld:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
+
+  seed-sqld:
+    build:
+      context: ..
+      dockerfile: .ghcr/Dockerfile
+      target: seeder
+    profiles:
+      - dev
+    environment:
+      LIBSQL_URL: http://sqld:8080
+      SQLD_AUTH_TOKEN: ${DATABASE_AUTH_TOKEN:-}
+    depends_on:
+      sqld:
+        condition: service_started
+    restart: "no"
 
 volumes:
   sqld-data:

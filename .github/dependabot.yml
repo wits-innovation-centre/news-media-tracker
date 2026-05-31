@@ -42,9 +42,24 @@ updates:
     commit-message:
       prefix: 'chore(ci)'
 
-  # Docker (Dockerfile + docker-compose.yml)
+  # Docker (root compose + any root Docker assets)
   - package-ecosystem: 'docker'
     directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    reviewers:
+      - 'copilot'
+    labels:
+      - 'dependencies'
+      - 'docker'
+      - 'automated'
+    commit-message:
+      prefix: 'chore(docker)'
+
+  # Docker (GHCR build + GHCR compose assets)
+  - package-ecosystem: 'docker'
+    directory: '/.ghcr'
     schedule:
       interval: 'weekly'
       day: 'monday'

@@ -2,6 +2,8 @@
 import { useEffect } from 'react';
 import { getStorageHealthReport } from '../storage/persistence-policy';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 /** Run the full storage health check and emit structured console output. */
 async function runStorageHealthCheck(): Promise<void> {
   if (!('storage' in navigator)) {
@@ -22,6 +24,25 @@ async function runStorageHealthCheck(): Promise<void> {
 
 export default function BootPWA() {
   useEffect(() => {
+    // In development, a stale service worker can cache old Next.js chunks and
+    // cause blank screens after hot reloads or restarts. Keep SW disabled.
+    if (!isProduction) {
+      const cleanupDevelopmentServiceWorkers = async () => {
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+        }
+
+        if ('caches' in window) {
+          const keys = await window.caches.keys();
+          await Promise.all(keys.map((key) => window.caches.delete(key)));
+        }
+      };
+
+      void cleanupDevelopmentServiceWorkers();
+      return;
+    }
+
     if ('serviceWorker' in navigator) {
       const register = async () => {
         try {

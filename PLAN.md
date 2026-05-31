@@ -1,6 +1,53 @@
 # Homicide Media Tracker Plan
 
+## Active update (2026-05-29)
+
+## Active update (2026-05-31)
+
+- Completed: fixed external-browser blank-screen regression caused by stale service-worker-cached Next.js chunks during development.
+- Completed: `lib/components/boot-pwa.ts` now disables service-worker registration in development and proactively unregisters old workers and clears caches.
+- Completed: `public/service-worker.js` now bypasses caching for `/_next/*` and HMR/debug asset requests to prevent stale chunk graph hydration failures.
+- Completed: `app/layout.tsx` now injects a dev-only pre-hydration cleanup script that unregisters service workers and clears Cache Storage before React bootstraps.
+- Completed: `next.config.js` now applies development-only no-cache response headers to prevent stale HTML/chunk manifests from persisting across browser reloads/restarts.
+- Remaining: validate in an external browser profile that previously cached state now recovers after one reload.
+- Risk/follow-up: if users still have persistent stale registrations from older builds, a one-time hard refresh or manual "Unregister service worker" may still be needed.
+
+- Completed: added a named volume mount for workspace-root `node_modules` (`/workspace/node_modules`) in both workspace-level devcontainer profiles to prevent root-ownership drift on shared monorepo dependencies.
+- Completed: updated README reset instructions to include the new workspace-root dependency volume.
+- Remaining: rebuild/reopen container and verify `npm`/`pnpm` runs do not recreate root-owned entries under `/workspace/node_modules`.
+
+- Completed: moved dependency volume-mount strategy from app-local `.devcontainer/` to workspace-root devcontainer configs under `/workspace/.devcontainer/`.
+- Completed: updated both `/workspace/.devcontainer/devcontainer.json` and `/workspace/.devcontainer/apps.news-media-tracker/devcontainer.json` to mount app `node_modules` and pnpm store as named volumes.
+- Completed: removed recursive ownership-repair command from workspace-root `postStartCommand` to avoid long startup-time `chown -R` sweeps.
+- Completed: deleted app-local `apps/news-media-tracker/.devcontainer/devcontainer.json` override so root-owned configuration is the single source of truth.
+- Remaining: rebuild/reopen the devcontainer to apply the updated mount definitions.
+
+- Completed: added a repository-local devcontainer config that mounts app `node_modules` and pnpm store as named Docker volumes, and enables UID/GID synchronization for the `node` user.
+- Completed: documented the new devcontainer dependency-mount workflow in `README.md`, including rebuild and volume-reset steps.
+- Remaining: validate in the host superproject devcontainer that opening this app directly uses `.devcontainer/devcontainer.json` as intended.
+
+- Completed: reviewed the pnpm ownership validation flow to identify shorter alternatives to full recursive ownership repair for root-owned path drift.
+- Completed: confirmed the current guard already uses a bounded scan and recommends recursive `chown` as the default remediation, but repo-level shorter options remain available depending on desired safety.
+- Remaining: if workflow friction remains high, choose whether to optimize around targeted repair, user-owned stores/install paths, or a relaxed validation mode.
+
+- Completed: installed `ripgrep` in the live dev container and added it to the shared `Dockerfile` base stage so all build/runtime stages include `rg`.
+- Completed: implemented explicit connected-graph model utilities with three node classes (`article`, `event`, `participant`) and participant subtypes (`victim`, `perpetrator`).
+- Completed: graph model now emits hard edges for capture links (article->event and event->participant) and soft edges for merge/dedup suggestions (participant similarity, article headline/url similarity, event-level participant overlap).
+- Completed: participant merge queue candidate generation now supports similarity-based matches (not exact-name only) and records `similarity` + `matchReason` metadata.
+- Completed: graph and merge UIs now surface soft-link evidence to support merge confirmation and dedup workflows.
+- Verification: focused utility suites were executed during implementation; one assertion threshold mismatch was fixed (`>= 0.9` for near-name match), and graph utility tests passed in the latest reported run.
+- Remaining: rerun focused utility suites once more after final UI-related edits to capture a fresh all-green verification output in one run.
+- Risk/follow-up: current participant subtype modeling is role-based (`victim`/`perpetrator`) and can be extended to richer participant-type taxonomy if schema-level participant kinds are introduced.
+
 ## Active update (2026-05-12)
+
+## Active update (2026-05-29)
+
+- Completed: reverted unintended `ripgrep` install changes in root `Dockerfile` used for app/runtime images.
+- Completed: added `ripgrep` installation to `.devcontainer/Dockerfile`, which is the image used to build this development container.
+- Completed: moved GHCR/runtime Docker assets to `.ghcr/` and updated path references in compose, workflow, scripts, and docs.
+- Remaining: rebuild/reopen devcontainer so the updated image provisions `ripgrep` automatically for future sessions.
+- Risk/follow-up: existing running container will not pick up `.devcontainer/Dockerfile` changes until rebuild.
 
 - Direction confirmed: web-first, offline-first, and single-user-first.
 - Electron packaging is deprioritized for now; runtime assumptions should not depend on Electron-specific paths.
@@ -15,6 +62,13 @@
   3.  An external server profile in the Docker stack for team/hosted sync.
   4.  Optional upstream multi-user synchronization after single-user reliability is complete.
 
+## Active update (2026-05-29)
+
+- Completed: Docker tooling (`docker`, `docker-compose`) was installed in the active development container via apt.
+- Completed: `.devcontainer/Dockerfile` now installs `docker.io` and `docker-compose`, so rebuilt development containers include Docker tooling.
+- Remaining: if compose v2 (`docker compose`) is required specifically, add Docker's official apt repository and install `docker-compose-plugin` in a follow-up.
+- Risk/follow-up: Debian package `docker-compose` is compose v1; scripts expecting v2 subcommand syntax may need adaptation or plugin installation.
+
 ## Active update (2026-05-27)
 
 - Completed: pnpm permission guardrails are now enforced before local dev/start via script hooks, and validation includes root-ownership drift checks for critical paths and workspace node_modules trees.
@@ -26,8 +80,8 @@
 ## Active update (2026-05-28)
 
 - Completed: added GHCR publishing workflow at `.github/workflows/publish-ghcr.yml` for a minimal app container delivery path.
-- Completed: optimized `Dockerfile` runner stage to use production-only dependencies (`prod-deps` stage) to reduce final image size.
-- Completed: added `docker-compose.ghcr.yml` for pull-and-run deployment from GHCR without local image build.
+- Completed: optimized `.ghcr/Dockerfile` runner stage to use production-only dependencies (`prod-deps` stage) to reduce final image size.
+- Completed: added `.ghcr/docker-compose.yml` for pull-and-run deployment from GHCR without local image build.
 - Completed: documented GHCR publish/deploy steps in `README.md`.
 - Remaining: optional follow-up to add authenticated pull guidance for private packages or organization package visibility defaults.
 - Risk/follow-up: current GHCR compose file is app-only by design; deployments needing sqld must continue to use `docker-compose.yml` external-server profile.

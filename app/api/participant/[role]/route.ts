@@ -72,13 +72,13 @@ export async function POST(
   const participantRecord = Array.isArray(result) ? result[0] : null;
   const inserted = participantRecord
     ? {
-        ...(participantRecord as Record<string, unknown>),
-        role:
-          'role' in participantRecord &&
+      ...(participantRecord as Record<string, unknown>),
+      role:
+        'role' in participantRecord &&
           typeof (participantRecord as { role?: unknown }).role === 'string'
-            ? (participantRecord as { role: string }).role
-            : role,
-      }
+          ? (participantRecord as { role: string }).role
+          : role,
+    }
     : null;
   // Always include id and role in response
   return NextResponse.json({ success: true, data: inserted });
@@ -107,6 +107,14 @@ const roleConfigMap: Record<SupportedRole, RoleConfig> = {
 
 const resolveRoleConfig = (role: string): RoleConfig | null =>
   role === 'victim' || role === 'perpetrator' ? roleConfigMap[role] : null;
+
+const toTrimmedStringArray = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+    : [];
 
 export async function PUT(
   request: NextRequest,
@@ -260,6 +268,16 @@ export async function PUT(
       [targetPrimary],
     );
 
+    // Merge is not only deduplication. These optional fields allow callers to
+    // record what new information was reconciled from different sources.
+    const sourceRecords = toTrimmedStringArray(payload.sourceRecords);
+    const newInformation = toTrimmedStringArray(payload.newInformation);
+    const eventReferences = toTrimmedStringArray(payload.eventReferences);
+    const fieldDecisions =
+      payload.fieldDecisions && typeof payload.fieldDecisions === 'object'
+        ? payload.fieldDecisions
+        : null;
+
     const mergeAudit = {
       action: 'merge',
       mergedAt: now,
@@ -269,6 +287,10 @@ export async function PUT(
       sourceAlias,
       targetAliasBefore: target[aliasField] ?? null,
       reason: typeof payload.reason === 'string' ? payload.reason.trim() : null,
+      sourceRecords,
+      newInformation,
+      eventReferences,
+      fieldDecisions,
     };
 
     const mergedTarget = await db.transaction(async (tx) => {

@@ -40,6 +40,19 @@ export type StorageManagerLike = {
   estimate?: () => Promise<StorageEstimate>;
 };
 
+function getDefaultStorageManager(): StorageManagerLike | null {
+  if (typeof navigator === 'undefined' || !navigator.storage) {
+    return null;
+  }
+
+  const storage = navigator.storage;
+  if (typeof storage.persisted !== 'function' || typeof storage.persist !== 'function') {
+    return null;
+  }
+
+  return storage;
+}
+
 function deriveQuotaLevel(estimate: StorageEstimate): QuotaLevel {
   const { quota, usage } = estimate;
   if (typeof quota !== 'number' || typeof usage !== 'number' || quota <= 0) {
@@ -68,8 +81,12 @@ function deriveQuotaLevel(estimate: StorageEstimate): QuotaLevel {
  * during this call; `false` otherwise. Never throws.
  */
 export async function requestPersistentStorage(
-  storage: StorageManagerLike = navigator.storage,
+  storage: StorageManagerLike | null = getDefaultStorageManager(),
 ): Promise<boolean> {
+  if (!storage) {
+    return false;
+  }
+
   try {
     if (await storage.persisted()) {
       return true;
@@ -88,9 +105,9 @@ export async function requestPersistentStorage(
  * non-secure context or an older browser).
  */
 export async function estimateStorageQuota(
-  storage: StorageManagerLike = navigator.storage,
+  storage: StorageManagerLike | null = getDefaultStorageManager(),
 ): Promise<{ estimate: StorageEstimate; level: QuotaLevel } | null> {
-  if (typeof storage.estimate !== 'function') {
+  if (!storage || typeof storage.estimate !== 'function') {
     return null;
   }
   try {
@@ -107,8 +124,17 @@ export async function estimateStorageQuota(
  * This is the primary entry-point used by `BootPWA`.
  */
 export async function getStorageHealthReport(
-  storage: StorageManagerLike = navigator.storage,
+  storage: StorageManagerLike | null = getDefaultStorageManager(),
 ): Promise<StorageHealthReport> {
+  if (!storage) {
+    return {
+      persisted: false,
+      quota: null,
+      quotaLevel: 'unknown',
+      reason: 'storage API unavailable',
+    };
+  }
+
   const persisted = await requestPersistentStorage(storage);
   const quotaResult = await estimateStorageQuota(storage);
 

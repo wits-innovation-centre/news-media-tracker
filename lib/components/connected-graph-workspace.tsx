@@ -5,6 +5,7 @@ import { Badge, Button, Card } from 'react-bootstrap';
 import type { DetailedEvent } from './list-homicides';
 import {
   GRAPH_SCALE_STEP,
+  buildConnectedGraphModel,
   clampGraphScale,
   nextGraphSelection,
 } from './connected-graph-workspace.utils';
@@ -32,6 +33,19 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
 
   const selectedCases = cases.filter(
     (case_) => case_.id && selectedSet.has(case_.id),
+  );
+  const activeCases = selectedCases.length > 0 ? selectedCases : cases;
+  const graphModel = useMemo(
+    () => buildConnectedGraphModel(activeCases),
+    [activeCases],
+  );
+  const hardEdges = useMemo(
+    () => graphModel.edges.filter((edge) => edge.style === 'hard'),
+    [graphModel.edges],
+  );
+  const softEdges = useMemo(
+    () => graphModel.edges.filter((edge) => edge.style === 'soft'),
+    [graphModel.edges],
   );
 
   const zoomIn = () => setScale((prev) => clampGraphScale(prev + GRAPH_SCALE_STEP));
@@ -124,29 +138,59 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
             className="graph-canvas-inner"
             style={{ transform: `scale(${scale})` }}
             role="list"
-            aria-label="Graph case nodes"
+            aria-label="Graph entity nodes"
           >
-            {(selectedCases.length > 0 ? selectedCases : cases).map((case_) => {
-              const caseId = case_.id ?? 'unknown-case-id';
-              const headline =
-                case_.articleData?.newsReportHeadline?.trim() || 'Untitled case';
-              const victimCount = case_.victims.length;
-              const perpetratorCount = case_.perpetrators.length;
+            {graphModel.nodes.map((node) => {
               return (
                 <div
-                  key={caseId}
-                  className={`graph-node ${case_.id && selectedSet.has(case_.id) ? 'is-active' : ''}`}
+                  key={node.id}
+                  className={`graph-node ${node.kind === 'event' ? 'is-active' : ''}`}
                   role="listitem"
-                  aria-label={`${headline}. ${victimCount} victim(s), ${perpetratorCount} suspect(s).`}
+                  aria-label={`${node.kind} node ${node.label}`}
                 >
-                  <strong>{headline}</strong>
-                  <small>
-                    {victimCount} victim(s) · {perpetratorCount} suspect(s)
-                  </small>
+                  <div className="d-flex align-items-center gap-2 mb-1">
+                    <Badge
+                      bg={
+                        node.kind === 'article'
+                          ? 'primary'
+                          : node.kind === 'event'
+                            ? 'success'
+                            : 'secondary'
+                      }
+                    >
+                      {node.kind}
+                      {node.subtype ? `:${node.subtype}` : ''}
+                    </Badge>
+                    <strong>{node.label}</strong>
+                  </div>
+                  <small>{node.detail}</small>
                 </div>
               );
             })}
           </div>
+        </div>
+
+        <div className="d-flex flex-column gap-2" aria-label="Graph edge summary">
+          <small className="text-muted">
+            Solid edges are hard capture links. Dashed edges are merge/dedup
+            suggestions from similarity scoring.
+          </small>
+          <div className="d-flex flex-wrap gap-2">
+            <Badge bg="dark">Solid (hard): {hardEdges.length}</Badge>
+            <Badge bg="warning" text="dark">
+              Dashed (soft): {softEdges.length}
+            </Badge>
+          </div>
+          {softEdges.slice(0, 8).map((edge) => (
+            <div key={edge.id} className="border rounded px-2 py-1 bg-light-subtle">
+              <small>
+                <strong>Dashed:</strong> {edge.reason}
+                {typeof edge.confidence === 'number'
+                  ? ` (${Math.round(edge.confidence * 100)}%)`
+                  : ''}
+              </small>
+            </div>
+          ))}
         </div>
       </Card.Body>
     </Card>

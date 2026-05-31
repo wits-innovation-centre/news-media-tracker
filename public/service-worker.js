@@ -41,6 +41,16 @@ self.addEventListener('install', event => {
 // Runtime caching for API and other requests
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
+  const isNextAssetRequest =
+    url.pathname.startsWith('/_next/') ||
+    url.pathname.includes('.hot-update.') ||
+    url.pathname.includes('__nextjs_original-stack-frame');
+
+  // Never cache Next.js build/HMR assets. Stale chunk graphs can break hydration.
+  if (isNextAssetRequest) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
   if (event.request.mode === 'navigate') {
     event.respondWith(

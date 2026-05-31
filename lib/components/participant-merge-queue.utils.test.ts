@@ -37,6 +37,35 @@ describe('participant merge queue utils', () => {
     expect(queue).toHaveLength(1);
     expect(queue[0].id).toBe('v1::v2');
     expect(queue[0].sharedValue).toBe('JD');
+    expect(queue[0].matchReason).toBe('alias-overlap');
+    expect(queue[0].similarity).toBe(1);
+  });
+
+  it('builds queue candidates for near-duplicate participant names', () => {
+    const queue = buildMergeQueueCandidates([
+      {
+        id: 'p1',
+        role: 'perpetrator',
+        articleId: 'a1',
+        primaryName: 'Jon Smith',
+        alias: null,
+      },
+      {
+        id: 'p2',
+        role: 'perpetrator',
+        articleId: 'a2',
+        primaryName: 'John Smith',
+        alias: null,
+      },
+    ]);
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0]).toMatchObject({
+      id: 'p1::p2',
+      matchReason: 'name-similarity',
+      sharedValue: 'Jon Smith ~ John Smith',
+    });
+    expect(queue[0].similarity).toBeGreaterThanOrEqual(0.9);
   });
 
   it('promotes alias to primary while preserving previous primary as alias', () => {

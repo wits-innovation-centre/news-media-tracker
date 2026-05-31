@@ -30,6 +30,33 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: false,
   },
+
+  async headers() {
+    if (process.env.NODE_ENV !== 'development') {
+      return [];
+    }
+
+    // Prevent stale HTML/chunk manifests from being reused across dev restarts.
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
+          },
+          {
+            key: 'Expires',
+            value: '0',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
