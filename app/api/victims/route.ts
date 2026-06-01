@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { and, eq, isNull, like, sql, type SQL } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { dbm, DatabaseManagerServer } from '../../../lib/db/server';
-import { victims, type Victim, type NewVictim } from '../../../lib/db/schema';
+import {
+  articles,
+  victims,
+  type Victim,
+  type NewVictim,
+} from '../../../lib/db/schema';
 import { prepareVictimPayload } from '../../../lib/utils/transformers';
 import { coerceVictim } from './utils';
 
@@ -142,6 +147,22 @@ export async function POST(request: Request) {
     }
 
     const db = await ensureServerDatabase();
+    const linkedArticle = await db
+      .select({ id: articles.id })
+      .from(articles)
+      .where(eq(articles.id, coerced.articleId))
+      .limit(1);
+
+    if (!linkedArticle[0]) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Linked article not found',
+        },
+        { status: 400 },
+      );
+    }
+
     const now = new Date().toISOString();
     const newVictim: NewVictim = {
       id: uuidv4(),
@@ -220,6 +241,22 @@ export async function PUT(request: Request) {
     if (!coercedUpdate.articleId) {
       return NextResponse.json(
         { success: false, error: 'Article ID is required' },
+        { status: 400 },
+      );
+    }
+
+    const linkedArticle = await db
+      .select({ id: articles.id })
+      .from(articles)
+      .where(eq(articles.id, coercedUpdate.articleId))
+      .limit(1);
+
+    if (!linkedArticle[0]) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Linked article not found',
+        },
         { status: 400 },
       );
     }

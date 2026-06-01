@@ -2,7 +2,44 @@
 
 ## Active update (2026-05-29)
 
+## Active update (2026-06-01)
+
+- Completed: document pane now renders structured frontmatter as editable form fields (Obsidian-style properties) instead of raw markdown frontmatter text editing.
+- Completed: document pane keeps a separate free-text Notes editor beneath the properties block to preserve the frontmatter + narrative document model.
+- Completed: article rows in the side tree now support explicit right-side caret collapse/expand behavior for child event/participant pointers.
+- Completed: child-creation controls under each article are consolidated into a single `+ Add` action that opens event vs participant choices.
+- Completed: participant draft flow now starts from the unified add action and defers subtype choice (`victim` or `perpetrator`) to the properties form.
+- Completed: removed duplicate add buttons and replaced them with hover-only insertion controls rendered between document rows across the tree.
+- Completed: insertion controls are context-aware: global separators create articles, and separators under an article also allow linked event/participant creation for that article.
+- Completed: document header empty-state action now shows `Add New Article` instead of a disabled `Save Document`, and automatically transitions back to active save controls once the created document loads.
+- Completed: migrated legacy field taxonomy and dropdown semantics into the unified document properties editor for article/event/victim/perpetrator forms.
+- Completed: participant draft forms now include legacy-style victim/perpetrator dropdown fields (murder type, demographics, relationship, suspect status) rather than only minimal text inputs.
+- Completed: date field normalization now converts ISO timestamps to `YYYY-MM-DD` for correct date-input rendering in the new editor flow.
+- Completed: added a document-level `Delete` action in the header for persisted documents (article/event/victim/perpetrator), with confirmation and post-delete workspace refresh.
+- Completed: article deletion now applies linked-document reconciliation server-side: linked events are deleted when no remaining article links exist, otherwise event links are reduced to undeleted articles, and directly article-linked victim/perpetrator records are deleted.
+- Completed: restored API-backed news platform suggestions in the unified article properties form, including add-new-outlet persistence via the outlets vocabulary endpoint.
+- Completed: restored legacy multi-author editing behavior in the unified article properties form, including special undefined-style author modes (`Undisclosed`, `Anonymous`, `Unknown`).
+- Completed: restored reveal-on-select perpetrator field behavior in unified forms (suspect arrested/charged and downstream fields now appear conditionally based on selected status flow).
+- Completed: audited legacy article/victim/perpetrator forms against unified document properties and added missing victim/perpetrator form elements (aliases, date-mode/end-date, nationality, additional location/death detail fields, suspect aliases).
+- Completed: participant draft properties now expose the expanded legacy victim/perpetrator element set so create flows and edit flows share the same field coverage.
+- Completed: victim/perpetrator API coercion now persists newly represented properties (`victimAliases`, `dateOfDeathMode`, `dateOfDeathEnd`, `nationality`, `ageDescriptor`, `suspectAliases`) instead of dropping them during save.
+- Completed: event document properties now use name-first multi-select checkbox dropdowns for linked articles and linked participants (invite-style picker UX), while preserving ID storage for API payloads.
+- Verification: static diagnostics reported no errors in `app/page.tsx` and `app/globals.css` after refactor.
+- Remaining: execute interactive browser smoke validation for sidebar add-menu behavior, article expand/collapse state, and draft create/save round-trips.
+- Risk/follow-up: advanced perpetrator charge/sentencing sub-field UI is still represented as raw persisted `charges`/`conviction`/`sentence` properties rather than the full card-based microflow used in the legacy dedicated perpetrator form.
+
 ## Active update (2026-05-31)
+
+- Completed: replaced the previous Form/Graph/Table split workspace with a persistent side-panel + main-pane structure inspired by Obsidian-style navigation.
+- Completed: side panel now renders a tree of document pointers grouped by article, with nested event and participant pointers opening editable document views.
+- Completed: document filtering in the side panel now drives the hidden case-loader query and therefore propagates to graph and table projections.
+- Completed: main table mode now renders an expanded pointer table (article + linked event + linked participant) with click-to-open document behavior.
+- Completed: document editor now uses Markdown-style files with YAML-like front-matter (`field: value`) plus free-text notes below the front-matter block.
+- Completed: article-first creation flow is now explicit in the side panel (`+ Article`, then `+ Event` / `+ Victim` / `+ Perp` under article nodes), enforcing linked-child creation from the workspace.
+- Completed: server APIs now validate article linkage on event and participant create/update operations; orphaned linked records are rejected.
+- Completed: victim/perpetrator records now persist free-text notes in dedicated `notes` fields (with additive migrations for existing databases).
+- Remaining: add dedicated structured editors per document type (article/event/participant) to complement the current JSON editor for richer in-place editing UX.
+- Risk/follow-up: merged participant pointer persistence currently depends on whichever participant records are returned by the loaded case projection; consider an include-merged pointer mode for explicit post-merge lineage visibility.
 
 - Completed: fixed external-browser blank-screen regression caused by stale service-worker-cached Next.js chunks during development.
 - Completed: `lib/components/boot-pwa.ts` now disables service-worker registration in development and proactively unregisters old workers and clears caches.
@@ -46,6 +83,7 @@
 - Completed: reverted unintended `ripgrep` install changes in root `Dockerfile` used for app/runtime images.
 - Completed: added `ripgrep` installation to `.devcontainer/Dockerfile`, which is the image used to build this development container.
 - Completed: moved GHCR/runtime Docker assets to `.ghcr/` and updated path references in compose, workflow, scripts, and docs.
+- Completed: updated auth guidance in `.env`, `.env.example`, and `README.md` to be algorithm-agnostic (HS256 shown as example only).
 - Remaining: rebuild/reopen devcontainer so the updated image provisions `ripgrep` automatically for future sessions.
 - Risk/follow-up: existing running container will not pick up `.devcontainer/Dockerfile` changes until rebuild.
 
@@ -70,6 +108,10 @@
 - Risk/follow-up: Debian package `docker-compose` is compose v1; scripts expecting v2 subcommand syntax may need adaptation or plugin installation.
 
 ## Active update (2026-05-27)
+
+- Completed: added workspace-level VS Code settings at `apps/news-media-tracker/.vscode/settings.json` to force npm scripts integration to use `pnpm` and to exclude `.wiki` from watcher/search indexing.
+- Completed: mitigation targets scripts-panel reload stalls after `package.json` edits by reducing watcher pressure and avoiding npm/pnpm provider ambiguity.
+- Remaining: validate that the npm scripts panel refreshes immediately after `package.json` edits without requiring `pnpm install`.
 
 - Completed: pnpm permission guardrails are now enforced before local dev/start via script hooks, and validation includes root-ownership drift checks for critical paths and workspace node_modules trees.
 - Completed: ownership scanning logic in `scripts/validate-pnpm-permissions.js` was optimized to a bounded top-level scan so validation does not stall on large dependency trees.

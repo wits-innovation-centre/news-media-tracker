@@ -10,6 +10,54 @@ import {
   nextGraphSelection,
 } from './connected-graph-workspace.utils';
 
+const GRAPH_VIEW_WIDTH = 1200;
+const GRAPH_VIEW_HEIGHT = 720;
+const GRAPH_TOP_PADDING = 88;
+
+type GraphPoint = { x: number; y: number };
+
+const hashSeed = (value: string): number => {
+  return value.split('').reduce((acc, char) => acc * 31 + char.charCodeAt(0), 17);
+};
+
+const jitter = (seed: number, amplitude: number): number => {
+  return (((seed % 1000) / 1000) * 2 - 1) * amplitude;
+};
+
+const distributeNodeLane = (
+  nodeIds: string[],
+  centerX: number,
+): Array<{ id: string; position: GraphPoint }> => {
+  if (nodeIds.length === 0) {
+    return [];
+  }
+
+  const availableHeight = GRAPH_VIEW_HEIGHT - GRAPH_TOP_PADDING * 2;
+  const spacing = nodeIds.length > 1 ? availableHeight / (nodeIds.length - 1) : 0;
+
+  return nodeIds.map((id, index) => {
+    const seed = hashSeed(id);
+    return {
+      id,
+      position: {
+        x: centerX + jitter(seed, 26),
+        y:
+          GRAPH_TOP_PADDING +
+          index * spacing +
+          jitter(seed >> 4, Math.min(22, spacing * 0.2 || 22)),
+      },
+    };
+  });
+};
+
+const buildCurvedEdgePath = (source: GraphPoint, target: GraphPoint): string => {
+  const direction = target.x >= source.x ? 1 : -1;
+  const arcStrength = Math.max(48, Math.abs(target.x - source.x) * 0.28);
+  const cx1 = source.x + direction * arcStrength;
+  const cx2 = target.x - direction * arcStrength;
+  return `M ${source.x} ${source.y} C ${cx1} ${source.y}, ${cx2} ${target.y}, ${target.x} ${target.y}`;
+};
+
 interface ConnectedGraphWorkspaceProps {
   cases: DetailedEvent[];
   selectedCaseIds: string[];
@@ -31,10 +79,7 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
     [selectedCaseIds],
   );
 
-  const selectedCases = cases.filter(
-    (case_) => case_.id && selectedSet.has(case_.id),
-  );
-  const activeCases = selectedCases.length > 0 ? selectedCases : cases;
+  const activeCases = cases;
   const graphModel = useMemo(
     () => buildConnectedGraphModel(activeCases),
     [activeCases],
@@ -47,6 +92,50 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
     () => graphModel.edges.filter((edge) => edge.style === 'soft'),
     [graphModel.edges],
   );
+
+  const positionedNodes = useMemo(() => {
+    const articles = graphModel.nodes
+      .filter((node) => node.kind === 'article')
+      .map((node) => node.id);
+    const events = graphModel.nodes
+      .filter((node) => node.kind === 'event')
+      .map((node) => node.id);
+    const participants = graphModel.nodes
+      .filter((node) => node.kind === 'participant')
+      .map((node) => node.id);
+
+    const laneNodes = [
+      ...distributeNodeLane(articles, 220),
+      ...distributeNodeLane(events, 600),
+      ...distributeNodeLane(participants, 980),
+    ];
+
+    const positionMap = new Map<string, GraphPoint>();
+    laneNodes.forEach((entry) => positionMap.set(entry.id, entry.position));
+
+    return graphModel.nodes.map((node) => {
+      const base = positionMap.get(node.id) ?? { x: 600, y: GRAPH_VIEW_HEIGHT / 2 };
+      const subtypeOffset =
+        node.kind === 'participant'
+          ? node.subtype === 'victim'
+            ? -42
+            : node.subtype === 'perpetrator'
+              ? 42
+              : 0
+          : 0;
+      return {
+        ...node,
+        position: {
+          x: base.x + subtypeOffset,
+          y: base.y,
+        },
+      };
+    });
+  }, [graphModel.nodes]);
+
+  const positionsById = useMemo(() => {
+    return new Map(positionedNodes.map((node) => [node.id, node.position]));
+  }, [positionedNodes]);
 
   const zoomIn = () => setScale((prev) => clampGraphScale(prev + GRAPH_SCALE_STEP));
   const zoomOut = () =>
@@ -62,7 +151,7 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
       <Card.Header className="workspace-surface-header d-flex justify-content-between align-items-center">
         <div>
           <h3 className="workspace-surface-title mb-1">Connected Graph</h3>
-          <small className="text-muted">Cases and participant relationships</small>
+          <small className="graph-muted-text">Cases and participant relationships</small>
         </div>
         <Badge bg="dark">{selectedCaseIds.length} selected</Badge>
       </Card.Header>
@@ -108,6 +197,15 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
           >
             Next
           </Button>
+          <Button
+            size="sm"
+            variant="outline-warning"
+            onClick={() => onSelectedCaseIdsChange([])}
+            aria-label="Show all graph nodes"
+            disabled={selectedCaseIds.length === 0}
+          >
+            Show All Nodes
+          </Button>
         </div>
 
         <div
@@ -131,47 +229,97 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
             } else if (event.key === '0') {
               event.preventDefault();
               resetView();
+            } else if (event.key === 'Escape') {
+              event.preventDefault();
+              onSelectedCaseIdsChange([]);
             }
           }}
         >
           <div
             className="graph-canvas-inner"
             style={{ transform: `scale(${scale})` }}
-            role="list"
-            aria-label="Graph entity nodes"
+            role="presentation"
           >
-            {graphModel.nodes.map((node) => {
-              return (
-                <div
-                  key={node.id}
-                  className={`graph-node ${node.kind === 'event' ? 'is-active' : ''}`}
-                  role="listitem"
-                  aria-label={`${node.kind} node ${node.label}`}
-                >
-                  <div className="d-flex align-items-center gap-2 mb-1">
-                    <Badge
-                      bg={
-                        node.kind === 'article'
-                          ? 'primary'
-                          : node.kind === 'event'
-                            ? 'success'
-                            : 'secondary'
+            <div className="graph-scene" role="list" aria-label="Graph entity nodes">
+              <svg
+                className="graph-edges"
+                viewBox={`0 0 ${GRAPH_VIEW_WIDTH} ${GRAPH_VIEW_HEIGHT}`}
+                aria-hidden
+              >
+                <defs>
+                  <linearGradient id="graph-hard-edge" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#2dd4bf" stopOpacity="0.74" />
+                    <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.76" />
+                  </linearGradient>
+                  <linearGradient id="graph-soft-edge" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#facc15" stopOpacity="0.55" />
+                    <stop offset="100%" stopColor="#fb7185" stopOpacity="0.6" />
+                  </linearGradient>
+                </defs>
+                {graphModel.edges.map((edge) => {
+                  const source = positionsById.get(edge.sourceId);
+                  const target = positionsById.get(edge.targetId);
+                  if (!source || !target) {
+                    return null;
+                  }
+
+                  const strokeColor =
+                    edge.style === 'hard' ? 'url(#graph-hard-edge)' : 'url(#graph-soft-edge)';
+
+                  return (
+                    <path
+                      key={edge.id}
+                      d={buildCurvedEdgePath(source, target)}
+                      className={`graph-edge graph-edge-${edge.style}`}
+                      stroke={strokeColor}
+                    />
+                  );
+                })}
+              </svg>
+
+              {positionedNodes.map((node) => {
+                const eventId = node.id.startsWith('event:') ? node.id.slice(6) : null;
+                const isSelectedEvent = eventId ? selectedSet.has(eventId) : false;
+                return (
+                  <button
+                    key={node.id}
+                    type="button"
+                    className={`graph-entity-node graph-kind-${node.kind} ${isSelectedEvent ? 'is-selected' : ''
+                      }`}
+                    style={{
+                      left: `${node.position.x}px`,
+                      top: `${node.position.y}px`,
+                    }}
+                    role="listitem"
+                    aria-label={`${node.kind} node ${node.label}. ${node.detail}`}
+                    onClick={() => {
+                      if (eventId) {
+                        if (
+                          selectedCaseIds.length === 1 &&
+                          selectedCaseIds[0] === eventId
+                        ) {
+                          onSelectedCaseIdsChange([]);
+                          return;
+                        }
+                        onSelectedCaseIdsChange([eventId]);
                       }
-                    >
+                    }}
+                  >
+                    <span className="graph-node-kind">
                       {node.kind}
                       {node.subtype ? `:${node.subtype}` : ''}
-                    </Badge>
-                    <strong>{node.label}</strong>
-                  </div>
-                  <small>{node.detail}</small>
-                </div>
-              );
-            })}
+                    </span>
+                    <strong className="graph-node-label">{node.label}</strong>
+                    <small className="graph-node-detail">{node.detail}</small>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
         <div className="d-flex flex-column gap-2" aria-label="Graph edge summary">
-          <small className="text-muted">
+          <small className="graph-muted-text">
             Solid edges are hard capture links. Dashed edges are merge/dedup
             suggestions from similarity scoring.
           </small>
@@ -182,8 +330,8 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
             </Badge>
           </div>
           {softEdges.slice(0, 8).map((edge) => (
-            <div key={edge.id} className="border rounded px-2 py-1 bg-light-subtle">
-              <small>
+            <div key={edge.id} className="graph-edge-note">
+              <small className="graph-edge-note-text">
                 <strong>Dashed:</strong> {edge.reason}
                 {typeof edge.confidence === 'number'
                   ? ` (${Math.round(edge.confidence * 100)}%)`

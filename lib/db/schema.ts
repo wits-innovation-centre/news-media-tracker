@@ -92,6 +92,7 @@ export const victims = sqliteTable('victims', {
   modeOfDeathSpecific: text('mode_of_death_specific'),
   modeOfDeathGeneral: text('mode_of_death_general'),
   typeOfMurder: text('type_of_murder'),
+  notes: text('notes'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
   syncStatus: text('sync_status').default('pending'),
@@ -126,6 +127,7 @@ export const migrationVictims = `CREATE TABLE IF NOT EXISTS victims (
   mode_of_death_specific TEXT,
   mode_of_death_general TEXT,
   type_of_murder TEXT,
+  notes TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
   sync_status TEXT DEFAULT 'pending',
@@ -154,6 +156,7 @@ export const perpetrators = sqliteTable('perpetrators', {
   charges: text('charges'),
   conviction: text('conviction'),
   sentence: text('sentence'),
+  notes: text('notes'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
   syncStatus: text('sync_status').default('pending'),
@@ -178,6 +181,7 @@ export const migrationPerpetrators = `CREATE TABLE IF NOT EXISTS perpetrators (
   charges TEXT,
   conviction TEXT,
   sentence TEXT,
+  notes TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
   sync_status TEXT DEFAULT 'pending',
@@ -894,6 +898,8 @@ export const migrationVictimDateOfDeathEndColumn = `ALTER TABLE victims ADD COLU
 export const migrationVictimAliasesColumn = `ALTER TABLE victims ADD COLUMN victim_aliases TEXT`;
 export const migrationPerpetratorAliasesColumn = `ALTER TABLE perpetrators ADD COLUMN suspect_aliases TEXT`;
 export const migrationPerpetratorChargesColumn = `ALTER TABLE perpetrators ADD COLUMN charges TEXT`;
+export const migrationVictimNotesColumn = `ALTER TABLE victims ADD COLUMN notes TEXT`;
+export const migrationPerpetratorNotesColumn = `ALTER TABLE perpetrators ADD COLUMN notes TEXT`;
 // NOTE: merge_audit and promotion_audit are JSON-serialized payloads stored as TEXT.
 
 export const migrationBackfillVictimsToActors = `INSERT OR IGNORE INTO actor (
@@ -1094,6 +1100,8 @@ export const migrations = [
   migrationVictimAliasesColumn,
   migrationPerpetratorAliasesColumn,
   migrationPerpetratorChargesColumn,
+  migrationVictimNotesColumn,
+  migrationPerpetratorNotesColumn,
   migrationSchemaProfiles,
   migrationSchemaFields,
   migrationBackfillVictimsToActors,

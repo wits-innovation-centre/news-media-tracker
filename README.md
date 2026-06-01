@@ -158,11 +158,12 @@ in `.env` before starting the stack.
 SQLD_AUTH_JWT_KEY=$(openssl rand -base64 32)
 echo "SQLD_AUTH_JWT_KEY=${SQLD_AUTH_JWT_KEY}" >> .env
 
-# 2. Generate a HS256 JWT token signed with that key.
+# 2. Generate a JWT token accepted by your sqld auth configuration.
+#    The example below is HS256 (HMAC) and may not match all deployments.
 #    Using the `jwt` CLI (npm install -g jsonwebtoken-cli) as an example:
 #    jwt sign '{"sub":"app"}' "${SQLD_AUTH_JWT_KEY}"
 #
-#    Alternatively, generate via a short Node.js snippet:
+#    Alternatively, generate a HS256 token via this Node.js example snippet:
 node -e "
 const crypto = require('crypto');
 const key = process.env.SQLD_AUTH_JWT_KEY || '${SQLD_AUTH_JWT_KEY}';

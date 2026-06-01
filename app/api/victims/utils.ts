@@ -9,7 +9,10 @@ type VictimCoreFields =
   | 'articleId'
   | 'victimName'
   | 'victimAlias'
+  | 'victimAliases'
   | 'dateOfDeath'
+  | 'dateOfDeathMode'
+  | 'dateOfDeathEnd'
   | 'placeOfDeathProvince'
   | 'placeOfDeathTown'
   | 'typeOfLocation'
@@ -17,11 +20,14 @@ type VictimCoreFields =
   | 'sexualAssault'
   | 'genderOfVictim'
   | 'raceOfVictim'
+  | 'nationality'
   | 'ageOfVictim'
   | 'ageRangeOfVictim'
+  | 'ageDescriptor'
   | 'modeOfDeathSpecific'
   | 'modeOfDeathGeneral'
-  | 'typeOfMurder';
+  | 'typeOfMurder'
+  | 'notes';
 
 export type VictimCore = Pick<Victim, VictimCoreFields>;
 
@@ -38,9 +44,21 @@ export const coerceVictim = (
     victimData.victimAlias,
     current?.victimAlias ?? null,
   ),
+  victimAliases: toNullableString(
+    victimData.victimAliases,
+    current?.victimAliases ?? null,
+  ),
   dateOfDeath: toNullableString(
     victimData.dateOfDeath,
     current?.dateOfDeath ?? null,
+  ),
+  dateOfDeathMode: toNullableString(
+    victimData.dateOfDeathMode,
+    current?.dateOfDeathMode ?? null,
+  ),
+  dateOfDeathEnd: toNullableString(
+    victimData.dateOfDeathEnd,
+    current?.dateOfDeathEnd ?? null,
   ),
   placeOfDeathProvince: toNullableString(
     victimData.placeOfDeathProvince,
@@ -70,6 +88,10 @@ export const coerceVictim = (
     victimData.raceOfVictim,
     current?.raceOfVictim ?? null,
   ),
+  nationality: toNullableString(
+    victimData.nationality,
+    current?.nationality ?? null,
+  ),
   ageOfVictim: toNullableNumber(
     victimData.ageOfVictim,
     current?.ageOfVictim ?? null,
@@ -77,6 +99,10 @@ export const coerceVictim = (
   ageRangeOfVictim: toNullableString(
     victimData.ageRangeOfVictim,
     current?.ageRangeOfVictim ?? null,
+  ),
+  ageDescriptor: toNullableString(
+    victimData.ageDescriptor,
+    current?.ageDescriptor ?? null,
   ),
   modeOfDeathSpecific: toNullableString(
     victimData.modeOfDeathSpecific,
@@ -90,4 +116,5 @@ export const coerceVictim = (
     victimData.typeOfMurder,
     current?.typeOfMurder ?? null,
   ),
+  notes: toNullableString(victimData.notes, current?.notes ?? null),
 });

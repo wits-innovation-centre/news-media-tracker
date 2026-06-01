@@ -3,6 +3,9 @@ import { and, eq, like, sql, type SQL } from 'drizzle-orm';
 import { dbm, DatabaseManagerServer } from '../../../lib/db/server';
 import {
   articles,
+  events,
+  perpetrators,
+  victims,
   type Article,
   type NewArticle,
 } from '../../../lib/db/schema';
@@ -21,6 +24,25 @@ const ensureServerDatabase = async () => {
   }
   await dbm.ensureDatabaseInitialised();
   return dbm.getLocal();
+};
+
+const parseStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string');
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is string => typeof item === 'string');
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
 };
 
 export async function GET(request: Request) {
@@ -312,11 +334,87 @@ export async function DELETE(request: Request) {
       );
     }
 
-    await db.delete(articles).where(eq(articles.id, id));
+    const deletionSummary = await db.transaction(async (tx) => {
+      const now = new Date().toISOString();
+
+      const linkedVictims = await tx
+        .select({ id: victims.id })
+        .from(victims)
+        .where(eq(victims.articleId, id));
+      const linkedPerpetrators = await tx
+        .select({ id: perpetrators.id })
+        .from(perpetrators)
+        .where(eq(perpetrators.articleId, id));
+
+      const participantIdsToDelete = new Set<string>([
+        ...linkedVictims.map((entry) => entry.id),
+        ...linkedPerpetrators.map((entry) => entry.id),
+      ]);
+
+      const allEvents = await tx.select().from(events);
+      const eventsLinkedToArticle = allEvents.filter((event) => {
+        const articleIds = parseStringArray(event.articleIds);
+        return articleIds.includes(id);
+      });
+
+      let deletedEventCount = 0;
+      let updatedEventCount = 0;
+
+      for (const event of eventsLinkedToArticle) {
+        const articleIds = parseStringArray(event.articleIds);
+        const participantIds = parseStringArray(event.participantIds);
+
+        const remainingArticleIds = articleIds.filter((articleId) => articleId !== id);
+        const remainingParticipantIds = participantIds.filter(
+          (participantId) => !participantIdsToDelete.has(participantId),
+        );
+
+        if (remainingArticleIds.length === 0) {
+          await tx.delete(events).where(eq(events.id, event.id));
+          deletedEventCount += 1;
+          continue;
+        }
+
+        const articleLinksChanged = remainingArticleIds.length !== articleIds.length;
+        const participantLinksChanged = remainingParticipantIds.length !== participantIds.length;
+
+        if (articleLinksChanged || participantLinksChanged) {
+          await tx
+            .update(events)
+            .set({
+              articleIds: remainingArticleIds,
+              participantIds: remainingParticipantIds,
+              updatedAt: now,
+              syncStatus: 'synced',
+              failureCount: event.failureCount ?? 0,
+            })
+            .where(eq(events.id, event.id));
+          updatedEventCount += 1;
+        }
+      }
+
+      if (linkedVictims.length > 0) {
+        await tx.delete(victims).where(eq(victims.articleId, id));
+      }
+
+      if (linkedPerpetrators.length > 0) {
+        await tx.delete(perpetrators).where(eq(perpetrators.articleId, id));
+      }
+
+      await tx.delete(articles).where(eq(articles.id, id));
+
+      return {
+        deletedEvents: deletedEventCount,
+        updatedEvents: updatedEventCount,
+        deletedVictims: linkedVictims.length,
+        deletedPerpetrators: linkedPerpetrators.length,
+      };
+    });
 
     return NextResponse.json({
       success: true,
       message: 'Article deleted successfully',
+      summary: deletionSummary,
     });
   } catch (error) {
     console.error('Failed to delete article:', error);

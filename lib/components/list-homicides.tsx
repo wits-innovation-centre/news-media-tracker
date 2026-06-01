@@ -145,13 +145,13 @@ async function fetchArticleById(articleId: string): Promise<Article | null> {
       get: (req: Request) => Promise<OfflineListResponse<Article>>;
     };
     const req = new Request(`${getBaseUrl()}?id=${articleId}`);
-    const response = await getArticle(req);
-    if (!response.success || !response.data) {
+    const offline = await getArticle(req);
+    if (!offline.success || !offline.data) {
       return null;
     }
-    return Array.isArray(response.data)
-      ? (response.data[0] ?? null)
-      : (response.data as Article);
+    return Array.isArray(offline.data)
+      ? (offline.data[0] ?? null)
+      : (offline.data as Article);
   } catch (error) {
     console.error(error);
     return null;
@@ -167,8 +167,8 @@ async function fetchVictimsByArticle(articleId: string): Promise<Victim[]> {
       get: (req: Request) => Promise<OfflineListResponse<Victim>>;
     };
     const req = new Request(`${getBaseUrl()}?articleId=${articleId}`);
-    const response = await getVictims(req);
-    return extractArrayData<Victim>(response.data);
+    const offline = await getVictims(req);
+    return extractArrayData<Victim>(offline.data);
   } catch (error) {
     console.error(error);
     return [];
@@ -188,8 +188,8 @@ async function fetchPerpetratorsByArticle(
       get: (req: Request) => Promise<OfflineListResponse<Perpetrator>>;
     };
     const req = new Request(`${getBaseUrl()}?articleId=${articleId}`);
-    const response = await getPerpetrators(req);
-    return extractArrayData<Perpetrator>(response.data);
+    const offline = await getPerpetrators(req);
+    return extractArrayData<Perpetrator>(offline.data);
   } catch (error) {
     console.error(error);
     return [];
@@ -251,20 +251,141 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
 
   const itemsPerPage = 10;
 
+  const hydrateOfflineFromHttp = useCallback(
+    async (params: URLSearchParams) => {
+      try {
+        const response = await fetch(`/api/events?${params.toString()}`);
+        const payload = (await response.json().catch(() => null)) as
+          | EventsApiResponse
+          | null;
+
+        if (!response.ok || !payload?.success || !payload.data) {
+          return;
+        }
+
+        const eventData = payload.data;
+        const eventsToHydrate = isEventsPayload(eventData)
+          ? eventData.events
+          : [eventData as Event];
+
+        if (eventsToHydrate.length === 0) {
+          return;
+        }
+
+        const { dbm, DatabaseManagerClient } = await import('@/lib/db/client');
+        if (!(dbm instanceof DatabaseManagerClient)) {
+          return;
+        }
+
+        await dbm.ensureDatabaseInitialised();
+        const db = dbm.getLocal();
+
+        const normalizedEvents = eventsToHydrate.map((event) => ({
+          ...event,
+          eventTypes: toStringArray(event.eventTypes),
+          articleIds: toStringArray(event.articleIds),
+          participantIds: toStringArray(event.participantIds),
+          details: toDetailsObject(event.details),
+        }));
+
+        await db.events.bulkPut(normalizedEvents);
+
+        const articleIds = Array.from(
+          new Set(
+            normalizedEvents.flatMap((event) => toStringArray(event.articleIds)),
+          ),
+        );
+
+        if (articleIds.length === 0) {
+          return;
+        }
+
+        const articleResults = await Promise.all(
+          articleIds.map(async (articleId) => {
+            try {
+              const articleResponse = await fetch(
+                `/api/articles?id=${encodeURIComponent(articleId)}`,
+              );
+              const articlePayload = (await articleResponse
+                .json()
+                .catch(() => null)) as OfflineListResponse<Article> | null;
+              const article = articlePayload?.success
+                ? Array.isArray(articlePayload.data)
+                  ? (articlePayload.data[0] ?? null)
+                  : (articlePayload.data as Article | null)
+                : null;
+
+              const [victimsResponse, perpetratorsResponse] = await Promise.all([
+                fetch(
+                  `/api/victims?articleId=${encodeURIComponent(articleId)}&limit=2000&offset=0&includeMerged=true`,
+                ),
+                fetch(
+                  `/api/perpetrators?articleId=${encodeURIComponent(articleId)}&limit=2000&offset=0&includeMerged=true`,
+                ),
+              ]);
+
+              const victimsPayload = (await victimsResponse
+                .json()
+                .catch(() => null)) as OfflineListResponse<Victim> | null;
+              const perpetratorsPayload = (await perpetratorsResponse
+                .json()
+                .catch(() => null)) as OfflineListResponse<Perpetrator> | null;
+
+              return {
+                article,
+                victims: extractArrayData<Victim>(victimsPayload?.data),
+                perpetrators: extractArrayData<Perpetrator>(
+                  perpetratorsPayload?.data,
+                ),
+              };
+            } catch (requestError) {
+              console.error(requestError);
+              return { article: null, victims: [], perpetrators: [] };
+            }
+          }),
+        );
+
+        const articlesToPut = articleResults
+          .map((result) => result.article)
+          .filter((article): article is Article => Boolean(article));
+        const victimsToPut = articleResults.flatMap((result) => result.victims);
+        const perpetratorsToPut = articleResults.flatMap(
+          (result) => result.perpetrators,
+        );
+
+        if (articlesToPut.length > 0) {
+          await db.articles.bulkPut(articlesToPut);
+        }
+        if (victimsToPut.length > 0) {
+          await db.victims.bulkPut(victimsToPut);
+        }
+        if (perpetratorsToPut.length > 0) {
+          await db.perpetrators.bulkPut(perpetratorsToPut);
+        }
+      } catch (hydrateError) {
+        // Best effort only: list can still render current offline state.
+        console.error(hydrateError);
+      }
+    },
+    [],
+  );
+
   const fetchCases = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    // Offline-first: try local/offline API first, fall back to network if unavailable or fails
+    // Sync utility approach: hydrate offline storage from HTTP API first,
+    // then read cases from offline storage.
     const params = new URLSearchParams({
       page: currentPage.toString(),
       limit: itemsPerPage.toString(),
       ...(searchTerm && { search: searchTerm }),
     });
 
+    await hydrateOfflineFromHttp(params);
+
     let result: EventsApiResponse | null = null;
     try {
-      // Try offline API
       const { get: getEvents } = await import('@/app/api/events/offline');
       const req = new Request(`${getBaseUrl()}?${params}`);
       result = await getEvents(req);
@@ -330,7 +451,7 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
       onCasesLoaded?.([]);
     }
     setLoading(false);
-  }, [currentPage, onCasesLoaded, searchTerm]);
+  }, [currentPage, hydrateOfflineFromHttp, onCasesLoaded, searchTerm]);
 
   useEffect(() => {
     fetchCases();
@@ -582,7 +703,7 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
                               )}
                               <td>
                                 {case_.articleData &&
-                                case_.articleData.dateOfPublication ? (
+                                  case_.articleData.dateOfPublication ? (
                                   formatDate(
                                     case_.articleData.dateOfPublication,
                                   )
@@ -596,7 +717,7 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
                                   style={{ maxWidth: '200px' }}
                                 >
                                   {case_.articleData &&
-                                  case_.articleData.newsReportHeadline ? (
+                                    case_.articleData.newsReportHeadline ? (
                                     case_.articleData.newsReportHeadline
                                   ) : (
                                     <span className="text-muted">N/A</span>
@@ -605,7 +726,7 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
                               </td>
                               <td>
                                 {case_.articleData &&
-                                case_.articleData.newsReportPlatform ? (
+                                  case_.articleData.newsReportPlatform ? (
                                   case_.articleData.newsReportPlatform
                                 ) : (
                                   <span className="text-muted">N/A</span>

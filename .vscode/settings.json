@@ -1,0 +1,11 @@
+{
+  "npm.packageManager": "pnpm",
+  "npm.autoDetect": "on",
+  "files.watcherExclude": {
+    "**/.wiki/**": true
+  },
+  "search.exclude": {
+    "**/.wiki/**": true
+  },
+  "postman.settings.dotenv-detection-notification-visibility": false
+}

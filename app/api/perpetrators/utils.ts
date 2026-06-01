@@ -8,12 +8,15 @@ type PerpetratorCoreFields =
   | 'articleId'
   | 'perpetratorName'
   | 'perpetratorAlias'
+  | 'suspectAliases'
   | 'perpetratorRelationshipToVictim'
   | 'suspectIdentified'
   | 'suspectArrested'
   | 'suspectCharged'
+  | 'charges'
   | 'conviction'
-  | 'sentence';
+  | 'sentence'
+  | 'notes';
 
 export type PerpetratorCore = Pick<Perpetrator, PerpetratorCoreFields>;
 
@@ -29,6 +32,10 @@ export const coercePerpetrator = (
   perpetratorAlias: toNullableString(
     data.perpetratorAlias,
     current?.perpetratorAlias ?? null,
+  ),
+  suspectAliases: toNullableString(
+    data.suspectAliases,
+    current?.suspectAliases ?? null,
   ),
   perpetratorRelationshipToVictim: toNullableString(
     data.perpetratorRelationshipToVictim,
@@ -46,6 +53,8 @@ export const coercePerpetrator = (
     data.suspectCharged,
     current?.suspectCharged ?? null,
   ),
+  charges: toNullableString(data.charges, current?.charges ?? null),
   conviction: toNullableString(data.conviction, current?.conviction ?? null),
   sentence: toNullableString(data.sentence, current?.sentence ?? null),
+  notes: toNullableString(data.notes, current?.notes ?? null),
 });

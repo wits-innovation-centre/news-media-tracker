@@ -3,6 +3,7 @@ import { and, eq, isNull, like, sql, type SQL } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { dbm, DatabaseManagerServer } from '../../../lib/db/server';
 import {
+  articles,
   perpetrators,
   type Perpetrator,
   type NewPerpetrator,
@@ -90,9 +91,9 @@ export async function GET(request: Request) {
     const countColumn = sql<number>`count(*)`.as('count');
     const totalResult = condition
       ? await db
-          .select({ count: countColumn })
-          .from(perpetrators)
-          .where(condition)
+        .select({ count: countColumn })
+        .from(perpetrators)
+        .where(condition)
       : await db.select({ count: countColumn }).from(perpetrators);
     const total = totalResult[0]?.count ?? 0;
 
@@ -149,6 +150,22 @@ export async function POST(request: Request) {
     }
 
     const db = await ensureServerDatabase();
+    const linkedArticle = await db
+      .select({ id: articles.id })
+      .from(articles)
+      .where(eq(articles.id, coerced.articleId))
+      .limit(1);
+
+    if (!linkedArticle[0]) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Linked article not found',
+        },
+        { status: 400 },
+      );
+    }
+
     const now = new Date().toISOString();
     const newPerpetrator: NewPerpetrator = {
       id: uuidv4(),
@@ -231,6 +248,22 @@ export async function PUT(request: Request) {
     if (!coercedUpdate.articleId) {
       return NextResponse.json(
         { success: false, error: 'Article ID is required' },
+        { status: 400 },
+      );
+    }
+
+    const linkedArticle = await db
+      .select({ id: articles.id })
+      .from(articles)
+      .where(eq(articles.id, coercedUpdate.articleId))
+      .limit(1);
+
+    if (!linkedArticle[0]) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Linked article not found',
+        },
         { status: 400 },
       );
     }

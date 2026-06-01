@@ -23,6 +23,7 @@ import {
   claims,
   claimEvidence,
   appConfig,
+  migrationAppConfig,
   syncQueue,
   syncConflictRecords,
   migrations,
@@ -88,6 +89,42 @@ type PersistedReplayConflictRecord = {
 };
 
 class DatabaseManagerServer {
+  private async applyMigrations(
+    client: ReturnType<typeof createClient>,
+  ): Promise<void> {
+    for (const sql of migrations) {
+      try {
+        await client.execute(sql);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const isDuplicateColumnMigration =
+          sql.startsWith('ALTER TABLE') &&
+          message.toLowerCase().includes('duplicate column name');
+        if (!isDuplicateColumnMigration) {
+          throw error;
+        }
+      }
+    }
+  }
+
+  private async ensureRemoteAppConfigTable(): Promise<void> {
+    if (!this.remoteClient || !this.remoteDrizzle) {
+      return;
+    }
+
+    try {
+      await this.remoteDrizzle.select().from(appConfig).limit(1);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.toLowerCase().includes('no such table: app_config')) {
+        throw error;
+      }
+
+      await this.remoteClient.execute(migrationAppConfig);
+      await this.remoteDrizzle.select().from(appConfig).limit(1);
+    }
+  }
+
   private getDomainSeedClient(): DomainSeedSqlClient | null {
     if (!this.localClient) {
       return null;
@@ -209,19 +246,7 @@ class DatabaseManagerServer {
         syncConflictRecords,
       },
     });
-    for (const sql of migrations) {
-      try {
-        await this.localClient.execute(sql);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const isDuplicateColumnMigration =
-          sql.startsWith('ALTER TABLE') &&
-          message.toLowerCase().includes('duplicate column name');
-        if (!isDuplicateColumnMigration) {
-          throw error;
-        }
-      }
-    }
+    await this.applyMigrations(this.localClient);
     await this.seedRegisteredDomainSeeds();
     await this.seedDefaultRoleVocabulary();
   }
@@ -300,6 +325,10 @@ class DatabaseManagerServer {
   async configureRemote(url: string, authToken?: string): Promise<void> {
     try {
       this.remoteClient = createClient({ url, authToken });
+
+      // Ensure remote schema exists before probing config tables.
+      await this.applyMigrations(this.remoteClient);
+
       this.remoteDrizzle = drizzle(this.remoteClient, {
         schema: {
           articles,
@@ -327,8 +356,9 @@ class DatabaseManagerServer {
       });
       this.config.remote = { url, authToken, syncInterval: 15 };
       this.config.sync.enabled = true;
-      // Test remote connection
-      await this.remoteDrizzle.select().from(appConfig).limit(1);
+
+      // Test remote connection and ensure config table exists.
+      await this.ensureRemoteAppConfigTable();
       console.log('Remote database configured successfully');
     } catch (error) {
       console.error('Failed to configure remote database:', error);
