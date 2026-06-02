@@ -10,6 +10,9 @@ permissions:
   contents: read
   packages: write
 
+env:
+  NEXT_PUBLIC_BASE_PATH: ${{ vars.NEXT_PUBLIC_BASE_PATH || '/homicidetracker' }}
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -64,12 +67,19 @@ jobs:
           push: false
           load: true
           tags: nmt-healthcheck:${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_BASE_PATH=${{ env.NEXT_PUBLIC_BASE_PATH }}
           cache-from: type=gha
 
       - name: Smoke test container health endpoint
         shell: bash
         run: |
           set -euo pipefail
+
+          base_path="${NEXT_PUBLIC_BASE_PATH}"
+          if [ "$base_path" = "/" ]; then
+            base_path=""
+          fi
 
           docker run -d --name nmt-healthcheck -p 3000:3000 nmt-healthcheck:${{ github.sha }}
 
@@ -80,7 +90,7 @@ jobs:
           trap cleanup EXIT
 
           for attempt in {1..45}; do
-            if curl -fsS http://127.0.0.1:3000/api/health | grep -q '"status":"healthy"'; then
+            if curl -fsS "http://127.0.0.1:3000${base_path}/api/health" | grep -q '"status":"healthy"'; then
               echo "Healthcheck passed on attempt ${attempt}."
               exit 0
             fi
@@ -99,6 +109,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            NEXT_PUBLIC_BASE_PATH=${{ env.NEXT_PUBLIC_BASE_PATH }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

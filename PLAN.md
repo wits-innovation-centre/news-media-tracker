@@ -125,7 +125,7 @@
 
 ## Active update (2026-05-27)
 
-- Completed: added workspace-level VS Code settings at `apps/news-media-tracker/.vscode/settings.json` to force npm scripts integration to use `pnpm` and to exclude `.wiki` from watcher/search indexing.
+- Completed: added workspace-level VS Code settings at `apps/news-media-tracker/.vscode/settings.json` to force npm scripts integration to use `pnpm`.
 - Completed: mitigation targets scripts-panel reload stalls after `package.json` edits by reducing watcher pressure and avoiding npm/pnpm provider ambiguity.
 - Remaining: validate that the npm scripts panel refreshes immediately after `package.json` edits without requiring `pnpm install`.
 

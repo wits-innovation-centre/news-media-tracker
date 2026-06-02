@@ -34,6 +34,8 @@ RUN pnpm install --ignore-workspace --prod --frozen-lockfile
 FROM node:26-bookworm-slim AS builder
 WORKDIR /app
 ENV NODE_ENV=production
+ARG NEXT_PUBLIC_BASE_PATH=
+ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
 RUN chown node:node /app
 USER node
 COPY --chown=node:node --from=deps /app/node_modules ./node_modules
@@ -46,6 +48,8 @@ RUN ./node_modules/.bin/next build
 FROM node:26-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ARG NEXT_PUBLIC_BASE_PATH=
+ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
 # PORT is read by `next start`; override at runtime via -e PORT=<n>.
 ENV PORT=3000
 

@@ -1,14 +1,11 @@
 /** @type {import('next').NextConfig} */
-const configuredBasePath = process.env.NEXT_PUBLIC_BASE_PATH || '/homicidetracker';
+const configuredBasePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 const normalisedBasePath =
   configuredBasePath === '/'
     ? ''
     : `/${configuredBasePath.replace(/^\/+|\/+$/g, '')}`;
-const isDevelopment = process.env.NODE_ENV === 'development';
 
 const nextConfig = {
-  assetPrefix: isDevelopment ? undefined : normalisedBasePath || undefined,
-
   env: {
     NEXT_PUBLIC_BASE_PATH: normalisedBasePath,
   },
@@ -18,7 +15,7 @@ const nextConfig = {
   // ...(process.env.NODE_ENV === 'production' && { output: 'standalone' }),
 
   // Configure webpack for Electron compatibility
-  webpack: (config, { isServer, dev }) => {
+  webpack: (config, { isServer }) => {
     // Don't bundle these packages - they'll be available in the Electron environment
     if (!isServer) {
       config.resolve.fallback = {
