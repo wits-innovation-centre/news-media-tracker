@@ -66,8 +66,8 @@ interface ConnectedGraphWorkspaceProps {
   onSelectedCaseIdsChange: (caseIds: string[]) => void;
   onCasesReconciled?: (cases: DetailedEvent[]) => void;
   onArticlesReconciled?: (payload: {
-    winnerId: string;
-    loserId: string;
+    mergedId: string;
+    sourceIds: string[];
     mergedArticle: Record<string, unknown>;
   }) => void;
 }
@@ -126,8 +126,99 @@ const PARTICIPANT_NODE_REGEX = /^participant:(victim|perpetrator):(.*)$/;
 const GRAPH_MERGE_PERSIST_KEY = 'nmt.graph.merge-resolutions.v1';
 const GRAPH_AUDIT_LIMIT = 80;
 
+const ARTICLE_MERGEABLE_FIELDS = new Set([
+  'newsReportHeadline',
+  'newsReportUrl',
+  'dateOfPublication',
+  'author',
+  'wireService',
+  'language',
+  'typeOfSource',
+  'newsReportPlatform',
+  'notes',
+]);
+
+const EVENT_MERGEABLE_FIELDS = new Set([
+  'eventTypes',
+  'typeOfMurder',
+  'location',
+  'incidentTime',
+  'court',
+  'hearingType',
+  'notes',
+]);
+
+const VICTIM_MERGEABLE_FIELDS = new Set([
+  'victimName',
+  'victimAlias',
+  'victimAliases',
+  'dateOfDeath',
+  'dateOfDeathMode',
+  'dateOfDeathEnd',
+  'placeOfDeathProvince',
+  'placeOfDeathTown',
+  'typeOfLocation',
+  'policeStation',
+  'sexualAssault',
+  'genderOfVictim',
+  'raceOfVictim',
+  'nationality',
+  'ageOfVictim',
+  'ageRangeOfVictim',
+  'ageDescriptor',
+  'modeOfDeathGeneral',
+  'modeOfDeathSpecific',
+  'typeOfMurder',
+  'notes',
+]);
+
+const PERPETRATOR_MERGEABLE_FIELDS = new Set([
+  'perpetratorName',
+  'perpetratorAlias',
+  'suspectAliases',
+  'perpetratorRelationshipToVictim',
+  'suspectIdentified',
+  'suspectArrested',
+  'suspectCharged',
+  'charges',
+  'conviction',
+  'sentence',
+  'notes',
+]);
+
 const isPrimitive = (value: unknown): boolean =>
   value === null || ['string', 'number', 'boolean'].includes(typeof value);
+
+const isMergeableField = (
+  kind: MergeKind,
+  key: string,
+  participantRole?: 'victim' | 'perpetrator',
+): boolean => {
+  if (key === 'id' || key.endsWith('At') || key === 'syncStatus' || key === 'failureCount') {
+    return false;
+  }
+
+  if (kind === 'article') {
+    return ARTICLE_MERGEABLE_FIELDS.has(key);
+  }
+  if (kind === 'event') {
+    return EVENT_MERGEABLE_FIELDS.has(key);
+  }
+
+  if (participantRole === 'victim') {
+    return VICTIM_MERGEABLE_FIELDS.has(key);
+  }
+  return PERPETRATOR_MERGEABLE_FIELDS.has(key);
+};
+
+const createMergedEntityId = (kind: MergeKind, participantRole?: 'victim' | 'perpetrator'): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  const rolePart = participantRole ? `${participantRole}-` : '';
+  return `merged-${kind}-${rolePart}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+};
 
 const isBlankValue = (value: unknown): boolean => {
   if (value === null || value === undefined) {
@@ -334,12 +425,18 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
 
     const keys = new Set<string>();
     Object.keys(mergeModalState.leftEntity).forEach((key) => {
-      if (key !== 'id' && isPrimitive(mergeModalState.leftEntity[key])) {
+      if (
+        isPrimitive(mergeModalState.leftEntity[key]) &&
+        isMergeableField(mergeModalState.kind, key, mergeModalState.participantRole)
+      ) {
         keys.add(key);
       }
     });
     Object.keys(mergeModalState.rightEntity).forEach((key) => {
-      if (key !== 'id' && isPrimitive(mergeModalState.rightEntity[key])) {
+      if (
+        isPrimitive(mergeModalState.rightEntity[key]) &&
+        isMergeableField(mergeModalState.kind, key, mergeModalState.participantRole)
+      ) {
         keys.add(key);
       }
     });
@@ -562,8 +659,9 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
       return;
     }
 
-    const winnerId = primaryMergeSide === 'left' ? mergeModalState.leftId : mergeModalState.rightId;
-    const loserId = primaryMergeSide === 'left' ? mergeModalState.rightId : mergeModalState.leftId;
+    const leftId = mergeModalState.leftId;
+    const rightId = mergeModalState.rightId;
+    const mergedId = createMergedEntityId(mergeModalState.kind, mergeModalState.participantRole);
 
     const winnerEntity = primaryMergeSide === 'left'
       ? mergeModalState.leftEntity
@@ -589,13 +687,13 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
         ...loserEntity,
         ...winnerEntity,
         ...mergedEntity,
-        id: winnerId,
+        id: mergedId,
       };
 
       const nextCases = cases.map((case_) => {
         if (mergeModalState.participantRole === 'victim') {
           const updatedVictims = case_.victims.map((victim) => {
-            if (victim.id === winnerId || victim.id === loserId) {
+            if (victim.id === leftId || victim.id === rightId) {
               return mergedParticipant as typeof victim;
             }
             return victim;
@@ -608,7 +706,7 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
         }
 
         const updatedPerpetrators = case_.perpetrators.map((perpetrator) => {
-          if (perpetrator.id === winnerId || perpetrator.id === loserId) {
+          if (perpetrator.id === leftId || perpetrator.id === rightId) {
             return mergedParticipant as typeof perpetrator;
           }
           return perpetrator;
@@ -628,11 +726,11 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
         ...loserEntity,
         ...winnerEntity,
         ...mergedEntity,
-        id: winnerId,
+        id: mergedId,
       };
 
       const nextCases = cases.map((case_) => {
-        if (!case_.articleData || (case_.articleData.id !== winnerId && case_.articleData.id !== loserId)) {
+        if (!case_.articleData || (case_.articleData.id !== leftId && case_.articleData.id !== rightId)) {
           return case_;
         }
 
@@ -643,7 +741,7 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
       });
 
       onCasesReconciled?.(nextCases);
-      onArticlesReconciled?.({ winnerId, loserId, mergedArticle });
+      onArticlesReconciled?.({ mergedId, sourceIds: [leftId, rightId], mergedArticle });
     }
 
     if (mergeModalState.kind === 'event') {
@@ -655,14 +753,14 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
 
       const mergedEventRows = cases
         .map((case_) => {
-          if (case_.id !== winnerId && case_.id !== loserId) {
+          if (case_.id !== leftId && case_.id !== rightId) {
             return case_;
           }
 
           return {
             ...case_,
             ...eventMergedFields,
-            id: winnerId,
+            id: mergedId,
           };
         })
         .reduce<Map<string, DetailedEvent>>((acc, case_) => {
@@ -677,7 +775,7 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
           acc.set(key, {
             ...existing,
             ...eventMergedFields,
-            id: winnerId,
+            id: mergedId,
             victims: uniqueById([...existing.victims, ...case_.victims]),
             perpetrators: uniqueById([...existing.perpetrators, ...case_.perpetrators]),
           });
@@ -688,7 +786,7 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
       onCasesReconciled?.(nextCases);
 
       const nextSelection = new Set(
-        selectedCaseIds.map((id) => (id === loserId ? winnerId : id)),
+        selectedCaseIds.map((id) => (id === leftId || id === rightId ? mergedId : id)),
       );
       onSelectedCaseIdsChange(
         Array.from(nextSelection).filter((id) =>
@@ -697,7 +795,10 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
       );
     }
 
-    recordResolution(mergeModalState.edge, 'merged', { winnerId, loserId });
+    recordResolution(mergeModalState.edge, 'merged', {
+      winnerId: mergedId,
+      loserId: `${leftId},${rightId}`,
+    });
     closeMergeManager();
   };
 

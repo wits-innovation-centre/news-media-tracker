@@ -15,6 +15,8 @@
 - Verification: `pnpm run build` succeeds after the merge-manager and graph interactivity changes (existing analytics dynamic-route warning remains non-blocking).
 - Completed: rejected/accepted dashed-link decisions now persist in local storage and automatically re-apply on graph reload.
 - Completed: graph view now includes a merge audit log with timestamps, decision type, winner/retired references, and rejected-link restore action.
+- Completed: merge actions now use single-vertex semantics by creating a new merged entity ID and rewiring both source entities to the merged node.
+- Completed: merge manager cherry-pick options now exclude operational metadata (for example `syncStatus`, `failureCount`, timestamp fields) and only expose annotation-content fields.
 - Remaining: persist merge-reconciled entity writes through explicit offline merge endpoints so audit and structural changes remain durable across full data refreshes.
 - Risk/follow-up: event/article merge reconciliation currently operates at workspace state level and should be backed by explicit offline API merge endpoints for durable conflict lineage.
 

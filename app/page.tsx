@@ -1735,33 +1735,33 @@ export default function Home() {
   }, []);
 
   const handleGraphArticlesReconciled = useCallback(
-    (payload: { winnerId: string; loserId: string; mergedArticle: Record<string, unknown> }) => {
+    (payload: { mergedId: string; sourceIds: string[]; mergedArticle: Record<string, unknown> }) => {
       setLoadedArticles((current) => {
         const next = current
-          .filter((article) => article.id !== payload.loserId)
-          .map((article) => (article.id === payload.winnerId
-            ? ({ ...article, ...payload.mergedArticle, id: payload.winnerId } as Article)
+          .filter((article) => !payload.sourceIds.includes(article.id))
+          .map((article) => (article.id === payload.mergedId
+            ? ({ ...article, ...payload.mergedArticle, id: payload.mergedId } as Article)
             : article));
 
-        const hasWinner = next.some((article) => article.id === payload.winnerId);
+        const hasWinner = next.some((article) => article.id === payload.mergedId);
         if (hasWinner) {
           return next;
         }
 
         return [
           ...next,
-          { ...(payload.mergedArticle as Article), id: payload.winnerId },
+          { ...(payload.mergedArticle as Article), id: payload.mergedId },
         ];
       });
 
       if (
         selectedPointer?.kind === 'article' &&
-        (selectedPointer.id === payload.loserId || selectedPointer.id === payload.winnerId)
+        payload.sourceIds.includes(selectedPointer.id)
       ) {
         const nextPointer = {
           ...selectedPointer,
-          id: payload.winnerId,
-          articleId: payload.winnerId,
+          id: payload.mergedId,
+          articleId: payload.mergedId,
         };
         setSelectedPointer(nextPointer);
       }
