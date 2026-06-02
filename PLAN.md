@@ -4,6 +4,20 @@
 
 ## Active update (2026-06-01)
 
+## Active update (2026-06-02)
+
+- Completed: connected-graph dashed links are now actionable; clicking a dashed edge opens a Merge Manager modal.
+- Completed: Merge Manager supports per-field cherry-pick decisions and primary-side selection for article/event/participant reconciliation paths.
+- Completed: rejecting a dashed link now marks it invalid in-session and removes it from graph rendering.
+- Completed: accepting a merge now removes the dashed link and reconciles entities so retained nodes inherit link connectivity from removed candidates.
+- Completed: graph workspace now supports direct node dragging, scene panning, and ctrl/cmd+wheel zoom interactions for a more interactive exploration flow.
+- Completed: graph merge reconciliation now updates workspace case/article state so tree projections reflect merged winners and loser removal.
+- Verification: `pnpm run build` succeeds after the merge-manager and graph interactivity changes (existing analytics dynamic-route warning remains non-blocking).
+- Completed: rejected/accepted dashed-link decisions now persist in local storage and automatically re-apply on graph reload.
+- Completed: graph view now includes a merge audit log with timestamps, decision type, winner/retired references, and rejected-link restore action.
+- Remaining: persist merge-reconciled entity writes through explicit offline merge endpoints so audit and structural changes remain durable across full data refreshes.
+- Risk/follow-up: event/article merge reconciliation currently operates at workspace state level and should be backed by explicit offline API merge endpoints for durable conflict lineage.
+
 - Completed: document pane now renders structured frontmatter as editable form fields (Obsidian-style properties) instead of raw markdown frontmatter text editing.
 - Completed: document pane keeps a separate free-text Notes editor beneath the properties block to preserve the frontmatter + narrative document model.
 - Completed: article rows in the side tree now support explicit right-side caret collapse/expand behavior for child event/participant pointers.

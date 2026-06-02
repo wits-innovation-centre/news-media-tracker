@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { Badge, Button, Card } from 'react-bootstrap';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Badge, Button, Card, Form, Modal } from 'react-bootstrap';
 import type { DetailedEvent } from './list-homicides';
 import {
   GRAPH_SCALE_STEP,
+  type GraphEdge,
+  type GraphNode,
   buildConnectedGraphModel,
   clampGraphScale,
   nextGraphSelection,
@@ -62,14 +64,159 @@ interface ConnectedGraphWorkspaceProps {
   cases: DetailedEvent[];
   selectedCaseIds: string[];
   onSelectedCaseIdsChange: (caseIds: string[]) => void;
+  onCasesReconciled?: (cases: DetailedEvent[]) => void;
+  onArticlesReconciled?: (payload: {
+    winnerId: string;
+    loserId: string;
+    mergedArticle: Record<string, unknown>;
+  }) => void;
 }
+
+type MergeKind = 'article' | 'event' | 'participant';
+type MergeSide = 'left' | 'right';
+type MergeDecision = 'rejected' | 'merged';
+
+interface GraphResolutionRecord {
+  edgeId: string;
+  decision: MergeDecision;
+  resolvedAt: string;
+  sourceId: string;
+  targetId: string;
+  reason: string;
+  winnerId?: string;
+  loserId?: string;
+}
+
+interface GraphAuditEntry {
+  id: string;
+  edgeId: string;
+  decision: MergeDecision;
+  timestamp: string;
+  sourceLabel: string;
+  targetLabel: string;
+  reason: string;
+  winnerId?: string;
+  loserId?: string;
+}
+
+interface PersistedGraphMergeState {
+  resolutions: Record<string, GraphResolutionRecord>;
+  audit: GraphAuditEntry[];
+}
+
+interface MergeFieldChoice {
+  key: string;
+  leftValue: unknown;
+  rightValue: unknown;
+}
+
+interface MergeModalState {
+  edge: GraphEdge;
+  kind: MergeKind;
+  leftNode: GraphNode;
+  rightNode: GraphNode;
+  leftEntity: Record<string, unknown>;
+  rightEntity: Record<string, unknown>;
+  leftId: string;
+  rightId: string;
+  participantRole?: 'victim' | 'perpetrator';
+}
+
+const PARTICIPANT_NODE_REGEX = /^participant:(victim|perpetrator):(.*)$/;
+const GRAPH_MERGE_PERSIST_KEY = 'nmt.graph.merge-resolutions.v1';
+const GRAPH_AUDIT_LIMIT = 80;
+
+const isPrimitive = (value: unknown): boolean =>
+  value === null || ['string', 'number', 'boolean'].includes(typeof value);
+
+const isBlankValue = (value: unknown): boolean => {
+  if (value === null || value === undefined) {
+    return true;
+  }
+  if (typeof value === 'string') {
+    return value.trim() === '';
+  }
+  return false;
+};
+
+const formatFieldValue = (value: unknown): string => {
+  if (value === null || value === undefined || value === '') {
+    return 'empty';
+  }
+  if (Array.isArray(value) || typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
+
+const uniqueById = <T extends { id?: string | null }>(items: T[]): T[] => {
+  const seen = new Set<string>();
+  const deduped: T[] = [];
+  items.forEach((item) => {
+    const id = item.id ?? '';
+    if (!id || seen.has(id)) {
+      return;
+    }
+    seen.add(id);
+    deduped.push(item);
+  });
+  return deduped;
+};
+
+const formatAuditTimestamp = (isoValue: string): string => {
+  const parsed = new Date(isoValue);
+  if (Number.isNaN(parsed.getTime())) {
+    return isoValue;
+  }
+  return parsed.toLocaleString();
+};
+
+const loadPersistedGraphMergeState = (): PersistedGraphMergeState => {
+  if (typeof window === 'undefined') {
+    return { resolutions: {}, audit: [] };
+  }
+
+  try {
+    const raw = window.localStorage.getItem(GRAPH_MERGE_PERSIST_KEY);
+    if (!raw) {
+      return { resolutions: {}, audit: [] };
+    }
+
+    const parsed = JSON.parse(raw) as Partial<PersistedGraphMergeState> | null;
+    const resolutions =
+      parsed?.resolutions && typeof parsed.resolutions === 'object'
+        ? (parsed.resolutions as Record<string, GraphResolutionRecord>)
+        : {};
+    const audit = Array.isArray(parsed?.audit)
+      ? (parsed?.audit as GraphAuditEntry[])
+      : [];
+    return { resolutions, audit };
+  } catch {
+    return { resolutions: {}, audit: [] };
+  }
+};
 
 const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
   cases,
   selectedCaseIds,
   onSelectedCaseIdsChange,
+  onCasesReconciled,
+  onArticlesReconciled,
 }) => {
   const [scale, setScale] = useState(1);
+  const [nodePositionOverrides, setNodePositionOverrides] = useState<Record<string, GraphPoint>>({});
+  const [resolutionRecords, setResolutionRecords] = useState<Record<string, GraphResolutionRecord>>({});
+  const [mergeAudit, setMergeAudit] = useState<GraphAuditEntry[]>([]);
+  const [mergeModalState, setMergeModalState] = useState<MergeModalState | null>(null);
+  const [primaryMergeSide, setPrimaryMergeSide] = useState<MergeSide>('left');
+  const [fieldChoices, setFieldChoices] = useState<Record<string, MergeSide>>({});
+  const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
+
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const sceneRef = useRef<HTMLDivElement | null>(null);
+  const panStartRef = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
+
   const caseIds = useMemo(
     () => cases.map((case_) => case_.id).filter(Boolean) as string[],
     [cases],
@@ -84,14 +231,127 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
     () => buildConnectedGraphModel(activeCases),
     [activeCases],
   );
+
+  useEffect(() => {
+    const persisted = loadPersistedGraphMergeState();
+    setResolutionRecords(persisted.resolutions);
+    setMergeAudit(persisted.audit);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const payload: PersistedGraphMergeState = {
+      resolutions: resolutionRecords,
+      audit: mergeAudit,
+    };
+    window.localStorage.setItem(GRAPH_MERGE_PERSIST_KEY, JSON.stringify(payload));
+  }, [mergeAudit, resolutionRecords]);
+
+  const dismissedSoftEdgeIds = useMemo(
+    () =>
+      new Set(
+        Object.values(resolutionRecords)
+          .map((record) => record.edgeId)
+          .filter(Boolean),
+      ),
+    [resolutionRecords],
+  );
+
+  const visibleEdges = useMemo(
+    () => graphModel.edges.filter((edge) => !dismissedSoftEdgeIds.has(edge.id)),
+    [dismissedSoftEdgeIds, graphModel.edges],
+  );
+
+  const graphNodesById = useMemo(
+    () => new Map(graphModel.nodes.map((node) => [node.id, node])),
+    [graphModel.nodes],
+  );
+
   const hardEdges = useMemo(
-    () => graphModel.edges.filter((edge) => edge.style === 'hard'),
-    [graphModel.edges],
+    () => visibleEdges.filter((edge) => edge.style === 'hard'),
+    [visibleEdges],
   );
   const softEdges = useMemo(
-    () => graphModel.edges.filter((edge) => edge.style === 'soft'),
-    [graphModel.edges],
+    () => visibleEdges.filter((edge) => edge.style === 'soft'),
+    [visibleEdges],
   );
+
+  const resolveParticipantEntity = useMemo(() => {
+    return (role: 'victim' | 'perpetrator', id: string): Record<string, unknown> | null => {
+      for (const case_ of cases) {
+        if (role === 'victim') {
+          const match = case_.victims.find((victim) => victim.id === id);
+          if (match) {
+            return match as unknown as Record<string, unknown>;
+          }
+          continue;
+        }
+
+        const match = case_.perpetrators.find((perpetrator) => perpetrator.id === id);
+        if (match) {
+          return match as unknown as Record<string, unknown>;
+        }
+      }
+      return null;
+    };
+  }, [cases]);
+
+  const resolveArticleEntity = useMemo(() => {
+    return (id: string): Record<string, unknown> | null => {
+      const match = cases.find((case_) => case_.articleData?.id === id)?.articleData;
+      return match ? (match as unknown as Record<string, unknown>) : null;
+    };
+  }, [cases]);
+
+  const resolveEventEntity = useMemo(() => {
+    return (id: string): Record<string, unknown> | null => {
+      const match = cases.find((case_) => case_.id === id);
+      if (!match) {
+        return null;
+      }
+
+      const editable = Object.entries(match).reduce<Record<string, unknown>>((acc, [key, value]) => {
+        if (key === 'id' || key === 'articleData' || key === 'victims' || key === 'perpetrators') {
+          return acc;
+        }
+        if (isPrimitive(value)) {
+          acc[key] = value;
+        }
+        return acc;
+      }, {});
+
+      return editable;
+    };
+  }, [cases]);
+
+  const mergeFieldChoices = useMemo<MergeFieldChoice[]>(() => {
+    if (!mergeModalState) {
+      return [];
+    }
+
+    const keys = new Set<string>();
+    Object.keys(mergeModalState.leftEntity).forEach((key) => {
+      if (key !== 'id' && isPrimitive(mergeModalState.leftEntity[key])) {
+        keys.add(key);
+      }
+    });
+    Object.keys(mergeModalState.rightEntity).forEach((key) => {
+      if (key !== 'id' && isPrimitive(mergeModalState.rightEntity[key])) {
+        keys.add(key);
+      }
+    });
+
+    return Array.from(keys)
+      .sort((left, right) => left.localeCompare(right))
+      .map((key) => ({
+        key,
+        leftValue: mergeModalState.leftEntity[key],
+        rightValue: mergeModalState.rightEntity[key],
+      }));
+  }, [mergeModalState]);
 
   const positionedNodes = useMemo(() => {
     const articles = graphModel.nodes
@@ -126,12 +386,12 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
       return {
         ...node,
         position: {
-          x: base.x + subtypeOffset,
-          y: base.y,
+          x: nodePositionOverrides[node.id]?.x ?? base.x + subtypeOffset,
+          y: nodePositionOverrides[node.id]?.y ?? base.y,
         },
       };
     });
-  }, [graphModel.nodes]);
+  }, [graphModel.nodes, nodePositionOverrides]);
 
   const positionsById = useMemo(() => {
     return new Map(positionedNodes.map((node) => [node.id, node.position]));
@@ -145,6 +405,383 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
   const stepSelection = (direction: 'next' | 'prev') => {
     onSelectedCaseIdsChange(nextGraphSelection(caseIds, selectedCaseIds, direction));
   };
+
+  const recordResolution = (
+    edge: GraphEdge,
+    decision: MergeDecision,
+    payload?: { winnerId?: string; loserId?: string },
+  ) => {
+    const now = new Date().toISOString();
+    const leftNode = graphNodesById.get(edge.sourceId);
+    const rightNode = graphNodesById.get(edge.targetId);
+
+    const record: GraphResolutionRecord = {
+      edgeId: edge.id,
+      decision,
+      resolvedAt: now,
+      sourceId: edge.sourceId,
+      targetId: edge.targetId,
+      reason: edge.reason,
+      winnerId: payload?.winnerId,
+      loserId: payload?.loserId,
+    };
+
+    setResolutionRecords((current) => ({
+      ...current,
+      [edge.id]: record,
+    }));
+
+    const auditEntry: GraphAuditEntry = {
+      id: `${edge.id}:${now}`,
+      edgeId: edge.id,
+      decision,
+      timestamp: now,
+      sourceLabel: leftNode?.label || edge.sourceId,
+      targetLabel: rightNode?.label || edge.targetId,
+      reason: edge.reason,
+      winnerId: payload?.winnerId,
+      loserId: payload?.loserId,
+    };
+
+    setMergeAudit((current) => [auditEntry, ...current].slice(0, GRAPH_AUDIT_LIMIT));
+  };
+
+  const restoreRejectedResolution = (edgeId: string) => {
+    setResolutionRecords((current) => {
+      const existing = current[edgeId];
+      if (!existing || existing.decision !== 'rejected') {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[edgeId];
+      return next;
+    });
+  };
+
+  const openMergeManager = (edge: GraphEdge) => {
+    if (edge.style !== 'soft') {
+      return;
+    }
+
+    const leftNode = graphNodesById.get(edge.sourceId);
+    const rightNode = graphNodesById.get(edge.targetId);
+    if (!leftNode || !rightNode || leftNode.kind !== rightNode.kind) {
+      return;
+    }
+
+    if (leftNode.kind === 'participant') {
+      const leftMatch = edge.sourceId.match(PARTICIPANT_NODE_REGEX);
+      const rightMatch = edge.targetId.match(PARTICIPANT_NODE_REGEX);
+      if (!leftMatch || !rightMatch) {
+        return;
+      }
+
+      const participantRole = leftMatch[1] as 'victim' | 'perpetrator';
+      if (participantRole !== (rightMatch[1] as 'victim' | 'perpetrator')) {
+        return;
+      }
+
+      const leftId = leftMatch[2];
+      const rightId = rightMatch[2];
+      const leftEntity = resolveParticipantEntity(participantRole, leftId);
+      const rightEntity = resolveParticipantEntity(participantRole, rightId);
+      if (!leftEntity || !rightEntity) {
+        return;
+      }
+
+      setMergeModalState({
+        edge,
+        kind: 'participant',
+        leftNode,
+        rightNode,
+        leftEntity,
+        rightEntity,
+        leftId,
+        rightId,
+        participantRole,
+      });
+      setPrimaryMergeSide('left');
+      return;
+    }
+
+    if (leftNode.kind === 'article') {
+      const leftId = edge.sourceId.slice('article:'.length);
+      const rightId = edge.targetId.slice('article:'.length);
+      const leftEntity = resolveArticleEntity(leftId);
+      const rightEntity = resolveArticleEntity(rightId);
+      if (!leftEntity || !rightEntity) {
+        return;
+      }
+
+      setMergeModalState({
+        edge,
+        kind: 'article',
+        leftNode,
+        rightNode,
+        leftEntity,
+        rightEntity,
+        leftId,
+        rightId,
+      });
+      setPrimaryMergeSide('left');
+      return;
+    }
+
+    if (leftNode.kind === 'event') {
+      const leftId = edge.sourceId.slice('event:'.length);
+      const rightId = edge.targetId.slice('event:'.length);
+      const leftEntity = resolveEventEntity(leftId);
+      const rightEntity = resolveEventEntity(rightId);
+      if (!leftEntity || !rightEntity) {
+        return;
+      }
+
+      setMergeModalState({
+        edge,
+        kind: 'event',
+        leftNode,
+        rightNode,
+        leftEntity,
+        rightEntity,
+        leftId,
+        rightId,
+      });
+      setPrimaryMergeSide('left');
+    }
+  };
+
+  const closeMergeManager = () => {
+    setMergeModalState(null);
+    setFieldChoices({});
+    setPrimaryMergeSide('left');
+  };
+
+  const applyMerge = () => {
+    if (!mergeModalState) {
+      return;
+    }
+
+    const winnerId = primaryMergeSide === 'left' ? mergeModalState.leftId : mergeModalState.rightId;
+    const loserId = primaryMergeSide === 'left' ? mergeModalState.rightId : mergeModalState.leftId;
+
+    const winnerEntity = primaryMergeSide === 'left'
+      ? mergeModalState.leftEntity
+      : mergeModalState.rightEntity;
+    const loserEntity = primaryMergeSide === 'left'
+      ? mergeModalState.rightEntity
+      : mergeModalState.leftEntity;
+
+    const mergedEntity = mergeFieldChoices.reduce<Record<string, unknown>>(
+      (acc, field) => {
+        const chosenSide = fieldChoices[field.key] ?? primaryMergeSide;
+        const value = chosenSide === 'left' ? field.leftValue : field.rightValue;
+        acc[field.key] = value;
+        return acc;
+      },
+      {
+        ...winnerEntity,
+      },
+    );
+
+    if (mergeModalState.kind === 'participant' && mergeModalState.participantRole) {
+      const mergedParticipant = {
+        ...loserEntity,
+        ...winnerEntity,
+        ...mergedEntity,
+        id: winnerId,
+      };
+
+      const nextCases = cases.map((case_) => {
+        if (mergeModalState.participantRole === 'victim') {
+          const updatedVictims = case_.victims.map((victim) => {
+            if (victim.id === winnerId || victim.id === loserId) {
+              return mergedParticipant as typeof victim;
+            }
+            return victim;
+          });
+
+          return {
+            ...case_,
+            victims: uniqueById(updatedVictims),
+          };
+        }
+
+        const updatedPerpetrators = case_.perpetrators.map((perpetrator) => {
+          if (perpetrator.id === winnerId || perpetrator.id === loserId) {
+            return mergedParticipant as typeof perpetrator;
+          }
+          return perpetrator;
+        });
+
+        return {
+          ...case_,
+          perpetrators: uniqueById(updatedPerpetrators),
+        };
+      });
+
+      onCasesReconciled?.(nextCases);
+    }
+
+    if (mergeModalState.kind === 'article') {
+      const mergedArticle = {
+        ...loserEntity,
+        ...winnerEntity,
+        ...mergedEntity,
+        id: winnerId,
+      };
+
+      const nextCases = cases.map((case_) => {
+        if (!case_.articleData || (case_.articleData.id !== winnerId && case_.articleData.id !== loserId)) {
+          return case_;
+        }
+
+        return {
+          ...case_,
+          articleData: mergedArticle as typeof case_.articleData,
+        };
+      });
+
+      onCasesReconciled?.(nextCases);
+      onArticlesReconciled?.({ winnerId, loserId, mergedArticle });
+    }
+
+    if (mergeModalState.kind === 'event') {
+      const eventMergedFields = {
+        ...loserEntity,
+        ...winnerEntity,
+        ...mergedEntity,
+      };
+
+      const mergedEventRows = cases
+        .map((case_) => {
+          if (case_.id !== winnerId && case_.id !== loserId) {
+            return case_;
+          }
+
+          return {
+            ...case_,
+            ...eventMergedFields,
+            id: winnerId,
+          };
+        })
+        .reduce<Map<string, DetailedEvent>>((acc, case_) => {
+          const articleId = case_.articleData?.id ?? '';
+          const key = `${case_.id}::${articleId}`;
+          const existing = acc.get(key);
+          if (!existing) {
+            acc.set(key, case_);
+            return acc;
+          }
+
+          acc.set(key, {
+            ...existing,
+            ...eventMergedFields,
+            id: winnerId,
+            victims: uniqueById([...existing.victims, ...case_.victims]),
+            perpetrators: uniqueById([...existing.perpetrators, ...case_.perpetrators]),
+          });
+          return acc;
+        }, new Map());
+
+      const nextCases = Array.from(mergedEventRows.values());
+      onCasesReconciled?.(nextCases);
+
+      const nextSelection = new Set(
+        selectedCaseIds.map((id) => (id === loserId ? winnerId : id)),
+      );
+      onSelectedCaseIdsChange(
+        Array.from(nextSelection).filter((id) =>
+          nextCases.some((case_) => case_.id === id),
+        ),
+      );
+    }
+
+    recordResolution(mergeModalState.edge, 'merged', { winnerId, loserId });
+    closeMergeManager();
+  };
+
+  const rejectMerge = () => {
+    if (!mergeModalState) {
+      return;
+    }
+    recordResolution(mergeModalState.edge, 'rejected');
+    closeMergeManager();
+  };
+
+  const onScenePointerDown: React.PointerEventHandler<HTMLDivElement> = (event) => {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+    if (!canvasRef.current) {
+      return;
+    }
+
+    panStartRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      scrollLeft: canvasRef.current.scrollLeft,
+      scrollTop: canvasRef.current.scrollTop,
+    };
+    setIsPanning(true);
+  };
+
+  const onCanvasPointerMove: React.PointerEventHandler<HTMLDivElement> = (event) => {
+    if (draggingNodeId && sceneRef.current) {
+      const rect = sceneRef.current.getBoundingClientRect();
+      const rawX = (event.clientX - rect.left) / scale;
+      const rawY = (event.clientY - rect.top) / scale;
+      setNodePositionOverrides((current) => ({
+        ...current,
+        [draggingNodeId]: {
+          x: Math.max(80, Math.min(GRAPH_VIEW_WIDTH - 80, rawX)),
+          y: Math.max(56, Math.min(GRAPH_VIEW_HEIGHT - 56, rawY)),
+        },
+      }));
+      return;
+    }
+
+    if (isPanning && panStartRef.current && canvasRef.current) {
+      const dx = event.clientX - panStartRef.current.x;
+      const dy = event.clientY - panStartRef.current.y;
+      canvasRef.current.scrollLeft = panStartRef.current.scrollLeft - dx;
+      canvasRef.current.scrollTop = panStartRef.current.scrollTop - dy;
+    }
+  };
+
+  const onCanvasPointerUp: React.PointerEventHandler<HTMLDivElement> = () => {
+    setDraggingNodeId(null);
+    setIsPanning(false);
+    panStartRef.current = null;
+  };
+
+  const onCanvasWheel: React.WheelEventHandler<HTMLDivElement> = (event) => {
+    if (!event.ctrlKey && !event.metaKey) {
+      return;
+    }
+    event.preventDefault();
+    const delta = event.deltaY < 0 ? GRAPH_SCALE_STEP : -GRAPH_SCALE_STEP;
+    setScale((prev) => clampGraphScale(prev + delta));
+  };
+
+  React.useEffect(() => {
+    if (!mergeModalState) {
+      return;
+    }
+
+    const nextChoices = mergeFieldChoices.reduce<Record<string, MergeSide>>((acc, field) => {
+      if (!isBlankValue(field.leftValue) && isBlankValue(field.rightValue)) {
+        acc[field.key] = 'left';
+      } else if (isBlankValue(field.leftValue) && !isBlankValue(field.rightValue)) {
+        acc[field.key] = 'right';
+      } else {
+        acc[field.key] = primaryMergeSide;
+      }
+      return acc;
+    }, {});
+
+    setFieldChoices(nextChoices);
+  }, [mergeFieldChoices, mergeModalState, primaryMergeSide]);
 
   return (
     <Card className="workspace-surface h-100">
@@ -209,10 +846,16 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
         </div>
 
         <div
+          ref={canvasRef}
           className="graph-canvas"
+          style={{ cursor: isPanning ? 'grabbing' : undefined }}
           tabIndex={0}
           role="region"
           aria-label="Connected graph canvas"
+          onPointerMove={onCanvasPointerMove}
+          onPointerUp={onCanvasPointerUp}
+          onPointerLeave={onCanvasPointerUp}
+          onWheel={onCanvasWheel}
           onKeyDown={(event) => {
             if (event.key === 'ArrowRight') {
               event.preventDefault();
@@ -240,7 +883,13 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
             style={{ transform: `scale(${scale})` }}
             role="presentation"
           >
-            <div className="graph-scene" role="list" aria-label="Graph entity nodes">
+            <div
+              ref={sceneRef}
+              className={`graph-scene${isPanning ? ' is-panning' : ''}`}
+              role="list"
+              aria-label="Graph entity nodes"
+              onPointerDown={onScenePointerDown}
+            >
               <svg
                 className="graph-edges"
                 viewBox={`0 0 ${GRAPH_VIEW_WIDTH} ${GRAPH_VIEW_HEIGHT}`}
@@ -256,7 +905,7 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
                     <stop offset="100%" stopColor="#fb7185" stopOpacity="0.6" />
                   </linearGradient>
                 </defs>
-                {graphModel.edges.map((edge) => {
+                {visibleEdges.map((edge) => {
                   const source = positionsById.get(edge.sourceId);
                   const target = positionsById.get(edge.targetId);
                   if (!source || !target) {
@@ -272,6 +921,8 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
                       d={buildCurvedEdgePath(source, target)}
                       className={`graph-edge graph-edge-${edge.style}`}
                       stroke={strokeColor}
+                      style={{ pointerEvents: edge.style === 'soft' ? 'stroke' : 'none' }}
+                      onClick={() => openMergeManager(edge)}
                     />
                   );
                 })}
@@ -304,6 +955,11 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
                         onSelectedCaseIdsChange([eventId]);
                       }
                     }}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setDraggingNodeId(node.id);
+                    }}
                   >
                     <span className="graph-node-kind">
                       {node.kind}
@@ -321,7 +977,7 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
         <div className="d-flex flex-column gap-2" aria-label="Graph edge summary">
           <small className="graph-muted-text">
             Solid edges are hard capture links. Dashed edges are merge/dedup
-            suggestions from similarity scoring.
+            suggestions from similarity scoring. Click a dashed line to open Merge Manager.
           </small>
           <div className="d-flex flex-wrap gap-2">
             <Badge bg="dark">Solid (hard): {hardEdges.length}</Badge>
@@ -340,7 +996,134 @@ const ConnectedGraphWorkspace: React.FC<ConnectedGraphWorkspaceProps> = ({
             </div>
           ))}
         </div>
+
+        <div className="d-flex flex-column gap-2" aria-label="Graph merge audit log">
+          <small className="graph-muted-text">Merge Audit</small>
+          {mergeAudit.length === 0 ? (
+            <small className="text-muted">No merge decisions recorded yet.</small>
+          ) : (
+            mergeAudit.slice(0, 10).map((entry) => (
+              <div key={entry.id} className="graph-audit-note">
+                <div className="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                  <small className="graph-audit-note-text">
+                    <strong>{entry.decision === 'merged' ? 'Merged' : 'Rejected'}:</strong>{' '}
+                    {entry.sourceLabel}{' -> '}{entry.targetLabel}
+                    {entry.winnerId
+                      ? ` (winner ${entry.winnerId}${entry.loserId ? `, retired ${entry.loserId}` : ''})`
+                      : ''}
+                  </small>
+                  {entry.decision === 'rejected' && (
+                    <Button
+                      size="sm"
+                      variant="outline-secondary"
+                      onClick={() => restoreRejectedResolution(entry.edgeId)}
+                    >
+                      Restore link
+                    </Button>
+                  )}
+                </div>
+                <small className="graph-audit-note-meta">
+                  {formatAuditTimestamp(entry.timestamp)} - {entry.reason}
+                </small>
+              </div>
+            ))
+          )}
+        </div>
       </Card.Body>
+
+      <Modal
+        show={Boolean(mergeModalState)}
+        onHide={closeMergeManager}
+        centered
+        size="lg"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Merge Manager</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {mergeModalState && (
+            <div className="d-flex flex-column gap-3">
+              <p className="mb-0 text-muted">
+                Resolve the dashed link between <strong>{mergeModalState.leftNode.label}</strong> and{' '}
+                <strong>{mergeModalState.rightNode.label}</strong>.
+              </p>
+
+              <div className="d-flex flex-wrap gap-3">
+                <Form.Check
+                  type="radio"
+                  id="merge-side-left"
+                  name="merge-primary-side"
+                  label={`Keep left as primary (${mergeModalState.leftNode.label})`}
+                  checked={primaryMergeSide === 'left'}
+                  onChange={() => setPrimaryMergeSide('left')}
+                />
+                <Form.Check
+                  type="radio"
+                  id="merge-side-right"
+                  name="merge-primary-side"
+                  label={`Keep right as primary (${mergeModalState.rightNode.label})`}
+                  checked={primaryMergeSide === 'right'}
+                  onChange={() => setPrimaryMergeSide('right')}
+                />
+              </div>
+
+              {mergeFieldChoices.length > 0 && (
+                <div className="d-flex flex-column gap-2">
+                  {mergeFieldChoices.map((field) => (
+                    <div key={field.key} className="border rounded p-2">
+                      <strong className="d-block mb-2">{field.key}</strong>
+                      <div className="d-flex flex-wrap gap-3">
+                        <Form.Check
+                          type="radio"
+                          id={`merge-field-${field.key}-left`}
+                          name={`merge-field-${field.key}`}
+                          label={`Left: ${formatFieldValue(field.leftValue)}`}
+                          checked={(fieldChoices[field.key] ?? primaryMergeSide) === 'left'}
+                          onChange={() =>
+                            setFieldChoices((current) => ({
+                              ...current,
+                              [field.key]: 'left',
+                            }))
+                          }
+                        />
+                        <Form.Check
+                          type="radio"
+                          id={`merge-field-${field.key}-right`}
+                          name={`merge-field-${field.key}`}
+                          label={`Right: ${formatFieldValue(field.rightValue)}`}
+                          checked={(fieldChoices[field.key] ?? primaryMergeSide) === 'right'}
+                          onChange={() =>
+                            setFieldChoices((current) => ({
+                              ...current,
+                              [field.key]: 'right',
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <small className="text-muted">
+                Rejecting marks this dashed link invalid and removes it from the graph.
+                Merging removes the dashed link and reconciles connected links onto the kept entity.
+              </small>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-secondary" onClick={closeMergeManager}>
+            Cancel
+          </Button>
+          <Button variant="outline-danger" onClick={rejectMerge}>
+            Reject Merge
+          </Button>
+          <Button variant="primary" onClick={applyMerge}>
+            Merge with Cherry-Pick
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Card>
   );
 };

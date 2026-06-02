@@ -1729,6 +1729,48 @@ export default function Home() {
     }
   };
 
+  const handleGraphCasesReconciled = useCallback((nextCases: DetailedEvent[]) => {
+    setLoadedCases(nextCases);
+    setAnnotationsRefreshKey((k) => k + 1);
+  }, []);
+
+  const handleGraphArticlesReconciled = useCallback(
+    (payload: { winnerId: string; loserId: string; mergedArticle: Record<string, unknown> }) => {
+      setLoadedArticles((current) => {
+        const next = current
+          .filter((article) => article.id !== payload.loserId)
+          .map((article) => (article.id === payload.winnerId
+            ? ({ ...article, ...payload.mergedArticle, id: payload.winnerId } as Article)
+            : article));
+
+        const hasWinner = next.some((article) => article.id === payload.winnerId);
+        if (hasWinner) {
+          return next;
+        }
+
+        return [
+          ...next,
+          { ...(payload.mergedArticle as Article), id: payload.winnerId },
+        ];
+      });
+
+      if (
+        selectedPointer?.kind === 'article' &&
+        (selectedPointer.id === payload.loserId || selectedPointer.id === payload.winnerId)
+      ) {
+        const nextPointer = {
+          ...selectedPointer,
+          id: payload.winnerId,
+          articleId: payload.winnerId,
+        };
+        setSelectedPointer(nextPointer);
+      }
+
+      setAnnotationsRefreshKey((k) => k + 1);
+    },
+    [selectedPointer],
+  );
+
   const handleDeleteDocument = useCallback(async () => {
     if (!selectedPointer) {
       return;
@@ -2680,6 +2722,8 @@ export default function Home() {
                 cases={graphCases}
                 selectedCaseIds={selectedCaseIds}
                 onSelectedCaseIdsChange={setSelectedCaseIds}
+                onCasesReconciled={handleGraphCasesReconciled}
+                onArticlesReconciled={handleGraphArticlesReconciled}
               />
             </div>
           )}
