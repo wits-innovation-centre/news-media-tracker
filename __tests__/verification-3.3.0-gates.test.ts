@@ -194,7 +194,7 @@ describe('[gate-4] Stitch workspace UI and accessibility checks', () => {
   const readRootFile = (relativePath: string) =>
     fs.readFileSync(path.join(process.cwd(), relativePath), 'utf8');
 
-  it('detects current absence of Form|Graph switching and graph controls (blocker signal)', () => {
+  it('confirms Form|Graph workspace and sidebar accessibility contracts', () => {
     const pageSource = readRootFile('app/page.tsx');
     const inputSource = readRootFile('lib/components/input-homicide.tsx');
     const globalCss = readRootFile('app/globals.css');
@@ -207,10 +207,10 @@ describe('[gate-4] Stitch workspace UI and accessibility checks', () => {
     const keyboardPattern = /ArrowLeft|ArrowRight|onKeyDown|aria-controls/i;
     const themeTogglePattern =
       /workspace-theme|Switch to (light|dark) theme|bi-moon-stars|bi-sun/i;
-    const sidebarFilterPattern = /aria-label=['"]Filter annotations['"]/i;
+    const sidebarFilterPattern = /aria-label=['"]Filter (annotations|documents)['"]/i;
     const sidebarFilterTogglePattern =
-      /aria-label=['"]Cycle annotation filter['"]/i;
-    const sidebarRefreshPattern = /aria-label=['"]Refresh sidebar data['"]/i;
+      /aria-label=['"]Cycle (annotation|status) filter['"]/i;
+    const sidebarRefreshPattern = /aria-label=['"]Refresh (sidebar|tree) data['"]/i;
     const topbarFilterPattern = /aria-label=['"]Filter events['"]/i;
     const graphSplitPattern = /id=['"]workspace-panel-graph['"][\s\S]*<Row/i;
 
