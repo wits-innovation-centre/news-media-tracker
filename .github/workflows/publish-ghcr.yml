@@ -36,11 +36,47 @@ jobs:
             type=ref,event=tag
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Build image for healthcheck
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .ghcr/Dockerfile
+          target: runner
+          push: false
+          load: true
+          tags: nmt-healthcheck:${{ github.sha }}
+          cache-from: type=gha
+
+      - name: Smoke test container health endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run -d --name nmt-healthcheck -p 3000:3000 nmt-healthcheck:${{ github.sha }}
+
+          cleanup() {
+            docker logs nmt-healthcheck || true
+            docker rm -f nmt-healthcheck || true
+          }
+          trap cleanup EXIT
+
+          for attempt in {1..45}; do
+            if curl -fsS http://127.0.0.1:3000/api/health | grep -q '"status":"healthy"'; then
+              echo "Healthcheck passed on attempt ${attempt}."
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Healthcheck failed: /api/health did not report healthy in time."
+          exit 1
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: .ghcr/Dockerfile
+          target: runner
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

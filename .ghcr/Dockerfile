@@ -71,3 +71,7 @@ COPY --chown=node:node --from=deps /app/node_modules ./node_modules
 COPY --chown=node:node . .
 
 ENTRYPOINT ["./node_modules/.bin/tsx", "scripts/setup-sqld.ts"]
+
+# Keep the production web runner as the default final stage for plain
+# `docker build` / GHCR publishing when no --target is specified.
+FROM runner AS default-image
