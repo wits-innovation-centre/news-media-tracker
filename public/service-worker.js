@@ -1,6 +1,3 @@
-const STATIC_CACHE = 'news-media-cache-v1';
-const API_CACHE = 'api-cache-v1';
-const RUNTIME_CACHE = 'runtime-cache-v1';
 const OFFLINE_QUEUE_DB = 'offline-post-queue';
 const OFFLINE_QUEUE_STORE = 'queue';
 const OFFLINE_QUEUE_DB_VERSION = 2;
@@ -18,6 +15,14 @@ const BASE_PATH = (() => {
     return '';
   }
 })();
+
+const CACHE_SCOPE_KEY = BASE_PATH === ''
+  ? 'root'
+  : BASE_PATH.replace(/^\//, '').replace(/\//g, '-');
+const STATIC_CACHE = `news-media-cache-${CACHE_SCOPE_KEY}-v2`;
+const API_CACHE = `api-cache-${CACHE_SCOPE_KEY}-v2`;
+const RUNTIME_CACHE = `runtime-cache-${CACHE_SCOPE_KEY}-v2`;
+const CACHE_PREFIXES = ['news-media-cache-', 'api-cache-', 'runtime-cache-'];
 
 const withBasePath = path => {
   if (path.startsWith('http://') || path.startsWith('https://')) {
@@ -66,6 +71,19 @@ self.addEventListener('install', event => {
       return cache.addAll(filesToCache);
     })
   );
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    const valid = new Set([STATIC_CACHE, API_CACHE, RUNTIME_CACHE]);
+    const staleKeys = keys.filter(key =>
+      CACHE_PREFIXES.some(prefix => key.startsWith(prefix)) && !valid.has(key),
+    );
+
+    await Promise.all(staleKeys.map(key => caches.delete(key)));
+    await self.clients.claim();
+  })());
 });
 
 // Runtime caching for API and other requests

@@ -7,6 +7,11 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 const withBasePath = (path: string) =>
   `${basePath}${path.startsWith('/') ? path : `/${path}`}`;
 
+const normaliseScopePath = (input: string): string => {
+  const withoutTrailingSlash = input.replace(/\/+$/, '');
+  return withoutTrailingSlash === '' ? '/' : `${withoutTrailingSlash}/`;
+};
+
 /** Run the full storage health check and emit structured console output. */
 async function runStorageHealthCheck(): Promise<void> {
   if (!('storage' in navigator)) {
@@ -49,8 +54,30 @@ export default function BootPWA() {
     if ('serviceWorker' in navigator) {
       const register = async () => {
         try {
+          const expectedScopePath = normaliseScopePath(withBasePath('/'));
+          const registrations = await navigator.serviceWorker.getRegistrations();
+
+          // Ensure an old root-scoped worker does not keep controlling pages
+          // after switching between `/` and `/homicidetracker` deployments.
+          await Promise.all(
+            registrations.map(async (registration) => {
+              try {
+                const scopePath = normaliseScopePath(
+                  new URL(registration.scope).pathname,
+                );
+                if (scopePath !== expectedScopePath) {
+                  await registration.unregister();
+                }
+              } catch {
+                await registration.unregister();
+              }
+            }),
+          );
+
           const registration =
-            await navigator.serviceWorker.register(withBasePath('/service-worker.js'));
+            await navigator.serviceWorker.register(withBasePath('/service-worker.js'), {
+              scope: withBasePath('/'),
+            });
           console.info(
             '[SW] registered',
             registration.scope,
