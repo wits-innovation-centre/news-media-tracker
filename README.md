@@ -4,6 +4,7 @@ Tracker application repository.
 
 ## Roadmap Snapshot (next phase)
 
+- Active maintenance fleet `3.3.1` is launched for dependency audit and upgrades with strict app-functionality verification gates.
 - Active implementation focus remains `3.2.0` (offline sync bridge and single-user deployment readiness).
 - Next phase target is `3.3.x` (sync governance and controlled sharing).
 - `3.3.x` includes a dedicated UI lane:

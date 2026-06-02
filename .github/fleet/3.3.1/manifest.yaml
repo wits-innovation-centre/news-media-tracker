@@ -1,0 +1,130 @@
+plannedVersion: 3.3.1
+phaseName: Dependency Audit And Upgrade Stabilization
+phaseGoal: Upgrade dependencies to latest safe versions while preserving application functionality.
+approvalState: approved
+allowedChangeClass: patch
+versionRationale: >-
+  Maintenance phase focused on dependency currency and security hygiene. Scope allows
+  dependency majors only when required to keep the app functional and verified.
+escalationRule: >-
+  If a proposed update requires user-facing contract changes or unresolved functional regressions,
+  stop that lane and defer the package to a follow-up semver contract.
+mergePolicy: barrier-after-green
+baseBranch: origin/main
+phaseBranch: phase/3.3.1
+finalPr:
+  number: null
+  status: not-created
+
+verificationGates:
+  - pnpm install --frozen-lockfile
+  - npm run lint
+  - npm run test
+  - npm run verify.integrated
+  - npm run build
+
+sourceDependabotBranches:
+  - dependabot/docker/dot-ghcr/node-26-bookworm-slim
+  - dependabot/github_actions/actions/checkout-6
+  - dependabot/github_actions/actions/setup-node-6
+  - dependabot/github_actions/docker/login-action-4
+  - dependabot/github_actions/docker/setup-buildx-action-4
+  - dependabot/github_actions/pnpm/action-setup-6
+  - dependabot/npm_and_yarn/cross-env-10.1.0
+  - dependabot/npm_and_yarn/css-loader-7.1.4
+  - dependabot/npm_and_yarn/detect-port-2.1.0
+  - dependabot/npm_and_yarn/electron-42.0.1
+  - dependabot/npm_and_yarn/eslint-plugin-jest-28.14.0
+  - dependabot/npm_and_yarn/eslint-plugin-promise-7.3.0
+  - dependabot/npm_and_yarn/next-16.2.6
+  - dependabot/npm_and_yarn/npm-minor-patch-98057ef8ca
+  - dependabot/npm_and_yarn/style-loader-4.0.0
+  - dependabot/npm_and_yarn/uuid-14.0.0
+
+lanes:
+  - laneId: 00-conductor
+    role: conductor
+    branch: phase/3.3.1
+    prNumber: null
+    status: active
+    readiness: waiting
+    ownedSurface:
+      - .github/fleet/3.3.1/manifest.yaml
+      - phase branch governance
+      - integration verification
+      - final PR orchestration
+    blockers: []
+    verification:
+      - Integration checks pending
+
+  - laneId: 01-npm-audit-upgrade
+    role: worker
+    branch: lane/3.3.1/01-npm-audit-upgrade
+    prNumber: null
+    status: planned
+    readiness: waiting
+    ownedSurface:
+      - package.json
+      - pnpm-lock.yaml
+      - npm-related build/runtime config touched by dependency migrations
+    blockers: []
+    verification:
+      - pnpm install --frozen-lockfile
+      - npm run lint
+      - npm run test
+      - npm run build
+
+  - laneId: 02-actions-upgrade
+    role: worker
+    branch: lane/3.3.1/02-actions-upgrade
+    prNumber: null
+    status: planned
+    readiness: waiting
+    ownedSurface:
+      - .github/workflows/*
+      - workflow action version pins and permissions blocks
+    blockers: []
+    verification:
+      - workflow yaml validation
+      - run focused workflow lint/checks if available
+
+  - laneId: 03-docker-upgrade
+    role: worker
+    branch: lane/3.3.1/03-docker-upgrade
+    prNumber: null
+    status: planned
+    readiness: waiting
+    ownedSurface:
+      - Dockerfile
+      - .ghcr/Dockerfile
+      - docker-compose.yml
+      - .ghcr/docker-compose.yml
+      - .devcontainer/*
+    blockers: []
+    verification:
+      - docker compose config
+      - npm run build
+
+  - laneId: 04-functional-verification
+    role: worker
+    branch: lane/3.3.1/04-functional-verification
+    prNumber: null
+    status: planned
+    readiness: waiting
+    ownedSurface:
+      - __tests__/integrated-verification-gates.test.ts
+      - __tests__/verification-3.3.0-gates.test.ts
+      - docs/verification-3.3.0-sync-governance.md
+    blockers:
+      - Must start only after lanes 01-03 merge into phase/3.3.1
+    verification:
+      - npm run test -- __tests__/integrated-verification-gates.test.ts
+      - npm run verify.integrated
+
+dependencies:
+  - from: 01-npm-audit-upgrade
+    to: 04-functional-verification
+  - from: 02-actions-upgrade
+    to: 04-functional-verification
+  - from: 03-docker-upgrade
+    to: 04-functional-verification

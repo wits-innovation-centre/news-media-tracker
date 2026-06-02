@@ -4,6 +4,14 @@
 
 ## Active update (2026-06-01)
 
+## Active update (2026-06-02)
+
+- Completed: launched dependency-audit fleet contract for `3.3.1` focused on dependency currency with strict functionality preservation gates.
+- Completed: created conductor manifest at `.github/fleet/3.3.1/manifest.yaml` with lane ownership, merge policy, and escalation rules.
+- Completed: mapped current Dependabot branch inputs into the fleet manifest for npm, GitHub Actions, and Docker/devcontainer ecosystems.
+- Remaining: open worker lanes and merge into `phase/3.3.1` after each lane reports green verification.
+- Risk/follow-up: large-major dependency jumps (notably framework/runtime/toolchain upgrades) may require phased rollouts if integrated verification fails.
+
 - Completed: document pane now renders structured frontmatter as editable form fields (Obsidian-style properties) instead of raw markdown frontmatter text editing.
 - Completed: document pane keeps a separate free-text Notes editor beneath the properties block to preserve the frontmatter + narrative document model.
 - Completed: article rows in the side tree now support explicit right-side caret collapse/expand behavior for child event/participant pointers.
@@ -300,6 +308,7 @@
 
 ## Roadmap candidates after 3.2.x
 
+- `3.3.1` dependency audit and upgrade stabilization (maintenance fleet with functionality gates).
 - `3.3.x` sync hardening and pilot reliability.
 - `4.0.x` graph explorer.
 - `4.1.x` statistical reproducibility.
