@@ -27,7 +27,7 @@ services:
     volumes:
       - app-data:/app/data
     depends_on:
-      sqld:
+      pkg.db.libsql:
         condition: service_started
     restart: unless-stopped
     networks:

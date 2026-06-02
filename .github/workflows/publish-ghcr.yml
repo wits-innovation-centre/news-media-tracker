@@ -45,6 +45,16 @@ jobs:
             type=raw,value=latest
             type=raw,value=${{ steps.package.outputs.version }}
 
+      - name: Extract stack bundle metadata
+        id: meta-stack
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}-stack
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+            type=raw,value=${{ steps.package.outputs.version }}
+
       - name: Build image for healthcheck
         uses: docker/build-push-action@v6
         with:
@@ -89,5 +99,16 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push stack bundle image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .ghcr/stack.Dockerfile
+          push: true
+          tags: ${{ steps.meta-stack.outputs.tags }}
+          labels: ${{ steps.meta-stack.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
