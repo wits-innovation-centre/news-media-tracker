@@ -1,3 +1,8 @@
+# Dependency Audit Fleet Prompts (3.3.1)
+
+## Lane 00 - Conductor
+
+```text
 @cloud You are [3.3.1][00-conductor] Integrate dependency-audit fleet.
 
 Repository lock directive:
@@ -5,7 +10,7 @@ Repository lock directive:
 - Hard scope:
   - Repository owner/name: wits-research-office-development/news-media-tracker
   - Working directory: /workspace/apps/news-media-tracker
-  - Allowed branches: phase/3.3.1, lane/3.3.1/\*
+  - Allowed branches: phase/3.3.1, lane/3.3.1/*
   - Target branch for worker PRs: phase/3.3.1
   - Final merge target: origin/main
 - Forbidden:
@@ -57,7 +62,11 @@ Stop conditions:
 - Worker lane changes another lane's owned surface.
 - Integrated verification fails and no bounded fix is identified.
 - Scope expands beyond dependency audit / app functionality preservation.
+```
 
+## Lane 01 - NPM Audit Upgrade
+
+```text
 @cloud You are [3.3.1][01-npm-audit-upgrade] Upgrade npm/pnpm dependencies to latest workable versions.
 
 Repository lock directive:
@@ -117,7 +126,11 @@ Stop conditions:
 - Changes required outside dependency-audit scope.
 - Functional regressions remain unresolved.
 - Required edits collide with owned surfaces for lanes 02 or 03.
+```
 
+## Lane 02 - Actions Upgrade
+
+```text
 @cloud You are [3.3.1][02-actions-upgrade] Upgrade GitHub Actions dependencies and workflow compatibility.
 
 Repository lock directive:
@@ -173,7 +186,11 @@ Stop conditions:
 
 - Workflow updates require non-workflow code changes.
 - Security posture regresses without explicit justification.
+```
 
+## Lane 03 - Docker Upgrade
+
+```text
 @cloud You are [3.3.1][03-docker-upgrade] Upgrade Docker and devcontainer dependency surfaces.
 
 Repository lock directive:
@@ -233,7 +250,11 @@ Stop conditions:
 
 - Docker updates require broad app refactors outside this lane.
 - Runtime functionality is degraded without a bounded fix.
+```
 
+## Lane 04 - Functional Verification
+
+```text
 @cloud You are [3.3.1][04-functional-verification] Validate integrated functionality after dependency upgrades.
 
 Repository lock directive:
@@ -291,3 +312,4 @@ Stop conditions:
 
 - Found regressions without a reproducible bounded fix.
 - Required fixes spill into another lane's owned surface without coordination.
+```
