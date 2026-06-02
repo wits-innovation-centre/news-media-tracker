@@ -1,3 +1,4 @@
+```
 @cloud You are [3.3.1][00-conductor] Integrate dependency-audit fleet.
 
 Repository lock directive:
@@ -13,8 +14,8 @@ Repository lock directive:
   - No file edits outside /workspace/apps/news-media-tracker.
 - Startup gate:
   1. Print `git remote -v` and `git branch --show-current`.
-  2. Stop if active branch is not `phase/3.3.1`.
-  3. Continue only after all gates pass.
+  2. If active branch is not `phase/3.3.1`, record a warning and continue on the current branch.
+  3. Continue after working-directory and repository checks pass.
 - PR gate:
   - Worker PR base must be `phase/3.3.1`.
   - Worker PR title must start with lane prefix.
@@ -57,7 +58,7 @@ Stop conditions:
 - Worker lane changes another lane's owned surface.
 - Integrated verification fails and no bounded fix is identified.
 - Scope expands beyond dependency audit / app functionality preservation.
-
+```
 @cloud You are [3.3.1][01-npm-audit-upgrade] Upgrade npm/pnpm dependencies to latest workable versions.
 
 Repository lock directive:
@@ -73,8 +74,8 @@ Repository lock directive:
   - No file edits outside /workspace/apps/news-media-tracker.
 - Startup gate:
   1. Print `git remote -v` and `git branch --show-current`.
-  2. Stop if active branch is not `lane/3.3.1/01-npm-audit-upgrade`.
-  3. Continue only after all gates pass.
+  2. If active branch is not `lane/3.3.1/01-npm-audit-upgrade`, record a warning and continue on the current branch.
+  3. Continue after working-directory and repository checks pass.
 - PR gate:
   - PR base must be `phase/3.3.1`.
   - PR title must start with `[3.3.1][01-npm-audit-upgrade]`.
@@ -133,8 +134,8 @@ Repository lock directive:
   - No file edits outside /workspace/apps/news-media-tracker.
 - Startup gate:
   1. Print `git remote -v` and `git branch --show-current`.
-  2. Stop if active branch is not `lane/3.3.1/02-actions-upgrade`.
-  3. Continue only after all gates pass.
+  2. If active branch is not `lane/3.3.1/02-actions-upgrade`, record a warning and continue on the current branch.
+  3. Continue after working-directory and repository checks pass.
 - PR gate:
   - PR base must be `phase/3.3.1`.
   - PR title must start with `[3.3.1][02-actions-upgrade]`.
@@ -189,8 +190,8 @@ Repository lock directive:
   - No file edits outside /workspace/apps/news-media-tracker.
 - Startup gate:
   1. Print `git remote -v` and `git branch --show-current`.
-  2. Stop if active branch is not `lane/3.3.1/03-docker-upgrade`.
-  3. Continue only after all gates pass.
+  2. If active branch is not `lane/3.3.1/03-docker-upgrade`, record a warning and continue on the current branch.
+  3. Continue after working-directory and repository checks pass.
 - PR gate:
   - PR base must be `phase/3.3.1`.
   - PR title must start with `[3.3.1][03-docker-upgrade]`.
@@ -249,8 +250,8 @@ Repository lock directive:
   - No file edits outside /workspace/apps/news-media-tracker.
 - Startup gate:
   1. Print `git remote -v` and `git branch --show-current`.
-  2. Stop if active branch is not `lane/3.3.1/04-functional-verification`.
-  3. Continue only after all gates pass.
+  2. If active branch is not `lane/3.3.1/04-functional-verification`, record a warning and continue on the current branch.
+  3. Continue after working-directory and repository checks pass.
 - PR gate:
   - PR base must be `phase/3.3.1`.
   - PR title must start with `[3.3.1][04-functional-verification]`.

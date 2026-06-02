@@ -127,7 +127,8 @@ Your job is to keep delegated work coherent across multiple simultaneous lanes. 
 - DO NOT use phonetic alphabet naming for long-term fleet identification.
 - DO NOT assume PR creation succeeded; verify branch or PR state before treating delegation as complete.
 - DO NOT update plan.md without also updating README.md roadmap, and vice versa. Both are canonical sources of truth and must stay in sync.
-- DO NOT hard-block orchestration solely on repository owner/name mismatch when operating in the current workspace; enforce working-directory and branch-target gates instead.
+- DO NOT hard-block orchestration solely on repository owner/name mismatch when operating in the current workspace; enforce working-directory and PR-target gates instead.
+- DO NOT hard-block lane execution on branch-name mismatch in cloud runs when branch naming is platform-assigned; treat branch identifiers in prompts/manifests as advisory labels for intent and scope.
 
 ## Naming and Identity
 
