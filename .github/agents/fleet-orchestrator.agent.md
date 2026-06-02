@@ -144,6 +144,11 @@ Your job is to keep delegated work coherent across multiple simultaneous lanes. 
 - Preferred branch patterns:
   - phase branch: `phase/<planned-version>`
   - worker branch: `lane/<planned-version>/<agent-id>-<short-name>`
+- Preferred prompt artifact patterns:
+  - fleet prompt directory: `prompts/fleet/<planned-version>/`
+  - conductor prompt file: `prompts/fleet/<planned-version>/00-conductor.prompt.md`
+  - worker prompt file: `prompts/fleet/<planned-version>/<agent-id>-<short-name>.prompt.md`
+  - launch order index: `prompts/fleet/<planned-version>/launch-order.md`
 - Preferred agent identity patterns:
   - conductor: `conductor.<planned-version>.00`
   - worker: `worker.<planned-version>.<agent-id>-<short-name>`
