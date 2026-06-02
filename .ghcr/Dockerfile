@@ -3,10 +3,13 @@
 # Used by docker-compose.yml (external-server profile).
 
 # ── Stage 1: install dependencies ────────────────────────────────────────────
-FROM node:20-bookworm-slim AS deps
+FROM node:26-bookworm-slim AS deps
 WORKDIR /app
 # Enable corepack to use the pnpm version declared in package.json.
-RUN corepack enable
+RUN (command -v corepack >/dev/null 2>&1 \
+    && corepack enable \
+    && corepack prepare pnpm@8.15.0 --activate) \
+    || npm install -g pnpm@8.15.0
 # Run pnpm as the non-root node user (uid 1000) so installed files are never
 # root-owned. This prevents EPERM when bin wrappers are chmod'd on hosts that
 # share a bind-mounted workspace with the devcontainer.
@@ -16,16 +19,19 @@ COPY --chown=node:node package.json pnpm-lock.yaml ./
 RUN pnpm install --ignore-workspace --frozen-lockfile
 
 # ── Stage 1b: production-only dependencies ──────────────────────────────────
-FROM node:20-bookworm-slim AS prod-deps
+FROM node:26-bookworm-slim AS prod-deps
 WORKDIR /app
-RUN corepack enable
+RUN (command -v corepack >/dev/null 2>&1 \
+    && corepack enable \
+    && corepack prepare pnpm@8.15.0 --activate) \
+    || npm install -g pnpm@8.15.0
 RUN chown node:node /app
 USER node
 COPY --chown=node:node package.json pnpm-lock.yaml ./
 RUN pnpm install --ignore-workspace --prod --frozen-lockfile
 
 # ── Stage 2: build the Next.js app ───────────────────────────────────────────
-FROM node:20-bookworm-slim AS builder
+FROM node:26-bookworm-slim AS builder
 WORKDIR /app
 ENV NODE_ENV=production
 RUN chown node:node /app
@@ -37,7 +43,7 @@ COPY --chown=node:node . .
 RUN ./node_modules/.bin/next build
 
 # ── Stage 3: production runner ────────────────────────────────────────────────
-FROM node:20-bookworm-slim AS runner
+FROM node:26-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 # PORT is read by `next start`; override at runtime via -e PORT=<n>.
@@ -61,9 +67,13 @@ ENTRYPOINT ["./node_modules/.bin/next", "start"]
 # ── Stage 4: seeder runner (dev profile) ─────────────────────────────────────
 # Contains full dependencies and source so the sqld seed script can run
 # without host bind mounts or ad-hoc installs.
-FROM node:20-bookworm-slim AS seeder
+FROM node:26-bookworm-slim AS seeder
 WORKDIR /app
-RUN corepack enable && chown node:node /app
+RUN ((command -v corepack >/dev/null 2>&1 \
+    && corepack enable \
+    && corepack prepare pnpm@8.15.0 --activate) \
+    || npm install -g pnpm@8.15.0) \
+    && chown node:node /app
 USER node
 
 # Reuse fully resolved dependency tree from deps stage for deterministic runs.

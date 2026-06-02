@@ -6,8 +6,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends docker.io docker-compose ripgrep \
     && rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable \
+RUN (command -v corepack >/dev/null 2>&1 \
+    && corepack enable \
     && corepack prepare pnpm@8 --activate \
+    || npm install -g pnpm@8.15.0) \
     && mkdir -p /workspace /pnpm/store /home/node/.ssh \
     && chown -R node:node /workspace /pnpm /home/node/.ssh
 
