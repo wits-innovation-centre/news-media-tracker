@@ -35,6 +35,8 @@ const nextConfig = {
     return config;
   },
 
+  basePath: normalisedBasePath,
+
   // Keep TypeScript and ESLint checking enabled for better development experience
   typescript: {
     ignoreBuildErrors: false,
