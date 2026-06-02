@@ -6,10 +6,14 @@ import './globals.css';
 import BootPWA from '@/lib/components/boot-pwa';
 import ToastProvider from '@/lib/components/toast-provider';
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+const withBasePath = (path: string) =>
+  `${basePath}${path.startsWith('/') ? path : `/${path}`}`;
+
 export const metadata: Metadata = {
   title: 'News Report Tracker',
   description: 'A utility tool to collect, track, and analyse news reports.',
-  manifest: '/manifest.webmanifest',
+  manifest: withBasePath('/manifest.webmanifest'),
 };
 
 const devServiceWorkerCleanupScript = `
@@ -42,46 +46,46 @@ export default function RootLayout({
         {process.env.NODE_ENV !== 'production' && (
           <script dangerouslySetInnerHTML={{ __html: devServiceWorkerCleanupScript }} />
         )}
-        <link rel="manifest" href="/manifest.webmanifest" />
+        <link rel="manifest" href={withBasePath('/manifest.webmanifest')} />
         <meta name="theme-color" content="#111827" />
         {/* Favicon */}
         <link
           rel="icon"
           type="image/png"
           sizes="32x32"
-          href="/icons/ios/32.png"
+          href={withBasePath('/icons/ios/32.png')}
         />
         <link
           rel="icon"
           type="image/png"
           sizes="16x16"
-          href="/icons/ios/16.png"
+          href={withBasePath('/icons/ios/16.png')}
         />
         {/* Apple Touch Icon */}
         <link
           rel="apple-touch-icon"
           sizes="180x180"
-          href="/icons/ios/180.png"
+          href={withBasePath('/icons/ios/180.png')}
         />
         {/* Android Chrome Icons */}
         <link
           rel="icon"
           type="image/png"
           sizes="192x192"
-          href="/icons/android/android-launchericon-192-192.png"
+          href={withBasePath('/icons/android/android-launchericon-192-192.png')}
         />
         <link
           rel="icon"
           type="image/png"
           sizes="512x512"
-          href="/icons/android/android-launchericon-512-512.png"
+          href={withBasePath('/icons/android/android-launchericon-512-512.png')}
         />
         {/* Windows 11 Large Tile */}
         <link
           rel="icon"
           type="image/png"
           sizes="150x150"
-          href="/icons/windows11/Square150x150Logo.scale-100.png"
+          href={withBasePath('/icons/windows11/Square150x150Logo.scale-100.png')}
         />
       </head>
       <body>

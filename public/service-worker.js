@@ -4,9 +4,39 @@ const RUNTIME_CACHE = 'runtime-cache-v1';
 const OFFLINE_QUEUE_DB = 'offline-post-queue';
 const OFFLINE_QUEUE_STORE = 'queue';
 const OFFLINE_QUEUE_DB_VERSION = 2;
-const OFFLINE_SYNC_ENDPOINT = '/api/sync';
 let offlineRequestCounter = 0;
 let queueReplayPromise = null;
+
+const BASE_PATH = (() => {
+  try {
+    const scopePath = new URL(self.registration.scope).pathname;
+    const normalised = scopePath.endsWith('/') && scopePath !== '/'
+      ? scopePath.slice(0, -1)
+      : scopePath;
+    return normalised === '/' ? '' : normalised;
+  } catch (err) {
+    return '';
+  }
+})();
+
+const withBasePath = path => {
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+
+  const normalisedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${BASE_PATH}${normalisedPath}`;
+};
+
+const stripBasePath = path => {
+  if (!BASE_PATH) {
+    return path;
+  }
+  return path.startsWith(BASE_PATH) ? path.slice(BASE_PATH.length) || '/' : path;
+};
+
+const API_PATH_PREFIX = withBasePath('/api/');
+const OFFLINE_SYNC_ENDPOINT = withBasePath('/api/sync');
 
 const supportsIndexedDB = () => {
   try {
@@ -20,12 +50,12 @@ self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(STATIC_CACHE).then(async cache => {
-      const baseAssets = ['/', '/offline.html', '/manifest.webmanifest'];
+      const baseAssets = ['/', '/offline.html', '/manifest.webmanifest'].map(withBasePath);
       let generatedAssets = [];
       try {
-        const response = await fetch('/cache.json');
+        const response = await fetch(withBasePath('/cache.json'));
         if (response.ok) {
-          generatedAssets = await response.json();
+          generatedAssets = (await response.json()).map(withBasePath);
         }
       } catch (err) {
         // Fallback: cache minimal assets if file missing
@@ -42,7 +72,7 @@ self.addEventListener('install', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   const isNextAssetRequest =
-    url.pathname.startsWith('/_next/') ||
+    url.pathname.startsWith(withBasePath('/_next/')) ||
     url.pathname.includes('.hot-update.') ||
     url.pathname.includes('__nextjs_original-stack-frame');
 
@@ -66,16 +96,16 @@ self.addEventListener('fetch', event => {
           const matchOptions = { ignoreSearch: true };
           const cachedHome = await caches.match(event.request, matchOptions);
           if (cachedHome) return cachedHome;
-          const fallbackCandidates = ['/', '/index.html'];
+          const fallbackCandidates = [withBasePath('/'), withBasePath('/index.html')];
           const { pathname } = new URL(event.request.url);
-          if (pathname === '/.' || pathname === '') {
-            fallbackCandidates.unshift('/');
+          if (pathname === '/.' || pathname === '' || pathname === BASE_PATH || pathname === `${BASE_PATH}/`) {
+            fallbackCandidates.unshift(withBasePath('/'));
           }
           for (const candidate of fallbackCandidates) {
             const cachedCandidate = await caches.match(candidate, matchOptions);
             if (cachedCandidate) return cachedCandidate;
           }
-          const offline = await caches.match('/offline.html');
+          const offline = await caches.match(withBasePath('/offline.html'));
           if (offline) return offline;
           return new Response('Offline', {
             status: 504,
@@ -89,7 +119,7 @@ self.addEventListener('fetch', event => {
   // Intercept all API POST requests
   if (
     event.request.method === 'POST' &&
-    url.pathname.startsWith('/api/') &&
+    url.pathname.startsWith(API_PATH_PREFIX) &&
     url.pathname !== OFFLINE_SYNC_ENDPOINT
   ) {
     event.respondWith((async () => {
@@ -114,7 +144,7 @@ self.addEventListener('fetch', event => {
     return;
   }
   // GET API requests: cache as before
-  if (event.request.method === 'GET' && url.pathname.startsWith('/api/')) {
+  if (event.request.method === 'GET' && url.pathname.startsWith(API_PATH_PREFIX)) {
     event.respondWith(
       caches.open(API_CACHE).then(async cache => {
         try {
@@ -159,7 +189,7 @@ self.addEventListener('fetch', event => {
         }
         return networkResponse;
       } catch (err) {
-        const offline = await caches.match('/offline.html');
+        const offline = await caches.match(withBasePath('/offline.html'));
         if (offline) return offline;
         // Always return a valid Response
         return new Response('Offline', { status: 504, statusText: 'Gateway Timeout' });
@@ -190,8 +220,9 @@ function storePostRequest(request) {
             ? crypto.randomUUID()
             // Fallback format: <timestamp>-<counter>-<random>.
             : `${Date.now()}-${offlineRequestCounter++}-${Math.random().toString(16).slice(2)}`;
+        const endpointPath = stripBasePath(endpointUrl.pathname);
         tx.objectStore(OFFLINE_QUEUE_STORE).add({
-          endpoint: `${endpointUrl.pathname}${endpointUrl.search}`,
+          endpoint: `${endpointPath}${endpointUrl.search}`,
           method: request.method,
           body,
           requestId,

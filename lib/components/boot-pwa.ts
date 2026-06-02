@@ -3,6 +3,9 @@ import { useEffect } from 'react';
 import { getStorageHealthReport } from '../storage/persistence-policy';
 
 const isProduction = process.env.NODE_ENV === 'production';
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+const withBasePath = (path: string) =>
+  `${basePath}${path.startsWith('/') ? path : `/${path}`}`;
 
 /** Run the full storage health check and emit structured console output. */
 async function runStorageHealthCheck(): Promise<void> {
@@ -47,7 +50,7 @@ export default function BootPWA() {
       const register = async () => {
         try {
           const registration =
-            await navigator.serviceWorker.register('/service-worker.js');
+            await navigator.serviceWorker.register(withBasePath('/service-worker.js'));
           console.info(
             '[SW] registered',
             registration.scope,
