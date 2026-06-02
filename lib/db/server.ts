@@ -89,6 +89,8 @@ type PersistedReplayConflictRecord = {
 };
 
 class DatabaseManagerServer {
+  private localInitPromise: Promise<void> | null = null;
+
   private async applyMigrations(
     client: ReturnType<typeof createClient>,
   ): Promise<void> {
@@ -148,9 +150,23 @@ class DatabaseManagerServer {
   ]);
 
   async ensureDatabaseInitialised(): Promise<void> {
-    if (!this.localDb) {
-      await this.initialiseLocal();
+    if (this.localDb) {
+      return;
     }
+
+    if (!this.localInitPromise) {
+      this.localInitPromise = this.initialiseLocal()
+        .catch((error) => {
+          this.localClient = null;
+          this.localDb = null;
+          throw error;
+        })
+        .finally(() => {
+          this.localInitPromise = null;
+        });
+    }
+
+    await this.localInitPromise;
   }
   private localClient: ReturnType<typeof createClient> | null = null;
   private localDb: ReturnType<typeof drizzle> | null = null;
@@ -221,7 +237,7 @@ class DatabaseManagerServer {
         `All libsql client creation strategies failed. Last error: ${lastError?.message}`,
       );
     }
-    this.localDb = drizzle(this.localClient, {
+    const localDb = drizzle(this.localClient, {
       schema: {
         articles,
         victims,
@@ -249,6 +265,7 @@ class DatabaseManagerServer {
     await this.applyMigrations(this.localClient);
     await this.seedRegisteredDomainSeeds();
     await this.seedDefaultRoleVocabulary();
+    this.localDb = localDb;
   }
 
   async registerDomainSeed(seed: DomainSeedDefinition): Promise<{
