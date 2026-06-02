@@ -27,6 +27,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Read package version
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "version=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -34,7 +41,8 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
+            type=raw,value=${{ steps.package.outputs.version }}
 
       - name: Build image for healthcheck
         uses: docker/build-push-action@v6
