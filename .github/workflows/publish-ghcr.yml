@@ -59,7 +59,7 @@ jobs:
             type=raw,value=${{ steps.package.outputs.version }}
 
       - name: Build image for healthcheck
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: .ghcr/Dockerfile
@@ -101,7 +101,7 @@ jobs:
           exit 1
 
       - name: Build and push image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: .ghcr/Dockerfile
@@ -115,7 +115,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push stack bundle image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: .ghcr/stack.Dockerfile
