@@ -1,3 +1,20 @@
+const configuredBasePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+const normalizedBasePath =
+  configuredBasePath === '/'
+    ? ''
+    : `/${configuredBasePath.replace(/^\/+|\/+$/g, '')}`;
+
+export const withBasePath = (path: string) => {
+  if (/^https?:\/\//.test(path)) {
+    return path;
+  }
+
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${normalizedBasePath}${normalizedPath}`;
+};
+
+export const getApiUrl = (path: string) => withBasePath(path);
+
 export const getBaseUrl = () => {
   if (typeof window !== 'undefined' && window.location?.origin) {
     return window.location.origin;

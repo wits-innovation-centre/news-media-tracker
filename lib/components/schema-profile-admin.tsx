@@ -13,6 +13,7 @@ import {
   Table,
 } from 'react-bootstrap';
 import { SCHEMA_PROFILE_DEFAULT } from '../contracts/schema-profile';
+import { getApiUrl } from '@/lib/platform';
 
 interface SchemaProfileAdminProps {
   onBack: () => void;
@@ -55,7 +56,7 @@ const SchemaProfileAdmin: React.FC<SchemaProfileAdminProps> = ({ onBack }) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/schema-profiles', {
+      const response = await fetch(getApiUrl('/api/schema-profiles'), {
         cache: 'no-store',
       });
       const payload = (await response.json()) as ApiResponse;
@@ -92,7 +93,7 @@ const SchemaProfileAdmin: React.FC<SchemaProfileAdminProps> = ({ onBack }) => {
         description,
       };
       const method = editingId ? 'PUT' : 'POST';
-      const response = await fetch('/api/schema-profiles', {
+      const response = await fetch(getApiUrl('/api/schema-profiles'), {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -132,7 +133,7 @@ const SchemaProfileAdmin: React.FC<SchemaProfileAdminProps> = ({ onBack }) => {
     setSubmitting(true);
     setError(null);
     try {
-      const response = await fetch('/api/schema-profiles', {
+      const response = await fetch(getApiUrl('/api/schema-profiles'), {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),

@@ -23,6 +23,7 @@ import {
   readOfflineQueueCount,
   hasSyncManager,
 } from '@/lib/utils/cache-manager';
+import { getApiUrl } from '@/lib/platform';
 import type {
   Article,
 } from '@/lib/db/schema';
@@ -695,6 +696,38 @@ export default function Home() {
     return loadedCases;
   }, [listStatusFilter, loadedCases]);
 
+  const clearActiveDocumentSelection = useCallback(() => {
+    setSelectedPointer(null);
+    setDraftContext(null);
+    setOpenTreeInsertMenu(null);
+    setDocumentFrontmatter({});
+    setDocumentNotes('');
+    setDocumentStatus('idle');
+    setDocumentMessage('');
+    setSelectedCaseIds([]);
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) {
+        return;
+      }
+
+      if (mainView !== 'document') {
+        return;
+      }
+
+      if (!selectedPointer && !draftContext) {
+        return;
+      }
+
+      clearActiveDocumentSelection();
+    };
+
+    window.addEventListener('keydown', handleGlobalEscape);
+    return () => window.removeEventListener('keydown', handleGlobalEscape);
+  }, [clearActiveDocumentSelection, draftContext, mainView, selectedPointer]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -705,13 +738,25 @@ export default function Home() {
           offset: '0',
           ...(searchTerm ? { search: searchTerm } : {}),
         });
-        const response = await fetch(`/api/articles?${params.toString()}`);
+        const response = await fetch(`${getApiUrl('/api/articles')}?${params.toString()}`);
         const payload = (await response.json().catch(() => null)) as
           | { success?: boolean; data?: Article[] }
           | null;
 
         if (!cancelled && response.ok && payload?.success && Array.isArray(payload.data)) {
           setLoadedArticles(payload.data);
+          return;
+        }
+
+        const { get: getArticlesOffline } = await import('@/app/api/articles/offline');
+        const { getBaseUrl } = await import('@/lib/platform');
+        const offlineReq = new Request(`${getBaseUrl()}${endpointByKind.article}?${params.toString()}`);
+        const offlinePayload = (await getArticlesOffline(offlineReq)) as
+          | { success?: boolean; data?: Article[] }
+          | null;
+
+        if (!cancelled && offlinePayload?.success && Array.isArray(offlinePayload.data)) {
+          setLoadedArticles(offlinePayload.data);
         }
       } catch {
         if (!cancelled) {
@@ -1003,7 +1048,7 @@ export default function Home() {
           for (const endpoint of endpoints) {
             try {
               const response = await fetch(
-                `${endpoint}?id=${encodeURIComponent(participantId)}`,
+                `${getApiUrl(endpoint)}?id=${encodeURIComponent(participantId)}`,
               );
               if (!response.ok) {
                 continue;
@@ -1261,7 +1306,7 @@ export default function Home() {
           query,
           limit: '20',
         });
-        const response = await fetch(`/api/articles/outlets?${params.toString()}`);
+        const response = await fetch(`${getApiUrl('/api/articles/outlets')}?${params.toString()}`);
 
         if (!response.ok) {
           return;
@@ -1348,7 +1393,7 @@ export default function Home() {
 
     try {
       setOutletSaving(true);
-      const response = await fetch('/api/articles/outlets', {
+      const response = await fetch(getApiUrl('/api/articles/outlets'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1688,19 +1733,20 @@ export default function Home() {
     };
 
     try {
-      const response = await fetch('/api/articles', {
+      const { post: createArticleOffline } = await import('@/app/api/articles/offline');
+      const { getBaseUrl } = await import('@/lib/platform');
+      const req = new Request(`${getBaseUrl()}${endpointByKind.article}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
       });
-
-      const result = (await response.json().catch(() => null)) as
+      const result = (await createArticleOffline(req)) as
         | { success?: boolean; data?: Record<string, unknown>; error?: string; message?: string }
         | null;
 
-      if (!response.ok || !result?.success || !result.data?.id) {
+      if (!result?.success || !result.data?.id) {
         throw new Error(result?.error || result?.message || 'Unable to create article');
       }
 

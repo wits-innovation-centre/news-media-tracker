@@ -14,7 +14,7 @@ import {
   Modal,
 } from 'react-bootstrap';
 import { toast } from 'react-toastify';
-import { getBaseUrl } from '../platform';
+import { getApiUrl, getBaseUrl } from '../platform';
 import type { Article, Event, Victim, Perpetrator } from '../db/schema';
 import {
   type AnnotationSyncStatusFilter,
@@ -254,7 +254,7 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
   const hydrateOfflineFromHttp = useCallback(
     async (params: URLSearchParams) => {
       try {
-        const response = await fetch(`/api/events?${params.toString()}`);
+        const response = await fetch(`${getApiUrl('/api/events')}?${params.toString()}`);
         const payload = (await response.json().catch(() => null)) as
           | EventsApiResponse
           | null;
@@ -304,7 +304,7 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
           articleIds.map(async (articleId) => {
             try {
               const articleResponse = await fetch(
-                `/api/articles?id=${encodeURIComponent(articleId)}`,
+                `${getApiUrl('/api/articles')}?id=${encodeURIComponent(articleId)}`,
               );
               const articlePayload = (await articleResponse
                 .json()
@@ -317,10 +317,10 @@ const ListHomicides: React.FC<ListHomicidesProps> = ({
 
               const [victimsResponse, perpetratorsResponse] = await Promise.all([
                 fetch(
-                  `/api/victims?articleId=${encodeURIComponent(articleId)}&limit=2000&offset=0&includeMerged=true`,
+                  `${getApiUrl('/api/victims')}?articleId=${encodeURIComponent(articleId)}&limit=2000&offset=0&includeMerged=true`,
                 ),
                 fetch(
-                  `/api/perpetrators?articleId=${encodeURIComponent(articleId)}&limit=2000&offset=0&includeMerged=true`,
+                  `${getApiUrl('/api/perpetrators')}?articleId=${encodeURIComponent(articleId)}&limit=2000&offset=0&includeMerged=true`,
                 ),
               ]);
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Container, Card, Button, Alert, Row, Col } from 'react-bootstrap';
-import { isElectron, getEnvironment } from '@/lib/platform';
+import { isElectron, getEnvironment, getApiUrl } from '@/lib/platform';
 import DatabaseStatus from '@/lib/components/database-status';
 import SyncConfiguration from '@/lib/components/sync-configuration';
 
@@ -33,7 +33,7 @@ export default function SysInfo({ onBack }: SysInfoProps) {
     setError(null);
 
     try {
-      const response = await fetch('/api/health');
+      const response = await fetch(getApiUrl('/api/health'));
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }

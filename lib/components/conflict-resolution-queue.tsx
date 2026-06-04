@@ -20,6 +20,7 @@ import {
   type ConflictRecord,
   type ConflictResolutionDecision,
 } from './conflict-resolution-queue.utils';
+import { getApiUrl } from '@/lib/platform';
 
 interface ConflictResolutionQueueProps {
   onBack: () => void;
@@ -77,7 +78,7 @@ const ConflictResolutionQueue: React.FC<ConflictResolutionQueueProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/sync/conflicts');
+      const response = await fetch(getApiUrl('/api/sync/conflicts'));
       const payload = await parseApiPayload(
         response,
         'Invalid response format from server',
@@ -85,7 +86,7 @@ const ConflictResolutionQueue: React.FC<ConflictResolutionQueueProps> = ({
       if (!response.ok || !payload.success) {
         throw new Error(
           (typeof payload.error === 'string' && payload.error) ||
-            'Failed to load conflict queue',
+          'Failed to load conflict queue',
         );
       }
 
@@ -124,7 +125,7 @@ const ConflictResolutionQueue: React.FC<ConflictResolutionQueueProps> = ({
       if (!response.ok || !payload.success) {
         throw new Error(
           (typeof payload.error === 'string' && payload.error) ||
-            'Failed to resolve conflict',
+          'Failed to resolve conflict',
         );
       }
       toast.success('Conflict resolved.');

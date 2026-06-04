@@ -12,6 +12,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Button, Form, Alert, Spinner, Modal, Badge } from 'react-bootstrap';
 import { toast } from 'react-toastify';
+import { getApiUrl } from '@/lib/platform';
 
 const LOCAL_SERVER_URL_KEY = 'hmt.local-server-url';
 const HEALTH_CHECK_TIMEOUT_MS = 5000;
@@ -61,7 +62,7 @@ const SyncConfiguration: React.FC = () => {
 
   const fetchConfig = async () => {
     try {
-      const response = await fetch('/api/sync');
+      const response = await fetch(getApiUrl('/api/sync'));
       if (!response.ok) {
         throw new Error('Failed to fetch sync configuration');
       }
@@ -87,7 +88,7 @@ const SyncConfiguration: React.FC = () => {
     setSaving(true);
 
     try {
-      const response = await fetch('/api/sync', {
+      const response = await fetch(getApiUrl('/api/sync'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -120,7 +121,7 @@ const SyncConfiguration: React.FC = () => {
   const handleDisableSync = async () => {
     setSaving(true);
     try {
-      const response = await fetch('/api/sync', {
+      const response = await fetch(getApiUrl('/api/sync'), {
         method: 'DELETE',
       });
 
@@ -405,7 +406,7 @@ const SyncConfiguration: React.FC = () => {
                   <span
                     className={
                       localServerDiag.statusCode >= 200 &&
-                      localServerDiag.statusCode < 300
+                        localServerDiag.statusCode < 300
                         ? 'text-success'
                         : 'text-warning'
                     }

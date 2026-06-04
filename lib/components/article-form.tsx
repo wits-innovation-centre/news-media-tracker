@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Form, Button, Row, Col } from 'react-bootstrap';
 import type { NewArticle } from '@/lib/db/schema';
+import { getApiUrl } from '@/lib/platform';
 
 type ArticleFieldKeys = Extract<
   keyof NewArticle,
@@ -225,9 +226,9 @@ const buildAuthorState = (value?: string | null) => {
 
   const authorValues = normalized
     ? normalized
-        .split(',')
-        .map((entry) => entry.trim())
-        .filter((entry) => entry.length > 0)
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
     : [''];
 
   return {
@@ -328,7 +329,7 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ onSubmit, initialData }) => {
           query: formData.newsReportPlatform ?? '',
           limit: '12',
         });
-        const response = await fetch(`/api/articles/outlets?${params.toString()}`);
+        const response = await fetch(`${getApiUrl('/api/articles/outlets')}?${params.toString()}`);
         if (!response.ok) {
           return;
         }
@@ -411,7 +412,7 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ onSubmit, initialData }) => {
 
     try {
       setOutletSaving(true);
-      const response = await fetch('/api/articles/outlets', {
+      const response = await fetch(getApiUrl('/api/articles/outlets'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

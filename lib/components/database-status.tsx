@@ -19,6 +19,7 @@ import {
   readOfflineQueueCount,
   hasSyncManager,
 } from '@/lib/utils/cache-manager';
+import { getApiUrl } from '@/lib/platform';
 
 interface DatabaseStatus {
   isInitialised: boolean;
@@ -111,7 +112,7 @@ const replayQueueDirect = (): Promise<void> => {
             return;
           }
           try {
-            const response = await fetch('/api/sync', {
+            const response = await fetch(getApiUrl('/api/sync'), {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
