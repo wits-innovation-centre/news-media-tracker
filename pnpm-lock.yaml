@@ -116,8 +116,8 @@ devDependencies:
     specifier: ^5.0.1
     version: 5.0.1(esbuild@0.19.12)(webpack@5.106.2)
   detect-port:
-    specifier: ^1.5.1
-    version: 1.6.1
+    specifier: ^2.1.0
+    version: 2.1.0
   drizzle-kit:
     specifier: ^0.20.18
     version: 0.20.18
@@ -4769,9 +4769,9 @@ packages:
     hasBin: true
     dev: true
 
-  /address@1.2.2:
-    resolution: {integrity: sha512-4B/qKCfeE/ODUaAUpSwfzazo5x29WD4r3vXiWsB7I2mSDAihwEqKO+g8GELZUQSSAo5e1XTYh3ZVfLyxBc12nA==}
-    engines: {node: '>= 10.0.0'}
+  /address@2.0.3:
+    resolution: {integrity: sha512-XNAb/a6TCqou+TufU8/u11HCu9x1gYvOoxLwtlXgIqmkrYQADVv6ljyW2zwiPhHz9R1gItAWpuDrdJMmrOBFEA==}
+    engines: {node: '>= 16.0.0'}
     dev: true
 
   /agent-base@6.0.2:
@@ -6558,15 +6558,12 @@ packages:
     resolution: {integrity: sha512-T0NIuQpnTvFDATNuHN5roPwSBG83rFsuO+MXXH9/3N1eFbn4wcPjttvjMLEPWJ0RGUYgQE7cGgS3tNxbqCGM7g==}
     dev: true
 
-  /detect-port@1.6.1:
-    resolution: {integrity: sha512-CmnVc+Hek2egPx1PeTFVta2W78xy2K/9Rkf6cC4T59S50tVnzKj+tnx5mmx5lwvCkujZ4uRrpRSuV+IVs3f90Q==}
-    engines: {node: '>= 4.0.0'}
+  /detect-port@2.1.0:
+    resolution: {integrity: sha512-epZuWb/6Q62L+nDHJc/hQAqf8pylsqgk3BpZXVBx1CDnr3nkrVNn73Uu1rXcFzkNcc+hkP3whuOg7JZYaQB65Q==}
+    engines: {node: '>= 16.0.0'}
     hasBin: true
     dependencies:
-      address: 1.2.2
-      debug: 4.4.3
-    transitivePeerDependencies:
-      - supports-color
+      address: 2.0.3
     dev: true
 
   /dexie@4.4.2:
