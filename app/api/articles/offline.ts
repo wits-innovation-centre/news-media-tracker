@@ -131,7 +131,12 @@ export async function post(req: Request) {
 export async function put(req: Request) {
   console.log('api/articles:PUT');
   const body = await req.json();
-  const articleId = typeof body.articleId === 'string' ? body.articleId : '';
+  const articleId =
+    typeof body.articleId === 'string' && body.articleId
+      ? body.articleId
+      : typeof body.id === 'string' && body.id
+        ? body.id
+        : '';
 
   if (!articleId) {
     return { success: false, error: 'Article ID is required' };

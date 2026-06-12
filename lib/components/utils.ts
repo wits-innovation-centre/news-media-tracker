@@ -114,6 +114,10 @@ export function generateArticleId(
   const normalisedAuthor = author.trim().toLowerCase();
   const normalisedTitle = title.trim().toLowerCase();
 
+  if (!normalisedUrl && !normalisedAuthor && !normalisedTitle) {
+    return `art_${uuidv4().replace(/-/g, '').substring(0, 16)}`;
+  }
+
   // Create hash from combined normalised data
   const combined = `${normalisedUrl}|${normalisedAuthor}|${normalisedTitle}`;
   const hash = crypto
@@ -150,14 +154,14 @@ export function validateArticleData(article: ArticleInput): ArticleValidation {
     !article.newsReportUrl ||
     article.newsReportUrl.toString().trim() === ''
   ) {
-    errors.push('News report URL is required');
+    warnings.push('News report URL is missing');
   }
 
   if (
     !article.newsReportHeadline ||
     article.newsReportHeadline.toString().trim() === ''
   ) {
-    errors.push('News report headline is required');
+    warnings.push('News report headline is missing');
   }
 
   if (!article.author || article.author.toString().trim() === '') {
@@ -395,9 +399,8 @@ const buildScoringDetails = (
   );
   const summaryRationale = `Primary ${matchType} signal selected with ${(
     (signalScores[matchType] ?? 0) * 100
-  ).toFixed(1)}% raw similarity; strongest weighted contribution was ${
-    strongestContribution.signal
-  } (${(strongestContribution.weightedScore * 100).toFixed(1)}%).`;
+  ).toFixed(1)}% raw similarity; strongest weighted contribution was ${strongestContribution.signal
+    } (${(strongestContribution.weightedScore * 100).toFixed(1)}%).`;
 
   return {
     whyMatched: [
@@ -439,9 +442,9 @@ const parseEventDateRange = (value: DateLike): EventDateRange | undefined => {
     return Number.isNaN(timestamp)
       ? undefined
       : {
-          start: timestamp,
-          end: timestamp,
-        };
+        start: timestamp,
+        end: timestamp,
+      };
   }
 
   if (typeof value !== 'string') {
@@ -1051,24 +1054,24 @@ const getBestNameAliasMatch = (
   existing: DuplicateCandidate,
 ):
   | {
-      similarity: number;
-      newValue: string;
-      existingValue: string;
-      newField: string;
-      existingField: string;
-    }
+    similarity: number;
+    newValue: string;
+    existingValue: string;
+    newField: string;
+    existingField: string;
+  }
   | undefined => {
   const currentNames = collectCandidateNames(current);
   const existingNames = collectCandidateNames(existing);
 
   let best:
     | {
-        similarity: number;
-        newValue: string;
-        existingValue: string;
-        newField: string;
-        existingField: string;
-      }
+      similarity: number;
+      newValue: string;
+      existingValue: string;
+      newField: string;
+      existingField: string;
+    }
     | undefined;
 
   for (const source of currentNames) {

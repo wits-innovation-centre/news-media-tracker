@@ -90,29 +90,29 @@ const murderTypeOptions = [
 ];
 const languageOptions = [
   '',
-  'english',
-  'afrikaans',
-  'zulu',
-  'xhosa',
-  'sotho',
-  'tswana',
-  'pedi',
-  'venda',
-  'tsonga',
-  'ndebele',
-  'swati',
-  'other',
+  'English',
+  'Afrikaans',
+  'Zulu',
+  'Xhosa',
+  'Sotho',
+  'Tswana',
+  'Pedi',
+  'Venda',
+  'Tsonga',
+  'Ndebele',
+  'Swati',
+  'Other',
 ];
 const sourceTypeOptions = [
   '',
-  'newspaper',
-  'online',
-  'television',
-  'radio',
-  'magazine',
-  'blog',
-  'social_media',
-  'other',
+  'Newspaper',
+  'Online',
+  'Television',
+  'Radio',
+  'Magazine',
+  'Blog',
+  'Social Media',
+  'Other',
 ];
 const provinceOptions = [
   '',
@@ -129,13 +129,11 @@ const provinceOptions = [
 const genderOptions = ['', 'Male', 'Female', 'Non-binary', 'Unknown'];
 const raceOptions = [
   '',
-  'Black South African',
+  'Black',
   'Coloured',
-  'White South African',
+  'White',
   'Indian',
   'Asian',
-  'Black Other African',
-  'White Non-South African',
   'Unknown',
   'Other',
 ];
@@ -145,6 +143,8 @@ const ageDescriptorOptions = [
   'Baby or infant',
   'Child',
   'Teenager',
+  'Young Adult',
+  'Adult',
   'Elderly',
   'Unknown',
 ];
@@ -191,6 +191,7 @@ const buildAuthorState = (value?: string | null) => {
 const editorFieldsByKind: Record<EditorKind, EditorField[]> = {
   article: [
     { key: 'newsReportHeadline', label: 'News Report Headline', type: 'text' },
+    { key: 'articleId', label: 'Article ID', type: 'text' },
     { key: 'newsReportUrl', label: 'News Report URL', type: 'text' },
     { key: 'dateOfPublication', label: 'Date of Publication', type: 'date' },
     { key: 'author', label: 'Author', type: 'text' },
@@ -473,6 +474,10 @@ const payloadToFormState = (
     }
   }
 
+  if (kind === 'article') {
+    frontmatter.articleId = toFormValue(payload.id);
+  }
+
   notes = typeof payload.notes === 'string' ? payload.notes : '';
   return { frontmatter, notes };
 };
@@ -486,6 +491,7 @@ const formStateToPayload = (
   const payload: Record<string, unknown> = { id: pointerId };
 
   if (kind === 'article') {
+    payload.articleId = pointerId;
     for (const field of editorFieldsByKind.article) {
       if (frontmatter[field.key] !== undefined) {
         payload[field.key] = frontmatter[field.key] || null;
@@ -1723,12 +1729,11 @@ export default function Home() {
     setDocumentStatus('saving');
     setDocumentMessage('');
 
-    const timestamp = new Date().toISOString();
     const payload: Record<string, unknown> = {
-      newsReportHeadline: `New Article ${timestamp}`,
-      newsReportUrl: `https://local.seed/article/${encodeURIComponent(timestamp)}`,
-      author: 'Unknown',
-      dateOfPublication: timestamp.slice(0, 10),
+      newsReportHeadline: '',
+      newsReportUrl: '',
+      author: '',
+      dateOfPublication: '',
       notes: '',
     };
 
@@ -2725,6 +2730,7 @@ export default function Home() {
                                   id={`property-${field.key}`}
                                   type={field.type === 'date' ? 'date' : 'text'}
                                   value={value}
+                                  disabled={field.key === 'articleId'}
                                   onChange={(event) => {
                                     const nextValue = event.currentTarget.value;
                                     setFrontmatterValue(field.key, nextValue);
