@@ -1,4 +1,4 @@
-FROM alpine:3.20
+FROM alpine:3.24
 
 LABEL org.opencontainers.image.title="news-media-tracker stack bundle"
 LABEL org.opencontainers.image.description="Compose stack definition bundle for News Media Tracker"
