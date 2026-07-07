@@ -9,6 +9,7 @@ RUN apt-get update \
                         ca-certificates \
                         libicu-dev \
                         git \
+                        openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 \

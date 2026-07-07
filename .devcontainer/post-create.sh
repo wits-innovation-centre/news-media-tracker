@@ -1,6 +1,6 @@
 #!/bin/sh
 
 corepack enable
-corepack prepare pnpm@11.10.0 --activate
+corepack prepare pnpm@11 --activate
 
 pnpm install
