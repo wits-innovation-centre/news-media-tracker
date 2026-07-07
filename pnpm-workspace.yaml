@@ -1,0 +1,8 @@
+allowBuilds:
+  '@parcel/watcher': true
+  core-js: true
+  core-js-pure: true
+  electron: true
+  es5-ext: true
+  esbuild: true
+  unrs-resolver: true

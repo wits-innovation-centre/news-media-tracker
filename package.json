@@ -1,24 +1,12 @@
 {
   "name": "news-media-tracker",
   "version": "2.0.1",
-  "description": "An application to track (homicide) media.",
-  "keywords": [
-    "electron",
-    "boilerplate",
-    "react",
-    "typescript",
-    "ts",
-    "sass",
-    "webpack",
-    "hot",
-    "reload"
-  ],
+  "description": "A flexible PWA capture surface application backended to track and map news media.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/JulianVJacobs/app.news-media-tracker.git"
+    "url": "git+https://github.com/wits-innovation-centre/news-media-tracker.git"
   },
   "license": "MIT",
-  "packageManager": "pnpm@11.11.0",
   "contributors": [
     {
       "name": "Max Brenner",
@@ -29,7 +17,6 @@
       "url": "https://github.com/JulianVJacobs"
     }
   ],
-  "main": "./dist/main/main.js",
   "scripts": {
     "all.package": "pnpm run build.electron && pnpm run package",
     "app.prepare": "node scripts/prepare-app.js",
@@ -42,11 +29,9 @@
     "build-and-package.electron.windows-portable": "pnpm run build.electron && pnpm run windows-portable.package",
     "build-and-package.electron.macos-dmg": "pnpm run build.electron && pnpm run macos-dmg.package",
     "build-and-start.web": "pnpm run build && next start",
-    "predev": "pnpm run validate.pnpm-permissions",
     "dev": "next dev",
     "dev.electron": "cross-env NODE_ENV=development electron dist/main/main.js",
     "start.electron": "pnpm run dev.electron",
-    "prestart": "pnpm run validate.pnpm-permissions",
     "start": "concurrently \"pnpm run dev\" \"wait-on http://localhost:3000 && pnpm run dev.electron\"",
     "start.web": "next start",
     "local-server.install": "node scripts/local-server-install.js",
@@ -64,7 +49,6 @@
     "lint": "next lint",
     "lint.fix": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx --fix",
     "validate.compose": "node scripts/validate-compose.js",
-    "validate.pnpm-permissions": "node scripts/validate-pnpm-permissions.js",
     "validate.gates": "npm run validate.compose && npm run validate.pnpm-permissions",
     "verify.integrated": "jest --runInBand __tests__/integrated-verification-gates.test.ts",
     "package.all": "electron-builder build --win --mac --linux --publish never",
@@ -75,8 +59,7 @@
     "package.web": "pnpm run build",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "tunnel": "lt --port 3000 --subdomain news-media-tracker-demo",
-    "test": "jest",
-    "policy.check": "node scripts/verify-pnpm-policy.js"
+    "test": "jest"
   },
   "dependencies": {
     "@libsql/client": "^0.5.6",
@@ -173,165 +156,5 @@
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^5.2.2",
     "webpack-merge": "^5.9.0"
-  },
-  "browserslist": [
-    "last 2 Chrome versions",
-    "last 2 Firefox versions",
-    "last 2 Safari versions"
-  ],
-  "prettier": {
-    "singleQuote": true,
-    "overrides": [
-      {
-        "files": [
-          ".prettierrc",
-          ".eslintrc"
-        ],
-        "options": {
-          "parser": "json"
-        }
-      }
-    ]
-  },
-  "jest": {
-    "moduleDirectories": [
-      "node_modules",
-      "release/app/node_modules",
-      "src"
-    ],
-    "moduleFileExtensions": [
-      "js",
-      "jsx",
-      "ts",
-      "tsx",
-      "json"
-    ],
-    "moduleNameMapper": {
-      "\\.(css|less|sass|scss)$": "identity-obj-proxy"
-    },
-    "setupFiles": [],
-    "testEnvironment": "jsdom",
-    "testEnvironmentOptions": {
-      "url": "http://localhost/"
-    },
-    "testPathIgnorePatterns": [
-      "release/app/dist"
-    ],
-    "transform": {
-      "\\.(ts|tsx|js|jsx)$": "ts-jest"
-    }
-  },
-  "build": {
-    "productName": "HomicideMediaTracker",
-    "appId": "org.wits.HomicideMediaTracker",
-    "asar": true,
-    "directories": {
-      "app": "release/app",
-      "buildResources": "assets",
-      "output": "release/build"
-    },
-    "asarUnpack": [
-      "**/*.{node,dll,dylib,so}",
-      ".next/**/*",
-      "server.js",
-      "package.json",
-      "node_modules/**/*"
-    ],
-    "files": [
-      "dist/**/*",
-      "server.js",
-      ".next/**/*",
-      "package.json",
-      "node_modules/@libsql/**/*",
-      "node_modules/libsql/**/*",
-      "node_modules/drizzle-orm/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "node_modules/@libsql/",
-        "to": "resources/libsql"
-      },
-      "./assets/**"
-    ],
-    "mac": {
-      "sign": "scripts/notarize.js",
-      "notarize": false,
-      "target": {
-        "target": "default",
-        "arch": [
-          "arm64",
-          "x64"
-        ]
-      },
-      "type": "distribution",
-      "hardenedRuntime": true,
-      "entitlements": "assets/entitlements.mac.plist",
-      "entitlementsInherit": "assets/entitlements.mac.plist",
-      "gatekeeperAssess": false
-    },
-    "dmg": {
-      "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    },
-    "win": {
-      "target": [
-        {
-          "target": "dir",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "assets/icon.ico",
-      "requestedExecutionLevel": "asInvoker",
-      "artifactName": "HomicideMediaTracker-${version}-portable.exe",
-      "sign": false,
-      "signAndEditExecutable": false,
-      "certificateFile": false,
-      "certificatePassword": false
-    },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "category": "Development"
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "electron-react-boilerplate",
-      "repo": "electron-react-boilerplate"
-    }
-  },
-  "collective": {
-    "url": "https://opencollective.com/electron-react-boilerplate-594"
-  },
-  "devEngines": {
-    "runtime": {
-      "name": "node",
-      "version": ">=22.x",
-      "onFail": "error"
-    },
-    "packageManager": {
-      "name": "pnpm",
-      "version": ">=11.x",
-      "onFail": "error"
-    }
-  },
-  "electronmon": {
-    "patterns": [
-      "!**/**",
-      "src/main/**"
-    ],
-    "logLevel": "quiet"
   }
 }
