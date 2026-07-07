@@ -1,5 +1,5 @@
 {
-  "name": "app.news-media-tracker",
+  "name": "news-media-tracker",
   "version": "2.0.1",
   "description": "An application to track (homicide) media.",
   "keywords": [
@@ -18,7 +18,7 @@
     "url": "git+https://github.com/JulianVJacobs/app.news-media-tracker.git"
   },
   "license": "MIT",
-  "packageManager": "pnpm@8.15.0",
+  "packageManager": "pnpm@11.11.0",
   "contributors": [
     {
       "name": "Max Brenner",
@@ -323,7 +323,7 @@
     },
     "packageManager": {
       "name": "pnpm",
-      "version": ">=8.x",
+      "version": ">=11.x",
       "onFail": "error"
     }
   },

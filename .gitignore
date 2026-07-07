@@ -54,3 +54,5 @@ tsconfig.tsbuildinfo
 
 # package lock file (not tracked — generated locally by npm install)
 package-lock.json
+
+.pnpm-store
