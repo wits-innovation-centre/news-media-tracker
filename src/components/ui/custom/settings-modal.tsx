@@ -1,40 +1,20 @@
 import { useState } from "react"
-import { Settings, Plus, Trash2, Download } from "lucide-react"
+import { Settings, Plus, Trash2, Download, FolderTree } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { type FieldDefinition } from "@/components/ui/custom/capture"
-
-const TEMPLATE_SCHEMAS = [
-    {
-        id: "template-book",
-        name: "📚 Book Review",
-        fields: [
-            { name: "author", label: "Author", type: "string", required: true },
-            { name: "rating", label: "Rating (1-5)", type: "number" },
-            { name: "finished", label: "Finished Reading", type: "boolean" },
-            { name: "thoughts", label: "Review Content", type: "markdown" }
-        ]
-    },
-    {
-        id: "template-daily",
-        name: "☀️ Daily Reflection",
-        fields: [
-            { name: "mood", label: "Today's Mood", type: "string" },
-            { name: "productivity", label: "Productivity Score", type: "number" },
-            { name: "body", label: "Journal Entry", type: "markdown" }
-        ]
-    }
-]
+import type { DocumentSchema, FieldDefinition } from "@/lib/types"
+import { DEFAULT_SCHEMA_TEMPLATES } from "@/lib/schema-registry"
 
 interface SettingsModalProps {
-    userSchemas: Array<{ id: string; name: string; fields: FieldDefinition[] }>
+    userSchemas: DocumentSchema[]
     onSaveSchema: (name: string, fields: FieldDefinition[]) => void
     onDeleteSchema: (id: string) => void
     onExportToObsidian: () => Promise<void>
+    onCreateChildSchema: (schema: DocumentSchema) => void
 }
 
-function SettingsModal({ userSchemas, onSaveSchema, onDeleteSchema, onExportToObsidian }: SettingsModalProps) {
+function SettingsModal({ userSchemas, onSaveSchema, onDeleteSchema, onExportToObsidian, onCreateChildSchema }: SettingsModalProps) {
     const [isExporting, setIsExporting] = useState(false)
 
     const handleExport = async () => {
@@ -60,7 +40,7 @@ function SettingsModal({ userSchemas, onSaveSchema, onDeleteSchema, onExportToOb
                 </Button>
             </DialogTrigger>
 
-            <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-150 max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Workspace Settings</DialogTitle>
                     <DialogDescription>
@@ -78,7 +58,7 @@ function SettingsModal({ userSchemas, onSaveSchema, onDeleteSchema, onExportToOb
                         <div>
                             <h4 className="text-sm font-medium mb-2">Available Templates</h4>
                             <div className="grid grid-cols-2 gap-2">
-                                {TEMPLATE_SCHEMAS.map((template) => (
+                                {DEFAULT_SCHEMA_TEMPLATES.map((template) => (
                                     <Button
                                         key={template.id}
                                         variant="outline"
@@ -105,10 +85,16 @@ function SettingsModal({ userSchemas, onSaveSchema, onDeleteSchema, onExportToOb
                                             <div>
                                                 <p className="font-medium text-sm">{schema.name}</p>
                                                 <p className="text-xs text-muted-foreground">{schema.fields.length} tracking fields defined</p>
+                                                {schema.parentSchemaId ? <p className="text-[11px] text-muted-foreground">Child of {schema.parentSchemaId}</p> : null}
                                             </div>
-                                            <Button variant="ghost" size="icon" onClick={() => onDeleteSchema(schema.id)} className="text-destructive hover:bg-destructive/10">
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
+                                            <div className="flex items-center gap-1">
+                                                <Button variant="ghost" size="icon" onClick={() => onCreateChildSchema(schema)} className="text-primary hover:bg-primary/10" title="Create child schema">
+                                                    <FolderTree className="h-4 w-4" />
+                                                </Button>
+                                                <Button variant="ghost" size="icon" onClick={() => onDeleteSchema(schema.id)} className="text-destructive hover:bg-destructive/10">
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

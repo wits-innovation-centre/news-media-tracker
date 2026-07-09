@@ -1,19 +1,22 @@
 import { dbClient } from "@/lib/db/client"
-import { type FieldDefinition } from "@/components/ui/custom/capture"
+import type { DocumentSchema, FieldDefinition } from "@/lib/types"
 
 export async function loadActiveSchemas() {
   const records = await dbClient.query("SELECT * FROM schemas")
-  return records.map(row => ({
+  return records.map((row) => ({
     id: row.id,
     name: row.name,
+    description: row.description ?? undefined,
+    kind: row.kind ?? "custom",
+    parentSchemaId: row.parentSchemaId ?? undefined,
     fields: JSON.parse(row.fields) as FieldDefinition[]
-  }))
+  })) as DocumentSchema[]
 }
 
-export async function saveCustomSchema(id: string, name: string, fields: FieldDefinition[]) {
+export async function saveCustomSchema(id: string, name: string, fields: FieldDefinition[], description?: string, kind: "template" | "custom" = "custom", parentSchemaId?: string) {
   await dbClient.execute(
-    "INSERT OR REPLACE INTO schemas (id, name, fields) VALUES (?, ?, ?)",
-    [id, name, JSON.stringify(fields)]
+    "INSERT OR REPLACE INTO schemas (id, name, description, kind, parentSchemaId, fields) VALUES (?, ?, ?, ?, ?, ?)",
+    [id, name, description ?? null, kind, parentSchemaId ?? null, JSON.stringify(fields)]
   )
 }
 

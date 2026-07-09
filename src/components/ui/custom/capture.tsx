@@ -3,27 +3,18 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
-import { 
-  Field, 
-  FieldDescription, 
-  FieldError, 
-  FieldGroup, 
-  FieldLabel 
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-
-type FieldType = "string" | "number" | "boolean" | "markdown";
-
-interface FieldDefinition {
-  name: string
-  label: string
-  type: FieldType
-  required?: boolean
-  description?: string
-};
+import type { FieldDefinition } from "@/lib/types";
 
 interface CaptureProps {
   fields: FieldDefinition[]
@@ -108,11 +99,11 @@ function Capture({ fields, onSubmit }: CaptureProps) {
             control={form.control}
             name={fieldDef.name}
             render={({ field, fieldState }) => (
-              <Field 
-                data-invalid={fieldState.invalid} 
+              <Field
+                data-invalid={fieldState.invalid}
                 className={fieldDef.type === "boolean" ? "flex flex-row items-center gap-3 space-y-0 rounded-md border p-4" : ""}
               >
-                
+
                 {fieldDef.type === "boolean" ? (
                   <>
                     <Checkbox
@@ -138,7 +129,7 @@ function Capture({ fields, onSubmit }: CaptureProps) {
                     <FieldLabel htmlFor={fieldDef.name}>
                       {fieldDef.label} {fieldDef.required && <span className="text-red-500">*</span>}
                     </FieldLabel>
-                    
+
                     {fieldDef.type === "string" || fieldDef.type === "number" ? (
                       <Input
                         {...field}
@@ -154,7 +145,7 @@ function Capture({ fields, onSubmit }: CaptureProps) {
                         value={(field.value as string) ?? ""}
                         id={fieldDef.name}
                         placeholder="Write your content here..."
-                        className="min-h-[200px] resize-y font-mono"
+                        className="min-h-50 resize-y font-mono"
                         aria-invalid={fieldState.invalid}
                       />
                     ) : null}
@@ -167,21 +158,18 @@ function Capture({ fields, onSubmit }: CaptureProps) {
                     )}
                   </>
                 )}
-                
+
               </Field>
             )}
           />
         ))}
       </FieldGroup>
-      
+
       <Button type="submit" className="w-full">Capture</Button>
     </form>
   )
 };
 
 export {
-    type FieldType,
-    type FieldDefinition,
-
-    Capture
+  Capture
 };

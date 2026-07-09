@@ -9,7 +9,7 @@ const dbWorkerAPI = {
 
     try {
       const sqlite3 = await sqlite3InitModule()
-      
+
       if ("opfs" in sqlite3) {
         db = new sqlite3.oo1.OpfsDb("/obsidian_vault.sqlite3")
         console.log("SQLite successfully mounted onto OPFS storage.")
@@ -22,6 +22,9 @@ const dbWorkerAPI = {
         CREATE TABLE IF NOT EXISTS schemas (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
+          description TEXT,
+          kind TEXT DEFAULT 'custom',
+          parentSchemaId TEXT,
           fields TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS notes (
@@ -42,7 +45,7 @@ const dbWorkerAPI = {
 
   async query(sql: string, bind: any[] = []): Promise<any[]> {
     if (!db) throw new Error("Database worker invoked prior to initializing engine arrays.")
-    
+
     const rows: any[] = []
     db.exec({
       sql,
