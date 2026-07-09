@@ -1,5 +1,0 @@
-{
-  "npm.packageManager": "pnpm",
-  "npm.autoDetect": "on",
-  "postman.settings.dotenv-detection-notification-visibility": false
-}
