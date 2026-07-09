@@ -58,17 +58,23 @@ function SettingsModal({ userSchemas, onSaveSchema, onDeleteSchema, onExportToOb
                         <div>
                             <h4 className="text-sm font-medium mb-2">Available Templates</h4>
                             <div className="grid grid-cols-2 gap-2">
-                                {DEFAULT_SCHEMA_TEMPLATES.map((template) => (
-                                    <Button
-                                        key={template.id}
-                                        variant="outline"
-                                        className="justify-start text-left"
-                                        onClick={() => onSaveSchema(template.name.replace(/[^a-zA-Z ]/g, "").trim(), template.fields as FieldDefinition[])}
-                                    >
-                                        <Plus className="mr-2 h-4 w-4" />
-                                        {template.name}
-                                    </Button>
-                                ))}
+                                {DEFAULT_SCHEMA_TEMPLATES.map((templateGroup) => {
+                                    const primaryDocument = templateGroup.documents[0]
+                                    return (
+                                        <Button
+                                            key={templateGroup.id}
+                                            variant="outline"
+                                            className="justify-start text-left"
+                                            onClick={() => onSaveSchema(primaryDocument.name.replace(/[^a-zA-Z ]/g, "").trim(), primaryDocument.fields as FieldDefinition[])}
+                                        >
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            <span className="flex flex-col items-start">
+                                                <span>{templateGroup.name}</span>
+                                                <span className="text-xs text-muted-foreground">{templateGroup.documents.length} documents</span>
+                                            </span>
+                                        </Button>
+                                    )
+                                })}
                             </div>
                         </div>
 
