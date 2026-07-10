@@ -3,19 +3,23 @@ import { Settings, Download } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { DocumentSchema, DocumentSchemaGroup } from "@/lib/types"
+import type { DocumentSchema, DocumentSchemaGroup, SpecificationDefinition, SpecificationStore } from "@/lib/types"
 import { SchemaManager } from "@/components/ui/custom/schema-manager"
+import { SpecificationsManager } from "@/components/ui/custom/specifications-manager"
 
 interface SettingsModalProps {
     groups: DocumentSchemaGroup[]
+    specificationRegistry: SpecificationDefinition[]
+    specifications: SpecificationStore
     onDeleteSchema: (id: string) => void
     onExportToObsidian: () => Promise<void>
     onSaveSchema: (schema: DocumentSchema) => void
     onSaveGroup: (group: DocumentSchemaGroup) => void
     onDeleteGroup: (groupId: string) => void
+    onSaveSpecifications: (nextRegistry: SpecificationDefinition[], nextValues: SpecificationStore) => Promise<void>
 }
 
-function SettingsModal({ groups, onDeleteSchema, onExportToObsidian, onSaveSchema, onSaveGroup, onDeleteGroup }: SettingsModalProps) {
+function SettingsModal({ groups, specificationRegistry, specifications, onDeleteSchema, onExportToObsidian, onSaveSchema, onSaveGroup, onDeleteGroup, onSaveSpecifications }: SettingsModalProps) {
     const [isExporting, setIsExporting] = useState(false)
 
     const handleExport = async () => {
@@ -31,14 +35,8 @@ function SettingsModal({ groups, onDeleteSchema, onExportToObsidian, onSaveSchem
 
     return (
         <Dialog>
-            <DialogTrigger
-                render={
-                    <Button variant="ghost" size="icon" className="fixed top-4 right-4 z-50" />
-                }
-            >
-                <Button variant="ghost" size="icon" className="fixed top-4 right-4 z-50">
-                    <Settings className="h-5 w-5" />
-                </Button>
+            <DialogTrigger render={<Button variant="ghost" size="icon" className="fixed top-4 right-4 z-50" />}>
+                <Settings className="h-5 w-5" />
             </DialogTrigger>
 
             <DialogContent className="flex h-[94vh] w-[96vw] max-w-375 flex-col overflow-hidden p-0 sm:max-w-375">
@@ -50,8 +48,9 @@ function SettingsModal({ groups, onDeleteSchema, onExportToObsidian, onSaveSchem
                 </DialogHeader>
 
                 <Tabs defaultValue="schemas" className="mt-2 flex min-h-0 flex-1 flex-col px-6 pb-6">
-                    <TabsList className="grid w-full max-w-sm grid-cols-2">
+                    <TabsList className="grid w-full max-w-xl grid-cols-3">
                         <TabsTrigger value="schemas">Schema Workspace</TabsTrigger>
+                        <TabsTrigger value="specifications">Specifications</TabsTrigger>
                         <TabsTrigger value="export">Data Vault Actions</TabsTrigger>
                     </TabsList>
 
@@ -59,6 +58,7 @@ function SettingsModal({ groups, onDeleteSchema, onExportToObsidian, onSaveSchem
                         <div className="h-full overflow-auto pr-2">
                             <SchemaManager
                                 groups={groups}
+                                specificationRegistry={specificationRegistry}
                                 onSaveGroup={onSaveGroup}
                                 onDeleteGroup={onDeleteGroup}
                                 onSaveSchema={onSaveSchema}
@@ -82,6 +82,14 @@ function SettingsModal({ groups, onDeleteSchema, onExportToObsidian, onSaveSchem
                                 {isExporting ? "Compiling Environment..." : "Export Workspace Data"}
                             </Button>
                         </div>
+                    </TabsContent>
+
+                    <TabsContent value="specifications" className="mt-4 min-h-0 flex-1 overflow-auto">
+                        <SpecificationsManager
+                            registry={specificationRegistry}
+                            specifications={specifications}
+                            onSave={onSaveSpecifications}
+                        />
                     </TabsContent>
                 </Tabs>
             </DialogContent>

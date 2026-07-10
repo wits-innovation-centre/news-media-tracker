@@ -226,12 +226,36 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 fields: [
                     { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "rpt-{date}-{rand:6}" }, description: "Auto-generated report identifier." },
                     { name: "headline", label: "Headline", type: { data: "string", input: "text" }, required: true },
+                    { name: "url", label: "URL", type: { data: "string", input: "text" }, required: true },
                     { name: "date", label: "Publication Date", type: { data: "date", input: "date" } },
-                    { name: "author", label: "Author(s)", type: { data: "array<string>", input: "text-multi" } },
+                    { 
+                        name: "author_identity_status", 
+                        label: "Author Identity Status", 
+                        type: { data: "string", input: "select" } ,
+                        options: [
+                            "Known",
+                            "Undisclosed",
+                            "Anonymous",
+                            "Unknown"
+                        ],
+                        default: "Known"
+                    },
+                    { 
+                        name: "author", 
+                        label: "Author(s)", 
+                        type: { data: "array<string>", input: "search-select-input" },
+                        specification: "author",
+                        visibility: {
+                            dependsOn: "author_identity_status",
+                            operator: "eq",
+                            value: "Known"
+                        } 
+                    },
                     {
                         name: "wire_service",
                         label: "Wire Service",
-                        type: { data: "select", input: "select" },
+                        type: { data: "select", input: "search-select-input" },
+                        specification: "wire_service",
                         options: [
 
                         ]
@@ -259,7 +283,8 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     {
                         name: "type_of_source",
                         label: "Source Type",
-                        type: { data: "select", input: "select" },
+                        type: { data: "select", input: "search-select-input" },
+                        specification: "report_platform",
                         options: [
                             'Newspaper',
                             'Online',

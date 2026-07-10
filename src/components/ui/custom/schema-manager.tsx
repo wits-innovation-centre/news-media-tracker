@@ -5,13 +5,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import type { DocumentSchema, DocumentSchemaGroup, FieldDataType, FieldDefinition, FieldInputType } from "@/lib/types"
+import type { DocumentSchema, DocumentSchemaGroup, FieldDataType, FieldDefinition, FieldInputType, SpecificationDefinition } from "@/lib/types"
 
 const DATA_TYPES: FieldDataType[] = ["string", "array<string>", "hierarchical-select", "select", "number", "boolean", "date", "date-range", "markdown"]
-const INPUT_TYPES: FieldInputType[] = ["text", "textarea", "select", "date", "date-range", "text-multi", "checkbox", "switch"]
+const INPUT_TYPES: FieldInputType[] = ["text", "textarea", "select", "search-select-input", "date", "date-range", "text-multi", "checkbox", "switch"]
 
 interface SchemaManagerProps {
     groups: DocumentSchemaGroup[]
+    specificationRegistry: SpecificationDefinition[]
     onSaveGroup: (group: DocumentSchemaGroup) => void
     onDeleteGroup: (groupId: string) => void
     onSaveSchema: (schema: DocumentSchema) => void
@@ -31,6 +32,7 @@ function createEmptyField(): EditableField {
         required: false,
         description: "",
         optionsText: "",
+        specification: undefined,
     }
 }
 
@@ -57,6 +59,7 @@ function parseField(field: EditableField): FieldDefinition {
         default: field.default === "" ? undefined : field.default,
         generator: field.generator,
         visibility: field.visibility?.dependsOn ? field.visibility : undefined,
+        specification: field.specification,
     }
 
     if (field.optionsText.trim()) {
@@ -73,7 +76,7 @@ function parseField(field: EditableField): FieldDefinition {
     return nextField
 }
 
-function SchemaManager({ groups, onSaveGroup, onDeleteGroup, onSaveSchema, onDeleteSchema }: SchemaManagerProps) {
+function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGroup, onSaveSchema, onDeleteSchema }: SchemaManagerProps) {
     const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>(groups[0]?.id)
     const [selectedSchemaId, setSelectedSchemaId] = useState<string | undefined>(groups[0]?.documents[0]?.id)
     const [groupDraft, setGroupDraft] = useState({ id: "", name: "", description: "" })
@@ -301,7 +304,19 @@ function SchemaManager({ groups, onSaveGroup, onDeleteGroup, onSaveSchema, onDel
                                         <Input value={field.description ?? ""} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, description: event.target.value } : item) }))} placeholder="Description" />
                                     </div>
 
-                                    <Textarea value={field.optionsText} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, optionsText: event.target.value } : item) }))} placeholder={field.type.data === "hierarchical-select" ? "Options JSON" : "One option per line or JSON array"} className="min-h-24" />
+                                    {field.type.input === "search-select-input" ? (
+                                        <div className="grid gap-2 md:grid-cols-2">
+                                            <Select value={field.specification ?? "__none__"} onValueChange={(value) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, specification: !value || value === "__none__" ? undefined : value } : item) }))}>
+                                                <SelectTrigger><SelectValue placeholder="Specification source" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="__none__">No specification source</SelectItem>
+                                                    {specificationRegistry.map((item) => <SelectItem key={item.id} value={item.id}>{item.name} ({item.id})</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    ) : null}
+
+                                    <Textarea value={field.optionsText} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, optionsText: event.target.value } : item) }))} placeholder={field.type.input === "search-select-input" ? "Optional fallback options" : field.type.data === "hierarchical-select" ? "Options JSON" : "One option per line or JSON array"} className="min-h-24" />
 
                                     <div className="grid gap-2 md:grid-cols-4">
                                         <Input value={field.visibility?.dependsOn ?? ""} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, visibility: { ...item.visibility, dependsOn: event.target.value, operator: item.visibility?.operator ?? "eq" } } : item) }))} placeholder="Visibility dependsOn" />

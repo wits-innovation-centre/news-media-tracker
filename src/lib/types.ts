@@ -11,6 +11,7 @@ type FieldDataType = "string" |
 type FieldInputType = "text" |
     "textarea" |
     "select" |
+    "search-select-input" |
     "date" |
     "date-range" |
     "text-multi" |
@@ -53,6 +54,7 @@ interface FieldDefinition {
     visibility?: VisibilityCondition;
     required?: boolean;
     options?: string[] | TieredOptions;
+    specification?: string;
     description?: string;
 };
 
@@ -95,6 +97,14 @@ interface SchemaWorkspace {
     groups: DocumentSchemaGroup[];
 }
 
+interface SpecificationDefinition {
+    id: string;
+    name: string;
+    description?: string;
+}
+
+type SpecificationStore = Record<string, string[]>;
+
 export type {
     FieldDataType,
     FieldInputType,
@@ -105,6 +115,8 @@ export type {
     DocumentSchema,
     DocumentSchemaGroup,
     SchemaWorkspace,
+    SpecificationDefinition,
+    SpecificationStore,
     StoredDocument,
     DocumentNode
 };

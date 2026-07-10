@@ -25,20 +25,35 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import {
   type FieldDefinition,
+  type SpecificationStore,
   type TieredOptions
 } from "@/lib/types";
 import {
   isValidPathInRecord,
 } from "@/lib/utils"
+import { SearchSelectInput } from "@/components/ui/custom/search-select-input";
 
 interface CaptureProps {
   fields: FieldDefinition[]
   initialValues?: Record<string, any>
   onValuesChange?: (values: Record<string, any>) => void
+  specifications: SpecificationStore
+  onAddSpecification?: (specificationId: string, value: string) => Promise<void> | void
   onSubmit: (frontmatter: Record<string, any>, markdownBody: string) => void
 };
 
 type DynamicFormValues = Record<string, string | string[] | number | boolean>
+
+const toStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.map((item) => String(item))
+  if (typeof value === "string") {
+    return value
+      .split("\n")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+  }
+  return []
+}
 
 const buildDefaultValues = (fields: FieldDefinition[], seedValues: Record<string, any> = {}) => {
   const defaults: DynamicFormValues = {}
@@ -89,7 +104,7 @@ const generateZodSchema = (fields: FieldDefinition[], currentValues: Record<stri
       case "array<string>":
         fieldSchema = z.array(z.string())
         if (field.required) {
-          fieldSchema = (fieldSchema as z.ZodString).min(1, "This field is required")
+          fieldSchema = (fieldSchema as z.ZodArray<z.ZodString>).min(1, "This field is required")
         }
         break
       case "date":
@@ -104,7 +119,7 @@ const generateZodSchema = (fields: FieldDefinition[], currentValues: Record<stri
 
           fieldSchema = (fieldSchema as z.ZodString).refine(
             (val: string) => {
-              if (!val) return !field.required; // Pass if empty and not required
+              if (!val) return !field.required;
 
               const segments = val.split(" / ");
 
@@ -142,7 +157,7 @@ const generateZodSchema = (fields: FieldDefinition[], currentValues: Record<stri
   return z.object(schemaShape)
 }
 
-function Capture({ fields, initialValues, onValuesChange, onSubmit }: CaptureProps) {
+function Capture({ fields, initialValues, onValuesChange, specifications, onAddSpecification, onSubmit }: CaptureProps) {
   const defaultValues = useMemo(() => {
     return { ...buildDefaultValues(fields), ...(initialValues ?? {}) }
   }, [fields, initialValues])
@@ -168,6 +183,16 @@ function Capture({ fields, initialValues, onValuesChange, onSubmit }: CapturePro
   }, [form, onValuesChange])
 
   const watchedValues = form.watch()
+
+  const getSpecificationKind = (fieldDef: FieldDefinition): string | undefined => {
+    return fieldDef.specification
+  }
+
+  const getSearchSelectOptions = (fieldDef: FieldDefinition) => {
+    const kind = getSpecificationKind(fieldDef)
+    if (kind) return specifications[kind] ?? []
+    return getSelectOptions(fieldDef)
+  }
 
   const handleSubmit = (values: DynamicFormValues) => {
     const frontmatter: Record<string, any> = {}
@@ -291,6 +316,78 @@ function Capture({ fields, initialValues, onValuesChange, onSubmit }: CapturePro
                           placeholder={`Select ${fieldDef.label.toLowerCase()}...`}
                           onChange={field.onChange}
                         />
+                      ) : fieldDef.type.input === "search-select-input" ? (
+                        (() => {
+                          const specificationKind = getSpecificationKind(fieldDef)
+                          const searchOptions = getSearchSelectOptions(fieldDef)
+
+                          if (fieldDef.type.data === "array<string>") {
+                            const values = toStringArray(field.value)
+                            const listValues = values.length > 0 ? values : [""]
+
+                            const updateIndex = (index: number, nextValue: string) => {
+                              const next = [...listValues]
+                              next[index] = nextValue
+                              field.onChange(next.filter((entry) => entry.trim().length > 0))
+                            }
+
+                            const removeIndex = (index: number) => {
+                              const next = listValues.filter((_, itemIndex) => itemIndex !== index)
+                              field.onChange(next.filter((entry) => entry.trim().length > 0))
+                            }
+
+                            return (
+                              <div className="space-y-2">
+                                {listValues.map((entry, index) => (
+                                  <div key={`${fieldDef.name}-${index}`} className="flex items-start gap-2">
+                                    <div className="flex-1">
+                                      <SearchSelectInput
+                                        id={`${fieldDef.name}-${index}`}
+                                        value={entry}
+                                        options={searchOptions}
+                                        placeholder={`Search ${fieldDef.label.toLowerCase()}...`}
+                                        onChange={(nextValue) => updateIndex(index, nextValue)}
+                                        allowCreate={Boolean(specificationKind)}
+                                        onCreateOption={async (nextValue) => {
+                                          if (!specificationKind) return
+                                          await onAddSpecification?.(specificationKind, nextValue)
+                                        }}
+                                      />
+                                    </div>
+                                    {listValues.length > 1 ? (
+                                      <Button type="button" variant="outline" size="icon-xs" onClick={() => removeIndex(index)}>
+                                        ×
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                ))}
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => field.onChange([...listValues, ""])}
+                                >
+                                  Add {fieldDef.label}
+                                </Button>
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <SearchSelectInput
+                              id={fieldDef.name}
+                              value={(field.value as string) ?? ""}
+                              options={searchOptions}
+                              placeholder={`Search ${fieldDef.label.toLowerCase()}...`}
+                              onChange={field.onChange}
+                              allowCreate={Boolean(specificationKind)}
+                              onCreateOption={async (nextValue) => {
+                                if (!specificationKind) return
+                                await onAddSpecification?.(specificationKind, nextValue)
+                              }}
+                            />
+                          )
+                        })()
                       ) : fieldDef.type.input === "select" ? (
                         (() => {
                           const selectOptions = getSelectOptions(fieldDef)
@@ -314,14 +411,49 @@ function Capture({ fields, initialValues, onValuesChange, onSubmit }: CapturePro
                           )
                         })()
                       ) : fieldDef.type.input === "text-multi" ? (
-                        <Textarea
-                          {...field}
-                          value={Array.isArray(field.value) ? field.value.join("\n") : (field.value as string) ?? ""}
-                          id={fieldDef.name}
-                          placeholder="Enter one item per line"
-                          className="min-h-30 resize-y"
-                          aria-invalid={fieldState.invalid}
-                        />
+                        (() => {
+                          const values = toStringArray(field.value)
+
+                          const updateIndex = (index: number, nextValue: string) => {
+                            const next = values.length > 0 ? [...values] : [""]
+                            next[index] = nextValue
+                            field.onChange(next)
+                          }
+
+                          const removeIndex = (index: number) => {
+                            const next = values.filter((_, itemIndex) => itemIndex !== index)
+                            field.onChange(next.length > 0 ? next : [""])
+                          }
+
+                          return (
+                            <div className="space-y-2">
+                              {(values.length > 0 ? values : [""]).map((entry, index) => (
+                                <div key={`${fieldDef.name}-${index}`} className="flex items-center gap-2">
+                                  <Input
+                                    id={`${fieldDef.name}-${index}`}
+                                    value={entry}
+                                    onChange={(event) => updateIndex(index, event.target.value)}
+                                    placeholder={`${fieldDef.label} ${index + 1}`}
+                                    aria-invalid={fieldState.invalid}
+                                  />
+                                  {index > 0 ? (
+                                    <Button type="button" variant="outline" size="icon-xs" onClick={() => removeIndex(index)}>
+                                      ×
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              ))}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => field.onChange([...(values.length > 0 ? values : [""]), ""])}
+                              >
+                                Add {fieldDef.label}
+                              </Button>
+                            </div>
+                          )
+                        })()
                       ) : null}
 
                       {fieldDef.description && (

@@ -1,5 +1,5 @@
 import { dbClient } from "@/lib/db/client"
-import type { DocumentSchema, DocumentSchemaGroup, FieldDefinition, StoredDocument } from "@/lib/types"
+import type { DocumentSchema, DocumentSchemaGroup, FieldDefinition, SpecificationDefinition, SpecificationStore, StoredDocument } from "@/lib/types"
 
 export async function loadSchemaGroups() {
   const records = await dbClient.query("SELECT * FROM schema_groups ORDER BY name")
@@ -79,4 +79,83 @@ export async function loadCapturedDocuments() {
 
 export async function getNotesForWorkspaceExport() {
   return await dbClient.query("SELECT title, frontmatter, body FROM notes")
+}
+
+export async function loadSpecifications(): Promise<SpecificationStore> {
+  const rows = await dbClient.query("SELECT kind, value FROM specifications ORDER BY kind, value")
+  const byId: SpecificationStore = {}
+
+  rows.forEach((row) => {
+    const specificationId = String(row.kind)
+    if (!byId[specificationId]) {
+      byId[specificationId] = []
+    }
+    byId[specificationId].push(String(row.value))
+  })
+
+  return byId
+}
+
+export async function loadSpecificationRegistry(): Promise<SpecificationDefinition[]> {
+  const rows = await dbClient.query("SELECT id, name, description FROM specification_registry ORDER BY name")
+  const byId = new Map<string, SpecificationDefinition>()
+
+  rows.forEach((row) => {
+    byId.set(String(row.id), {
+      id: String(row.id),
+      name: String(row.name),
+      description: row.description ? String(row.description) : undefined,
+    })
+  })
+
+  return [...byId.values()]
+}
+
+export async function saveSpecificationRegistry(registry: SpecificationDefinition[]) {
+  await dbClient.execute("DELETE FROM specification_registry")
+
+  const normalized = new Map<string, SpecificationDefinition>()
+  registry.forEach((item) => {
+    const id = item.id.trim()
+    if (!id) return
+    normalized.set(id, {
+      id,
+      name: item.name.trim() || id,
+      description: item.description?.trim() || undefined,
+    })
+  })
+
+  for (const item of normalized.values()) {
+    await dbClient.execute(
+      "INSERT OR REPLACE INTO specification_registry (id, name, description) VALUES (?, ?, ?)",
+      [item.id, item.name, item.description ?? null]
+    )
+  }
+}
+
+export async function saveSpecificationValues(specificationId: string, values: string[]) {
+  const normalized = [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right))
+  await dbClient.execute("DELETE FROM specifications WHERE kind = ?", [specificationId])
+
+  for (const value of normalized) {
+    await dbClient.execute(
+      "INSERT INTO specifications (kind, value) VALUES (?, ?)",
+      [specificationId, value]
+    )
+  }
+}
+
+export async function saveSpecificationsStore(store: SpecificationStore) {
+  await dbClient.execute("DELETE FROM specifications")
+
+  const entries = Object.entries(store)
+  for (const [specificationId, values] of entries) {
+    const normalized = [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right))
+    for (const value of normalized) {
+      await dbClient.execute(
+        "INSERT INTO specifications (kind, value) VALUES (?, ?)",
+        [specificationId, value]
+      )
+    }
+  }
 }

@@ -44,6 +44,16 @@ const dbWorkerAPI = {
           body TEXT NOT NULL,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS specifications (
+          kind TEXT NOT NULL,
+          value TEXT NOT NULL,
+          PRIMARY KEY (kind, value)
+        );
+        CREATE TABLE IF NOT EXISTS specification_registry (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT
+        );
       `)
 
       const tryExec = (sql: string) => {
