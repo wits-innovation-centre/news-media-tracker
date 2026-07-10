@@ -4,7 +4,9 @@
     "dockerfile": "Dockerfile"
   },
   "runArgs": [
-    "--name=news-media-tracker"
+    "--label='com.docker.compose.project=development",
+    "--label='com.docker.compose.service=news-media-tracker",
+    "--name=dev.news-media-tracker"
   ],
   "shutdownAction": "none",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
@@ -17,22 +19,6 @@
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
     "source=${localEnv:USERPROFILE}/AppData/Local/Microsoft/PowerAppsCLI,target=/root/.local/share/Microsoft/PowerAppsCli,type=bind"
   ],
-  "forwardPorts": [
-    3000,
-    3001,
-    8080
-  ],
-  "portsAttributes": {
-    "3000": {
-      "label": "Next.js Dev Server"
-    },
-    "3001": {
-      "label": "Electron Dev"
-    },
-    "8080": {
-      "label": "sqld Sync Target (external-server profile)"
-    }
-  },
   "customizations": {
     "vscode": {
       "extensions": [
