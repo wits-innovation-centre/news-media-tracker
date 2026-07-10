@@ -11,13 +11,13 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 name: "event",
                 description: "Add notes to annotate reports of homicides.",
                 fields: [
-                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true },
-                    { name: "name", label: "Event Title", type: { data: "string", input: "text" }, required: true },
+                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "evt-{date}-{rand:6}" }, description: "Auto-generated event identifier." },
+                    { name: "name", label: "Event Title", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "Event {date} {rand:4}" }, description: "Generated working title; you can rename this after details are known." },
                     { name: "date", label: "Incident Date", type: { data: "date", input: "date" } },
                     {
                         name: "location_of_homicide",
                         label: "Location",
-                        type: { data: "tiered-select", input: "select" },
+                        type: { data: "hierarchical-select", input: "select" },
                         options: {
                             $schema: {
                                 $label: { "Province": "Town" },
@@ -224,7 +224,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 description: "Capture a report of homicide.",
                 parentSchemaId: "event",
                 fields: [
-                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true },
+                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "rpt-{date}-{rand:6}" }, description: "Auto-generated report identifier." },
                     { name: "headline", label: "Headline", type: { data: "string", input: "text" }, required: true },
                     { name: "date", label: "Publication Date", type: { data: "date", input: "date" } },
                     { name: "author", label: "Author(s)", type: { data: "array<string>", input: "text-multi" } },
@@ -464,7 +464,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 description: "The people that participated in the reported event.",
                 parentSchemaId: "event",
                 fields: [
-                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true },
+                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "act-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
                     { name: "name", label: "Name", type: { data: "string", input: "text" } },
                     { name: "aliases", label: "Alias(es)", type: { data: "array<string>", input: "text-multi" } },
                     {

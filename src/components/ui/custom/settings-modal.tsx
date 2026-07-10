@@ -1,20 +1,21 @@
 import { useState } from "react"
-import { Settings, Plus, Trash2, Download, FolderTree } from "lucide-react"
+import { Settings, Download } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { DocumentSchema, FieldDefinition } from "@/lib/types"
-import { DEFAULT_SCHEMA_TEMPLATES } from "@/lib/schema-registry"
+import type { DocumentSchema, DocumentSchemaGroup } from "@/lib/types"
+import { SchemaManager } from "@/components/ui/custom/schema-manager"
 
 interface SettingsModalProps {
-    userSchemas: DocumentSchema[]
-    onSaveSchema: (name: string, fields: FieldDefinition[]) => void
+    groups: DocumentSchemaGroup[]
     onDeleteSchema: (id: string) => void
     onExportToObsidian: () => Promise<void>
-    onCreateChildSchema: (schema: DocumentSchema) => void
+    onSaveSchema: (schema: DocumentSchema) => void
+    onSaveGroup: (group: DocumentSchemaGroup) => void
+    onDeleteGroup: (groupId: string) => void
 }
 
-function SettingsModal({ userSchemas, onSaveSchema, onDeleteSchema, onExportToObsidian, onCreateChildSchema }: SettingsModalProps) {
+function SettingsModal({ groups, onDeleteSchema, onExportToObsidian, onSaveSchema, onSaveGroup, onDeleteGroup }: SettingsModalProps) {
     const [isExporting, setIsExporting] = useState(false)
 
     const handleExport = async () => {
@@ -40,76 +41,34 @@ function SettingsModal({ userSchemas, onSaveSchema, onDeleteSchema, onExportToOb
                 </Button>
             </DialogTrigger>
 
-            <DialogContent className="sm:max-w-150 max-h-[85vh] overflow-y-auto">
+            <DialogContent className="flex h-[94vh] w-[96vw] max-w-[1500px] flex-col overflow-hidden p-0 sm:max-w-[1500px]">
                 <DialogHeader>
-                    <DialogTitle>Workspace Settings</DialogTitle>
+                    <DialogTitle className="px-6 pt-6">Workspace Settings</DialogTitle>
                     <DialogDescription>
-                        Configure your local document types, choose metadata schemas, and export your vault.
+                        <span className="px-6 pb-2 block">Configure your local document types, choose metadata schemas, and export your vault.</span>
                     </DialogDescription>
                 </DialogHeader>
 
-                <Tabs defaultValue="schemas" className="w-full mt-4">
-                    <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="schemas">Document Schemas</TabsTrigger>
+                <Tabs defaultValue="schemas" className="mt-2 flex min-h-0 flex-1 flex-col px-6 pb-6">
+                    <TabsList className="grid w-full max-w-sm grid-cols-2">
+                        <TabsTrigger value="schemas">Schema Workspace</TabsTrigger>
                         <TabsTrigger value="export">Data Vault Actions</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="schemas" className="space-y-4 pt-4">
-                        <div>
-                            <h4 className="text-sm font-medium mb-2">Available Templates</h4>
-                            <div className="grid grid-cols-2 gap-2">
-                                {DEFAULT_SCHEMA_TEMPLATES.map((templateGroup) => {
-                                    const primaryDocument = templateGroup.documents[0]
-                                    return (
-                                        <Button
-                                            key={templateGroup.id}
-                                            variant="outline"
-                                            className="justify-start text-left"
-                                            onClick={() => onSaveSchema(primaryDocument.name.replace(/[^a-zA-Z ]/g, "").trim(), primaryDocument.fields as FieldDefinition[])}
-                                        >
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            <span className="flex flex-col items-start">
-                                                <span>{templateGroup.name}</span>
-                                                <span className="text-xs text-muted-foreground">{templateGroup.documents.length} documents</span>
-                                            </span>
-                                        </Button>
-                                    )
-                                })}
-                            </div>
-                        </div>
-
-                        <hr className="my-4 border-muted" />
-
-                        <div>
-                            <h4 className="text-sm font-medium mb-2">Your Active Active Document Schemas</h4>
-                            {userSchemas.length === 0 ? (
-                                <p className="text-sm text-muted-foreground italic">No custom schemas built yet. Pick a template above or create one.</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {userSchemas.map((schema) => (
-                                        <div key={schema.id} className="flex items-center justify-between p-3 border rounded-lg bg-card text-card-foreground">
-                                            <div>
-                                                <p className="font-medium text-sm">{schema.name}</p>
-                                                <p className="text-xs text-muted-foreground">{schema.fields.length} tracking fields defined</p>
-                                                {schema.parentSchemaId ? <p className="text-[11px] text-muted-foreground">Child of {schema.parentSchemaId}</p> : null}
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon" onClick={() => onCreateChildSchema(schema)} className="text-primary hover:bg-primary/10" title="Create child schema">
-                                                    <FolderTree className="h-4 w-4" />
-                                                </Button>
-                                                <Button variant="ghost" size="icon" onClick={() => onDeleteSchema(schema.id)} className="text-destructive hover:bg-destructive/10">
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                    <TabsContent value="schemas" className="mt-4 min-h-0 flex-1 overflow-hidden">
+                        <div className="h-full overflow-auto pr-2">
+                            <SchemaManager
+                                groups={groups}
+                                onSaveGroup={onSaveGroup}
+                                onDeleteGroup={onDeleteGroup}
+                                onSaveSchema={onSaveSchema}
+                                onDeleteSchema={onDeleteSchema}
+                            />
                         </div>
                     </TabsContent>
 
-                    <TabsContent value="export" className="space-y-4 pt-4">
-                        <div className="rounded-lg border border-dashed p-6 text-center space-y-4">
+                    <TabsContent value="export" className="mt-4 min-h-0 flex-1 overflow-auto">
+                        <div className="space-y-4 rounded-lg border border-dashed p-6 text-center">
                             <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                                 <Download className="h-6 w-6" />
                             </div>

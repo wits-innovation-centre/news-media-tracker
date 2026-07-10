@@ -1,9 +1,16 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { evaluateVisibility } from "@/lib/utils";
+import { RefreshCw } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { evaluateVisibility, flattenTieredOptions, generateFieldValue } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { HierarchicalSelect } from "@/components/ui/custom/hierarchical-select";
 
 import {
   Field,
@@ -26,15 +33,41 @@ import {
 
 interface CaptureProps {
   fields: FieldDefinition[]
+  initialValues?: Record<string, any>
+  onValuesChange?: (values: Record<string, any>) => void
   onSubmit: (frontmatter: Record<string, any>, markdownBody: string) => void
 };
 
 type DynamicFormValues = Record<string, string | string[] | number | boolean>
 
+const buildDefaultValues = (fields: FieldDefinition[], seedValues: Record<string, any> = {}) => {
+  const defaults: DynamicFormValues = {}
+
+  fields.forEach((field) => {
+    defaults[field.name] = generateFieldValue(field, { ...seedValues, ...defaults }) as DynamicFormValues[string]
+  })
+
+  return defaults
+}
+
+const isDeferredRelationField = (field: FieldDefinition) => {
+  return field.type.data === "array<string>" && field.type.input === "select" && (!field.options || (Array.isArray(field.options) && field.options.length === 0))
+}
+
+const getSelectOptions = (field: FieldDefinition) => {
+  if (!field.options) return []
+  return Array.isArray(field.options) ? field.options.map(String) : flattenTieredOptions(field.options)
+}
+
 const generateZodSchema = (fields: FieldDefinition[], currentValues: Record<string, any>) => {
   const schemaShape: Record<string, z.ZodTypeAny> = {}
 
   fields.forEach((field) => {
+    if (isDeferredRelationField(field)) {
+      schemaShape[field.name] = z.any().optional();
+      return;
+    }
+
     const isVisible = evaluateVisibility(field.visibility, currentValues);
     if (!isVisible) {
       schemaShape[field.name] = z.any().optional();
@@ -62,6 +95,7 @@ const generateZodSchema = (fields: FieldDefinition[], currentValues: Record<stri
       case "date":
         fieldSchema = z.string()
         break
+      case "hierarchical-select":
       case "select":
         fieldSchema = z.string();
 
@@ -108,18 +142,10 @@ const generateZodSchema = (fields: FieldDefinition[], currentValues: Record<stri
   return z.object(schemaShape)
 }
 
-function Capture({ fields, onSubmit }: CaptureProps) {
+function Capture({ fields, initialValues, onValuesChange, onSubmit }: CaptureProps) {
   const defaultValues = useMemo(() => {
-    const defaults: DynamicFormValues = {}
-    fields.forEach((field) => {
-      if (field.type.data === "boolean") defaults[field.name] = false
-      else if (field.type.data === "number") defaults[field.name] = 0
-      else if (field.type.data === "date-range") defaults[field.name] = ""
-      else if (field.type.input === "checkbox") defaults[field.name] = false
-      else defaults[field.name] = ""
-    })
-    return defaults
-  }, [fields])
+    return { ...buildDefaultValues(fields), ...(initialValues ?? {}) }
+  }, [fields, initialValues])
 
   const form = useForm<DynamicFormValues>({
     resolver: (values, context, options) => {
@@ -129,6 +155,18 @@ function Capture({ fields, onSubmit }: CaptureProps) {
     defaultValues,
   })
 
+  useEffect(() => {
+    form.reset({ ...buildDefaultValues(fields), ...(initialValues ?? {}) })
+  }, [fields, form, initialValues])
+
+  useEffect(() => {
+    const subscription = form.watch((values) => {
+      onValuesChange?.(values as Record<string, any>)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [form, onValuesChange])
+
   const watchedValues = form.watch()
 
   const handleSubmit = (values: DynamicFormValues) => {
@@ -136,6 +174,8 @@ function Capture({ fields, onSubmit }: CaptureProps) {
     let markdownBody = ""
 
     fields.forEach((field) => {
+      if (isDeferredRelationField(field)) return;
+
       const isVisible = evaluateVisibility(field.visibility, values);
       if (!isVisible) return;
 
@@ -147,13 +187,23 @@ function Capture({ fields, onSubmit }: CaptureProps) {
     })
 
     onSubmit(frontmatter, markdownBody)
-    form.reset()
+    form.reset(buildDefaultValues(fields))
+  }
+
+  const handleRegenerateField = (fieldDef: FieldDefinition) => {
+    form.setValue(
+      fieldDef.name,
+      generateFieldValue(fieldDef, form.getValues() as Record<string, any>) as DynamicFormValues[string],
+      { shouldDirty: true, shouldValidate: true }
+    )
   }
 
   return (
     <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
       <FieldGroup>
         {fields.map((fieldDef) => {
+          if (isDeferredRelationField(fieldDef)) return null;
+
           const isVisible = evaluateVisibility(fieldDef.visibility, watchedValues);
           if (!isVisible) return null;
 
@@ -195,14 +245,35 @@ function Capture({ fields, onSubmit }: CaptureProps) {
                       </FieldLabel>
 
                       {fieldDef.type.input === "text" || fieldDef.type.input === "date" ? (
-                        <Input
-                          {...field}
-                          value={(field.value as string | number) ?? ""}
-                          id={fieldDef.name}
-                          type={fieldDef.type.input === "date" ? "date" : "text"}
-                          placeholder={`Enter ${fieldDef.label.toLowerCase()}...`}
-                          aria-invalid={fieldState.invalid}
-                        />
+                        <div className="relative">
+                          <Input
+                            {...field}
+                            value={(field.value as string | number) ?? ""}
+                            id={fieldDef.name}
+                            type={fieldDef.type.input === "date" ? "date" : "text"}
+                            placeholder={`Enter ${fieldDef.label.toLowerCase()}...`}
+                            aria-invalid={fieldState.invalid}
+                            className={fieldDef.generator && fieldDef.type.input === "text" ? "pr-28" : undefined}
+                          />
+                          {fieldDef.generator && fieldDef.type.input === "text" ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              className="absolute top-1/2 right-1 h-6 -translate-y-1/2 px-2 text-[11px]"
+                              onClick={() => handleRegenerateField(fieldDef)}
+                            >
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <RefreshCw className="mr-1 h-3 w-3" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  Generate New
+                                </TooltipContent>
+                              </Tooltip>
+                            </Button>
+                          ) : null}
+                        </div>
                       ) : fieldDef.type.input === "textarea" ? (
                         <Textarea
                           {...field}
@@ -212,22 +283,36 @@ function Capture({ fields, onSubmit }: CaptureProps) {
                           className="min-h-50 resize-y font-mono"
                           aria-invalid={fieldState.invalid}
                         />
-                      ) : fieldDef.type.input === "select" ? (
-                        <Select
+                      ) : fieldDef.type.data === "hierarchical-select" && fieldDef.type.input === "select" ? (
+                        <HierarchicalSelect
+                          id={fieldDef.name}
                           value={(field.value as string) ?? ""}
-                          onValueChange={field.onChange}
-                        >
-                          <SelectTrigger id={fieldDef.name} aria-invalid={fieldState.invalid}>
-                            <SelectValue placeholder={`Select ${fieldDef.label.toLowerCase()}...`} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(Array.isArray(fieldDef.options) ? fieldDef.options : []).map((option) => (
-                              <SelectItem key={String(option)} value={String(option)}>
-                                {String(option)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          options={fieldDef.options as TieredOptions}
+                          placeholder={`Select ${fieldDef.label.toLowerCase()}...`}
+                          onChange={field.onChange}
+                        />
+                      ) : fieldDef.type.input === "select" ? (
+                        (() => {
+                          const selectOptions = getSelectOptions(fieldDef)
+
+                          return (
+                            <Select
+                              value={(field.value as string) ?? ""}
+                              onValueChange={field.onChange}
+                            >
+                              <SelectTrigger id={fieldDef.name} aria-invalid={fieldState.invalid}>
+                                <SelectValue placeholder={`Select ${fieldDef.label.toLowerCase()}...`} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {selectOptions.map((option) => (
+                                  <SelectItem key={String(option)} value={String(option)}>
+                                    {String(option)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )
+                        })()
                       ) : fieldDef.type.input === "text-multi" ? (
                         <Textarea
                           {...field}
@@ -242,6 +327,11 @@ function Capture({ fields, onSubmit }: CaptureProps) {
                       {fieldDef.description && (
                         <FieldDescription>{fieldDef.description}</FieldDescription>
                       )}
+                      {fieldDef.generator && !fieldDef.description ? (
+                        <FieldDescription>
+                          This value is generated from the schema rule and can be regenerated.
+                        </FieldDescription>
+                      ) : null}
                       {fieldState.invalid && (
                         <FieldError errors={[fieldState.error]} />
                       )}

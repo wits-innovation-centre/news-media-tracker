@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import JSZip from "jszip"
-import type { TieredOptions } from "@/lib/types";
+import type { FieldDefinition, TieredOptions } from "@/lib/types";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -45,7 +45,7 @@ async function exportSqliteToObsidianWorkspace(notes: SQLiteNoteRecord[]) {
   }
 
   const zipBlob = await zip.generateAsync({ type: "blob" })
-  
+
   const downloadLink = document.createElement("a")
   downloadLink.href = URL.createObjectURL(zipBlob)
   downloadLink.download = `obsidian_vault_${Date.now()}.zip`
@@ -57,9 +57,9 @@ async function exportSqliteToObsidianWorkspace(notes: SQLiteNoteRecord[]) {
 
 function isValidPathInRecord(path: string[], record: TieredOptions): boolean {
   if (path.length === 0) return false;
-  
+
   const [currentSegment, ...remainingSegments] = path;
-  
+
   if (currentSegment.startsWith("$")) return false;
 
   const nextTarget = record[currentSegment];
@@ -76,13 +76,47 @@ function isValidPathInRecord(path: string[], record: TieredOptions): boolean {
   return isValidPathInRecord(remainingSegments, nextTarget as TieredOptions);
 };
 
+function flattenTieredOptions(record: TieredOptions, prefix: string[] = []): string[] {
+  return Object.entries(record).flatMap(([key, value]) => {
+    if (key.startsWith("$")) return []
+
+    const nextPath = [...prefix, key]
+
+    if (Array.isArray(value)) {
+      return value.map((leaf) => [...nextPath, leaf].join(" / "))
+    }
+
+    return flattenTieredOptions(value as TieredOptions, nextPath)
+  })
+}
+
+function getVisibilityTargetValue(formValues: Record<string, any>, dependsOn: string): any {
+  if (dependsOn in formValues) return formValues[dependsOn]
+
+  const segments = dependsOn.split(".")
+  if (segments.length === 0) return undefined
+
+  const rootValue = formValues[segments[0]]
+  if (rootValue == null) return undefined
+
+  if (typeof rootValue === "string" && rootValue.includes(" / ") && segments.length > 1) {
+    const pathSegments = rootValue.split(" / ")
+    return pathSegments[pathSegments.length - 1]
+  }
+
+  return segments.slice(1).reduce((current, segment) => {
+    if (current == null || typeof current !== "object") return undefined
+    return current[segment]
+  }, rootValue)
+}
+
 function evaluateVisibility(
   condition: any,
   formValues: Record<string, any>
 ): boolean {
   if (!condition) return true; // No condition means always visible
 
-  const targetValue = formValues[condition.dependsOn];
+  const targetValue = getVisibilityTargetValue(formValues, condition.dependsOn);
 
   switch (condition.operator) {
     case "eq":
@@ -98,9 +132,71 @@ function evaluateVisibility(
   }
 }
 
+function buildRandomToken(length = 6): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+  const values = crypto.getRandomValues(new Uint32Array(length))
+  return Array.from(values, (value) => alphabet[value % alphabet.length]).join("")
+}
+
+function formatDateToken(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = `${now.getMonth() + 1}`.padStart(2, "0")
+  const day = `${now.getDate()}`.padStart(2, "0")
+  return `${year}${month}${day}`
+}
+
+function generateFieldValue(field: FieldDefinition, formValues: Record<string, any> = {}): any {
+  if (field.generator) {
+    const { strategy, prefix = "", pattern, randomLength = 6, uppercase } = field.generator
+
+    let generatedValue = ""
+
+    switch (strategy) {
+      case "uuid":
+        generatedValue = crypto.randomUUID()
+        break
+      case "timestamp":
+        generatedValue = `${Date.now()}`
+        break
+      case "pattern":
+        generatedValue = (pattern ?? "{uuid}").replace(/\{([^}]+)\}/g, (_match, token) => {
+          if (token === "uuid") return crypto.randomUUID()
+          if (token === "timestamp") return `${Date.now()}`
+          if (token === "date") return formatDateToken()
+          if (token === "rand" || token === "random") return buildRandomToken(randomLength)
+          if (token.startsWith("rand:")) {
+            const length = Number.parseInt(token.split(":")[1] ?? `${randomLength}`, 10)
+            return buildRandomToken(Number.isNaN(length) ? randomLength : length)
+          }
+          if (token.startsWith("field:")) {
+            const fieldName = token.slice("field:".length)
+            const value = formValues[fieldName]
+            return value == null ? "" : String(value)
+          }
+          return ""
+        })
+        break
+    }
+
+    const value = `${prefix}${generatedValue}`
+    return uppercase ? value.toUpperCase() : value
+  }
+
+  if (field.default !== undefined) return field.default
+
+  if (field.type.data === "boolean") return false
+  if (field.type.data === "number") return 0
+  if (field.type.data === "array<string>") return []
+
+  return ""
+}
+
 export {
   cn,
   exportSqliteToObsidianWorkspace,
   isValidPathInRecord,
-  evaluateVisibility
+  flattenTieredOptions,
+  evaluateVisibility,
+  generateFieldValue
 }

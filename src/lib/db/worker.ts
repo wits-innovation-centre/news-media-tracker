@@ -25,17 +25,39 @@ const dbWorkerAPI = {
           description TEXT,
           kind TEXT DEFAULT 'custom',
           parentSchemaId TEXT,
+          groupId TEXT,
+          groupName TEXT,
+          subtypeFields TEXT,
           fields TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS schema_groups (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT
         );
         CREATE TABLE IF NOT EXISTS notes (
           id TEXT PRIMARY KEY,
           schema_id TEXT NOT NULL,
+          parent_id TEXT,
           title TEXT NOT NULL,
           frontmatter TEXT NOT NULL,
           body TEXT NOT NULL,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `)
+
+      const tryExec = (sql: string) => {
+        try {
+          db.exec(sql)
+        } catch {
+          // Ignore duplicate-column migrations for existing databases.
+        }
+      }
+
+      tryExec("ALTER TABLE schemas ADD COLUMN groupId TEXT")
+      tryExec("ALTER TABLE schemas ADD COLUMN groupName TEXT")
+      tryExec("ALTER TABLE schemas ADD COLUMN subtypeFields TEXT")
+      tryExec("ALTER TABLE notes ADD COLUMN parent_id TEXT")
       return true
     } catch (error) {
       console.error("Failed to initialize SQLite WASM module:", error)

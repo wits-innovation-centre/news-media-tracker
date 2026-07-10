@@ -1,6 +1,6 @@
 type FieldDataType = "string" |
     "array<string>" |
-    "tiered-select" |
+    "hierarchical-select" |
     "select" |
     "number" |
     "boolean" |
@@ -33,6 +33,14 @@ interface VisibilityCondition {
     value?: any;
 }
 
+interface FieldGeneratorConfig {
+    strategy: "uuid" | "timestamp" | "pattern";
+    prefix?: string;
+    pattern?: string;
+    randomLength?: number;
+    uppercase?: boolean;
+}
+
 interface FieldDefinition {
     name: string;
     label: string;
@@ -41,6 +49,7 @@ interface FieldDefinition {
         input: FieldInputType;
     };
     default?: any;
+    generator?: FieldGeneratorConfig;
     visibility?: VisibilityCondition;
     required?: boolean;
     options?: string[] | TieredOptions;
@@ -71,15 +80,31 @@ interface StoredDocument {
     title: string;
     frontmatter: Record<string, any>;
     body: string;
+    parent_id?: string;
     created_at?: string;
 };
 
+interface DocumentNode {
+    id: string;
+    schemaId: string;
+    parentId?: string;
+    label: string;
+}
+
+interface SchemaWorkspace {
+    groups: DocumentSchemaGroup[];
+}
+
 export type {
     FieldDataType,
+    FieldInputType,
     FieldDefinition,
+    FieldGeneratorConfig,
     TieredOptions,
     TieredOptionsSchema,
     DocumentSchema,
     DocumentSchemaGroup,
-    StoredDocument
+    SchemaWorkspace,
+    StoredDocument,
+    DocumentNode
 };
