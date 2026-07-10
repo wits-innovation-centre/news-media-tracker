@@ -41,7 +41,7 @@ function SettingsModal({ groups, onDeleteSchema, onExportToObsidian, onSaveSchem
                 </Button>
             </DialogTrigger>
 
-            <DialogContent className="flex h-[94vh] w-[96vw] max-w-[1500px] flex-col overflow-hidden p-0 sm:max-w-[1500px]">
+            <DialogContent className="flex h-[94vh] w-[96vw] max-w-375 flex-col overflow-hidden p-0 sm:max-w-375">
                 <DialogHeader>
                     <DialogTitle className="px-6 pt-6">Workspace Settings</DialogTitle>
                     <DialogDescription>
