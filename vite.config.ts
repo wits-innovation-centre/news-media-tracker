@@ -101,6 +101,18 @@ export default defineConfig({
         }
       ]
     }),
+    {
+      name: "sqlite-wasm-opfs-fix",
+      enforce: "pre",
+      transform(code, id) {
+        if (id.includes("@sqlite.org/sqlite-wasm") && code.includes("sqlite3-opfs-async-proxy.js")) {
+          return code.replace(
+            /new Worker\(new URL\(['"]sqlite3-opfs-async-proxy\.js['"],\s*import\.meta\.url\)\)/g,
+            'new Worker(new URL("sqlite3-opfs-async-proxy.js", import.meta.url), { type: "module" })'
+          );
+        }
+      }
+    },
     // VitePWA({
     //   registerType: 'autoUpdate',
     //   injectRegister: 'auto',

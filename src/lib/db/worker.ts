@@ -13,7 +13,12 @@ const dbWorkerAPI = {
     console.log("3. SharedArrayBuffer:", typeof SharedArrayBuffer !== 'undefined');
 
     try {
-      const sqlite3 = await sqlite3InitModule();
+      // @ts-expect-error - SQLite WASM types are incomplete and incorrectly state this takes 0 arguments.
+      const sqlite3 = await sqlite3InitModule({
+        print: console.log,
+        printErr: console.error
+      })
+
       if ("opfs" in sqlite3) {
         db = new sqlite3.oo1.OpfsDb("/obsidian_vault.sqlite3")
         console.log("SQLite successfully mounted onto OPFS storage.")
