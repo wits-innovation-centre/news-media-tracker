@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { powerApps } from "@microsoft/power-apps-vite/plugin";
 import path from "path";
 import tailwindcss from "@tailwindcss/vite";
-import { viteStaticCopy } from 'vite-plugin-static-copy';
+// import { viteStaticCopy } from 'vite-plugin-static-copy';
 // import { VitePWA } from 'vite-plugin-pwa';
 
 // const windowsIcons = [
@@ -89,18 +89,6 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 export default defineConfig({
   plugins: [
     react(), powerApps(), tailwindcss(),
-    viteStaticCopy({
-      targets: [
-        {
-          src: 'node_modules/@sqlite.org/sqlite-wasm/**/*.wasm',
-          dest: 'assets'
-        },
-        {
-          src: 'node_modules/@sqlite.org/sqlite-wasm/**/*-proxy.js',
-          dest: 'assets'
-        }
-      ]
-    }),
     {
       name: "sqlite-wasm-opfs-fix",
       enforce: "pre",
@@ -113,6 +101,18 @@ export default defineConfig({
         }
       }
     },
+    // viteStaticCopy({
+    //   targets: [
+    //     { 
+    //       src: 'node_modules/@sqlite.org/sqlite-wasm/**/*-proxy.js', 
+    //       dest: 'assets' 
+    //     },
+    //     { 
+    //       src: 'node_modules/@sqlite.org/sqlite-wasm/**/*.wasm', 
+    //       dest: 'assets' 
+    //     }
+    //   ]
+    // }),
     // VitePWA({
     //   registerType: 'autoUpdate',
     //   injectRegister: 'auto',
