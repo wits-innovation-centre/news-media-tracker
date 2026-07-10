@@ -1,0 +1,45 @@
+{
+  "name": "news-media-tracker",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "runArgs": [
+    "--label='com.docker.compose.project=development",
+    "--label='com.docker.compose.service=news-media-tracker",
+    "--name=dev.news-media-tracker"
+  ],
+  "shutdownAction": "none",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+  "mounts": [
+    "source=pnpm_store,target=/pnpm/store,type=volume",
+    "source=node_modules,target=/workspace/node_modules,type=volume",
+    "source=/etc/localtime,target=/etc/localtime,type=bind,readonly",
+    "source=/etc/timezone,target=/etc/timezone,type=bind,readonly",
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+    "source=${localEnv:USERPROFILE}/AppData/Local/Microsoft/PowerAppsCLI,target=/root/.local/share/Microsoft/PowerAppsCli,type=bind"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "microsoft-IsvExpTools.powerplatform-vscode",
+        "ms-vscode-remote.remote-containers",
+        "ms-vscode.vscode-typescript-next",
+        "Postman.postman-for-vscode",
+        "bradlc.vscode-tailwindcss",
+        "ms-azuretools.vscode-docker",
+        "donjayamanne.githistory",
+        "esbenp.prettier-vscode",
+        "Orta.vscode-jest"
+      ]
+    }
+  },
+  "postCreateCommand": "/workspace/.devcontainer/post-create.sh",
+  "updateRemoteUserUID": false,
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": false,
+      "configureZshAsDefaultShell": false
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "appId": "9662909b-2537-4381-b019-bbcd41eaad40",
+  "appDisplayName": "News Media Tracker",
+  "region": "prod",
+  "environmentId": "e8263649-2b41-e2aa-b68e-b72077401d42",
+  "description": " ",
+  "buildPath": "./dist",
+  "buildEntryPoint": "index.html",
+  "localAppUrl": "http://localhost:3000",
+  "logoPath": "Default",
+  "connectionReferences": {},
+  "databaseReferences": {}
+}
