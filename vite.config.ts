@@ -109,7 +109,8 @@ export default defineConfig({
           type: 'image/png',
           purpose: 'any',
         })),
-      }, workbox: {
+      }, 
+      workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
         runtimeCaching: [
           {
@@ -133,6 +134,9 @@ export default defineConfig({
       "Cross-Origin-Opener-Policy": "same-origin",
       "Cross-Origin-Embedder-Policy": "require-corp",
     },
+  },
+  worker: {
+    format: 'es',
   },
   optimizeDeps: {
     exclude: ['@sqlite.org/sqlite-wasm'],

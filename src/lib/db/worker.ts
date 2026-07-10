@@ -20,6 +20,8 @@ const dbWorkerAPI = {
           console.error("OPFS Fail: The browser API 'navigator.storage.getDirectory' is missing completely.");
         } else if (typeof SharedArrayBuffer === "undefined") {
           console.error("OPFS Fail: SharedArrayBuffer is missing! You MUST configure your server to emit COOP and COEP headers.");
+        } else if (!self.crossOriginIsolated) {
+          console.error("OPFS Fail: crossOriginIsolated is FALSE. Your COOP/COEP headers are being stripped by the PWA cache or Cloudflare.");
         }
 
         db = new sqlite3.oo1.DB("/obsidian_vault.sqlite3", "ct")
