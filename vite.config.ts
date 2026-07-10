@@ -72,12 +72,25 @@ const windowsIcons = [
   { src: '/icons/windows11/Square44x44Logo.altform-unplated_targetsize-96.png', sizes: '96x96' },
 ];
 
+const headersPlugin = {
+  handlerWillRespond: async ({ response }: { response: any }) => {
+    const headers = new Headers(response.headers);
+    headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+    headers.set("Cross-Origin-Opener-Policy", "same-origin");
+    return new Response(response.body, {
+      headers,
+      status: response.status,
+      statusText: response.statusText,
+    });
+  },
+};
+
 export default defineConfig({
   plugins: [
     react(), powerApps(), tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto', 
+      injectRegister: 'auto',
       manifest: {
         name: 'News Report Tracker',
         short_name: 'NewsTracker',
@@ -96,9 +109,17 @@ export default defineConfig({
           type: 'image/png',
           purpose: 'any',
         })),
-      },
-      workbox: {
+      }, workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => ['document', 'iframe', 'worker'].includes(request.destination),
+            handler: 'NetworkOnly', 
+            options: {
+              plugins: [headersPlugin],
+            },
+          },
+        ],
       }
     })
   ],

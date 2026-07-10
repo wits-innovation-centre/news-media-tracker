@@ -14,8 +14,16 @@ const dbWorkerAPI = {
         db = new sqlite3.oo1.OpfsDb("/obsidian_vault.sqlite3")
         console.log("SQLite successfully mounted onto OPFS storage.")
       } else {
+        if (!self.isSecureContext) {
+          console.error("OPFS Fail: Context is not secure (requires HTTPS or localhost).");
+        } else if (!("storage" in navigator && "getDirectory" in navigator.storage)) {
+          console.error("OPFS Fail: The browser API 'navigator.storage.getDirectory' is missing completely.");
+        } else if (typeof SharedArrayBuffer === "undefined") {
+          console.error("OPFS Fail: SharedArrayBuffer is missing! You MUST configure your server to emit COOP and COEP headers.");
+        }
+
         db = new sqlite3.oo1.DB("/obsidian_vault.sqlite3", "ct")
-        console.warn("OPFS is unsupported. Operating on transient fallback storage.")
+        console.warn("OPFS is unsupported. Operating on transient fallback storage (data will lose state on refresh).")
       }
 
       db.exec(`
