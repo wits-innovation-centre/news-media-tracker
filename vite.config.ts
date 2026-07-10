@@ -92,11 +92,11 @@ export default defineConfig({
     viteStaticCopy({
       targets: [
         {
-          src: 'node_modules/@sqlite.org/sqlite-wasm/sqlite-wasm/jswasm/sqlite3.wasm',
+          src: 'node_modules/@sqlite.org/sqlite-wasm/**/*.wasm',
           dest: 'assets'
         },
         {
-          src: 'node_modules/@sqlite.org/sqlite-wasm/sqlite-wasm/jswasm/sqlite3-opfs-async-proxy.js',
+          src: 'node_modules/@sqlite.org/sqlite-wasm/**/*-proxy.js',
           dest: 'assets'
         }
       ]
@@ -122,13 +122,13 @@ export default defineConfig({
           type: 'image/png',
           purpose: 'any',
         })),
-      }, 
+      },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
         runtimeCaching: [
           {
             urlPattern: ({ request }) => ['document', 'iframe', 'worker'].includes(request.destination),
-            handler: 'NetworkOnly', 
+            handler: 'NetworkOnly',
             options: {
               plugins: [headersPlugin],
             },
