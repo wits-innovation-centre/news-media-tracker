@@ -125,6 +125,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
+        globIgnores: [
+          '**/*sqlite3-opfs-async-proxy*.js',
+          '**/*.wasm'
+        ],
         runtimeCaching: [
           {
             urlPattern: ({ request }) => ['document', 'iframe', 'worker'].includes(request.destination),
