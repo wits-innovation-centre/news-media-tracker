@@ -12,7 +12,6 @@ dist
 dist-ssr
 *.local
 .pnpm-store
-.legacy
 
 # Editor directories and files
 .vscode/*
