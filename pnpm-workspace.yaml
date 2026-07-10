@@ -1,3 +1,6 @@
+packages:
+  - "."
+
 allowBuilds:
   '@azure/msal-node-extensions': true
   '@azure/msal-node-runtime': true
