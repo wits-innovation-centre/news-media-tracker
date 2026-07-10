@@ -114,7 +114,7 @@ function evaluateVisibility(
   condition: any,
   formValues: Record<string, any>
 ): boolean {
-  if (!condition) return true; // No condition means always visible
+  if (!condition) return true; 
 
   const targetValue = getVisibilityTargetValue(formValues, condition.dependsOn);
 
