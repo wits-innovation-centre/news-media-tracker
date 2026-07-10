@@ -50,6 +50,7 @@
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
     "vite-plugin-pwa": "^1.3.0",
+    "vite-plugin-static-copy": "^4.1.1",
     "wrangler": "^4.109.0"
   }
 }

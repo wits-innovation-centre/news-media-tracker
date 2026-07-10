@@ -4,6 +4,7 @@ import { powerApps } from "@microsoft/power-apps-vite/plugin";
 import path from "path";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from 'vite-plugin-pwa';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 const windowsIcons = [
   { src: '/icons/windows11/SmallTile.scale-100.png', sizes: '71x71' },
@@ -88,6 +89,18 @@ const headersPlugin = {
 export default defineConfig({
   plugins: [
     react(), powerApps(), tailwindcss(),
+    viteStaticCopy({
+      targets: [
+        {
+          src: 'node_modules/@sqlite.org/sqlite-wasm/sqlite-wasm/jswasm/sqlite3.wasm',
+          dest: 'assets'
+        },
+        {
+          src: 'node_modules/@sqlite.org/sqlite-wasm/sqlite-wasm/jswasm/sqlite3-opfs-async-proxy.js',
+          dest: 'assets'
+        }
+      ]
+    }),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
