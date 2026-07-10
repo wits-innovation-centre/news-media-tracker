@@ -101,45 +101,45 @@ export default defineConfig({
         }
       ]
     }),
-    VitePWA({
-      registerType: 'autoUpdate',
-      injectRegister: 'auto',
-      manifest: {
-        name: 'News Report Tracker',
-        short_name: 'NewsTracker',
-        description: 'A utility tool to collect, track, and analyse news media.',
-        start_url: '/',
-        display: 'standalone',
-        background_color: '#111827',
-        theme_color: '#111827',
-        orientation: 'any',
-        scope: '/',
-        lang: 'en',
-        prefer_related_applications: false,
-        categories: ['news', 'productivity', 'utilities', 'research'],
-        icons: windowsIcons.map((icon) => ({
-          ...icon,
-          type: 'image/png',
-          purpose: 'any',
-        })),
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
-        globIgnores: [
-          '**/*sqlite3-opfs-async-proxy*.js',
-          '**/*.wasm'
-        ],
-        runtimeCaching: [
-          {
-            urlPattern: ({ request }) => ['document', 'iframe', 'worker'].includes(request.destination),
-            handler: 'NetworkOnly',
-            options: {
-              plugins: [headersPlugin],
-            },
-          },
-        ],
-      }
-    })
+    // VitePWA({
+    //   registerType: 'autoUpdate',
+    //   injectRegister: 'auto',
+    //   manifest: {
+    //     name: 'News Report Tracker',
+    //     short_name: 'NewsTracker',
+    //     description: 'A utility tool to collect, track, and analyse news media.',
+    //     start_url: '/',
+    //     display: 'standalone',
+    //     background_color: '#111827',
+    //     theme_color: '#111827',
+    //     orientation: 'any',
+    //     scope: '/',
+    //     lang: 'en',
+    //     prefer_related_applications: false,
+    //     categories: ['news', 'productivity', 'utilities', 'research'],
+    //     icons: windowsIcons.map((icon) => ({
+    //       ...icon,
+    //       type: 'image/png',
+    //       purpose: 'any',
+    //     })),
+    //   },
+    //   workbox: {
+    //     globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
+    //     globIgnores: [
+    //       '**/*sqlite3-opfs-async-proxy*.js',
+    //       '**/*.wasm'
+    //     ],
+    //     runtimeCaching: [
+    //       {
+    //         urlPattern: ({ request }) => ['document', 'iframe', 'worker'].includes(request.destination),
+    //         handler: 'NetworkOnly',
+    //         options: {
+    //           plugins: [headersPlugin],
+    //         },
+    //       },
+    //     ],
+    //   }
+    // })
   ],
   resolve: {
     alias: {

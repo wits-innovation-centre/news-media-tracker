@@ -7,9 +7,13 @@ const dbWorkerAPI = {
   async init() {
     if (db) return true
 
-    try {
-      const sqlite3 = await sqlite3InitModule()
+    console.log("=== OPFS DIAGNOSTICS ===");
+    console.log("1. Secure Context:", self.isSecureContext);
+    console.log("2. Cross Origin Isolated:", self.crossOriginIsolated);
+    console.log("3. SharedArrayBuffer:", typeof SharedArrayBuffer !== 'undefined');
 
+    try {
+      const sqlite3 = await sqlite3InitModule();
       if ("opfs" in sqlite3) {
         db = new sqlite3.oo1.OpfsDb("/obsidian_vault.sqlite3")
         console.log("SQLite successfully mounted onto OPFS storage.")
