@@ -22,8 +22,8 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
+.env
 *.sw?
 
-.env
-
+*.ig.md
 .legacy

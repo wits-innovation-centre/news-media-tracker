@@ -18,6 +18,7 @@ import {
     saveSpecificationsStore,
     saveSpecificationValues,
     saveSchemaWorkspace,
+    updateCapturedNoteSchema,
 } from "@/lib/db/utils";
 import {
     DEFAULT_SCHEMA_TEMPLATES,
@@ -92,9 +93,30 @@ const applySpecificationsToGroups = (
     }));
 };
 
+const createDefaultSchemaGroups = () =>
+    DEFAULT_SCHEMA_TEMPLATES.map((template) =>
+        createSchemaGroupFromTemplate(template, undefined, { preserveTemplateIds: true })
+    );
+
+const TEMPLATE_SCHEMA_IDS = new Set(
+    DEFAULT_SCHEMA_TEMPLATES.flatMap((group) => group.documents.map((schema) => schema.id))
+);
+
+const normalizeLegacySchemaId = (schemaId: string, availableSchemaIds: Set<string>): string => {
+    if (availableSchemaIds.has(schemaId)) return schemaId;
+
+    for (const templateSchemaId of TEMPLATE_SCHEMA_IDS) {
+        if (schemaId.startsWith(`${templateSchemaId}-`) && availableSchemaIds.has(templateSchemaId)) {
+            return templateSchemaId;
+        }
+    }
+
+    return schemaId;
+};
+
 function App() {
     const [schemaGroups, setSchemaGroups] = useState<DocumentSchemaGroup[]>(() =>
-        DEFAULT_SCHEMA_TEMPLATES.map((template) => createSchemaGroupFromTemplate(template))
+        createDefaultSchemaGroups()
     );
     const [documents, setDocuments] = useState<DocumentNode[]>([]);
     const [storedDocuments, setStoredDocuments] = useState<Record<string, StoredDocument>>({});
@@ -115,7 +137,7 @@ function App() {
                 const loadedDocuments = await loadCapturedDocuments();
                 const storedRegistry = await loadSpecificationRegistry();
                 const storedSpecifications = await loadSpecifications();
-                const defaultGroups = DEFAULT_SCHEMA_TEMPLATES.map((template) => createSchemaGroupFromTemplate(template));
+                const defaultGroups = createDefaultSchemaGroups();
 
                 const hydratedGroups =
                     storedGroups.length > 0 || storedSchemas.length > 0
@@ -147,6 +169,20 @@ function App() {
 
                 const normalizedSpecs = mergeSpecificationStore(storedSpecifications, specDefaults, normalizedRegistry);
 
+                const availableSchemaIds = new Set(hydratedGroups.flatMap((group) => group.documents.map((schema) => schema.id)));
+                const normalizedDocuments = loadedDocuments.map((record) => {
+                    const nextSchemaId = normalizeLegacySchemaId(record.schema_id, availableSchemaIds);
+                    if (nextSchemaId === record.schema_id) return record;
+                    return { ...record, schema_id: nextSchemaId };
+                });
+                const migratedSchemaRecords = normalizedDocuments.filter((record, index) => record.schema_id !== loadedDocuments[index].schema_id);
+
+                if (migratedSchemaRecords.length > 0) {
+                    await Promise.all(
+                        migratedSchemaRecords.map((record) => updateCapturedNoteSchema(record.id, record.schema_id))
+                    );
+                }
+
                 if (storedRegistry.length === 0 && normalizedRegistry.length > 0) {
                     await saveSpecificationRegistry(normalizedRegistry);
                 }
@@ -159,14 +195,14 @@ function App() {
                 setSpecificationRegistry(normalizedRegistry);
                 setSpecifications(normalizedSpecs);
                 setDocuments(
-                    loadedDocuments.map((record) => ({
+                    normalizedDocuments.map((record) => ({
                         id: record.id,
                         schemaId: record.schema_id,
                         label: record.title,
                         parentId: record.parent_id,
                     }))
                 );
-                setStoredDocuments(Object.fromEntries(loadedDocuments.map((record) => [record.id, record])));
+                setStoredDocuments(Object.fromEntries(normalizedDocuments.map((record) => [record.id, record])));
                 setIsDbReady(true);
             } catch (error) {
                 console.error("Failed preparing database", error);

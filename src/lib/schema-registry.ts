@@ -228,10 +228,10 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     { name: "headline", label: "Headline", type: { data: "string", input: "text" }, required: true },
                     { name: "url", label: "URL", type: { data: "string", input: "text" }, required: true },
                     { name: "date", label: "Publication Date", type: { data: "date", input: "date" } },
-                    { 
-                        name: "author_identity_status", 
-                        label: "Author Identity Status", 
-                        type: { data: "string", input: "select" } ,
+                    {
+                        name: "author_identity_status",
+                        label: "Author Identity Status",
+                        type: { data: "string", input: "select" },
                         options: [
                             "Known",
                             "Undisclosed",
@@ -240,16 +240,16 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         ],
                         default: "Known"
                     },
-                    { 
-                        name: "author", 
-                        label: "Author(s)", 
+                    {
+                        name: "author",
+                        label: "Author(s)",
                         type: { data: "array<string>", input: "search-select-input" },
                         specification: "author",
                         visibility: {
                             dependsOn: "author_identity_status",
                             operator: "eq",
                             value: "Known"
-                        } 
+                        }
                     },
                     {
                         name: "wire_service",
@@ -766,13 +766,15 @@ function createSchemaFromTemplate(
 
 function createSchemaGroupFromTemplate(
     template: DocumentSchemaGroup,
-    overrides?: Partial<DocumentSchemaGroup>
+    overrides?: Partial<DocumentSchemaGroup>,
+    options?: { preserveTemplateIds?: boolean }
 ): DocumentSchemaGroup {
-    const groupId = overrides?.id ?? `${template.id}-${crypto.randomUUID()}`;
+    const preserveTemplateIds = options?.preserveTemplateIds === true;
+    const groupId = overrides?.id ?? (preserveTemplateIds ? template.id : `${template.id}-${crypto.randomUUID()}`);
 
     const idMap: Record<string, string> = {};
     template.documents.forEach((doc) => {
-        idMap[doc.id] = `${doc.id}-${crypto.randomUUID()}`;
+        idMap[doc.id] = preserveTemplateIds ? doc.id : `${doc.id}-${crypto.randomUUID()}`;
     });
 
     const clonedDocuments = template.documents.map((doc) => {

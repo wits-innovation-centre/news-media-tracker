@@ -61,9 +61,16 @@ export async function saveCapturedNote(id: string, schemaId: string, title: stri
   return id
 }
 
+export async function updateCapturedNoteSchema(noteId: string, schemaId: string) {
+  await dbClient.execute(
+    "UPDATE notes SET schema_id = ? WHERE id = ?",
+    [schemaId, noteId]
+  )
+}
+
 export async function loadCapturedDocuments() {
   const records = await dbClient.query(
-    "SELECT id, schema_id, title, frontmatter, body, created_at FROM notes ORDER BY created_at DESC"
+    "SELECT id, schema_id, parent_id, title, frontmatter, body, created_at FROM notes ORDER BY created_at DESC"
   )
 
   return records.map((row) => ({
