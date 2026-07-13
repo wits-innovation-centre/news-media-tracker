@@ -11,6 +11,7 @@ interface LayoutProps {
   onSelectSchema: (id: string) => void;
   onSelectDocument: (documentId: string, schemaId: string) => void;
   onCreateDocument: (schema: DocumentSchema, parentId?: string) => void;
+  onDeleteDocument: (documentId: string) => void;
 }
 
 export default function Layout({
@@ -22,6 +23,7 @@ export default function Layout({
   onSelectSchema,
   onSelectDocument,
   onCreateDocument,
+  onDeleteDocument,
 }: LayoutProps) {
   return (
     <SidebarProvider>
@@ -33,6 +35,7 @@ export default function Layout({
         onSelectSchema={onSelectSchema}
         onSelectDocument={onSelectDocument}
         onCreateDocument={onCreateDocument}
+        onDeleteDocument={onDeleteDocument}
       />
       <div className="flex-1">{children}</div>
     </SidebarProvider>

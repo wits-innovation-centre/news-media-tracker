@@ -6,7 +6,8 @@ type FieldDataType = "string" |
     "boolean" |
     "date" |
     "date-range" |
-    "markdown";
+    "markdown" |
+    "form";
 
 type FieldInputType = "text" |
     "textarea" |
@@ -16,7 +17,9 @@ type FieldInputType = "text" |
     "date-range" |
     "text-multi" |
     "checkbox" |
-    "switch"
+    "switch" |
+    "subtype-form-select" |
+    "embedded-form-list";
 
 type TieredOptionsSchema = {
     [key: string]: string | TieredOptionsSchema | any;

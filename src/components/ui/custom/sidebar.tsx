@@ -12,9 +12,10 @@ interface SidebarProps {
   onSelectSchema: (schemaId: string) => void;
   onSelectDocument: (documentId: string, schemaId: string) => void;
   onCreateDocument: (schema: DocumentSchema, parentId?: string) => void;
+  onDeleteDocument: (documentId: string) => void;
 }
 
-function Sidebar({ schemas, documents, activeSchemaId, activeDocumentId, onSelectSchema, onSelectDocument, onCreateDocument }: SidebarProps) {
+function Sidebar({ schemas, documents, activeSchemaId, activeDocumentId, onSelectSchema, onSelectDocument, onCreateDocument, onDeleteDocument }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
   const [menuOpenAnchor, setMenuOpenAnchor] = useState<string | null>(null);
@@ -167,9 +168,24 @@ function Sidebar({ schemas, documents, activeSchemaId, activeDocumentId, onSelec
               <FilePlus2 className="h-3.5 w-3.5 shrink-0 opacity-70" />
               <span className="truncate">{document.label}</span>
             </div>
-            <span className="truncate rounded border border-border/70 px-1 py-0.5 text-[10px] text-muted-foreground">
-              {schema?.name ?? document.schemaId}
-            </span>
+            <div className="flex items-center gap-1">
+              <span className="truncate rounded border border-border/70 px-1 py-0.5 text-[10px] text-muted-foreground">
+                {schema?.name ?? document.schemaId}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`Delete "${document.label}"? This cannot be undone.`)) {
+                    onDeleteDocument(document.id);
+                  }
+                }}
+                className="rounded p-0.5 opacity-0 transition-opacity hover:bg-destructive/20 hover:text-destructive group-hover:opacity-100"
+                title="Delete document"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
           </div>
           {renderAddMenu(`after-${document.id}`, document)}
         </div>

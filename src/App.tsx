@@ -6,7 +6,7 @@ import { Capture } from "@/components/ui/custom/capture";
 import Layout from "@/components/ui/custom/layout";
 import { SettingsModal } from "@/components/ui/custom/settings-modal";
 
-import { initializeDatabase } from "@/lib/db/client";
+import { initializeDatabase, dbClient } from "@/lib/db/client";
 import {
     loadCapturedDocuments,
     loadActiveSchemas,
@@ -416,6 +416,29 @@ function App() {
         setActiveSchemaId(schema.id);
     };
 
+    const handleDeleteDocument = async (documentId: string) => {
+        await dbClient.execute("DELETE FROM notes WHERE id = ?", [documentId]);
+
+        setDocuments((current) => current.filter((doc) => doc.id !== documentId));
+        setStoredDocuments((current) => {
+            const next = { ...current };
+            delete next[documentId];
+            return next;
+        });
+        setDrafts((current) => {
+            const next = { ...current };
+            delete next[documentId];
+            return next;
+        });
+
+        if (activeDocumentId === documentId) {
+            setActiveDocumentId(undefined);
+            setActiveSchemaId(undefined);
+        }
+
+        setStatusMessage("Document deleted.");
+    };
+
     const handleSelectDocument = (documentId: string, schemaId: string) => {
         setActiveDocumentId(documentId);
         setActiveSchemaId(schemaId);
@@ -430,6 +453,7 @@ function App() {
             onSelectSchema={(schemaId) => setActiveSchemaId(schemaId)}
             onSelectDocument={handleSelectDocument}
             onCreateDocument={handleCreateDocument}
+            onDeleteDocument={handleDeleteDocument}
         >
             <div className="relative min-h-screen bg-background text-foreground flex p-8">
                 <SettingsModal

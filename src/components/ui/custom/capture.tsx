@@ -32,6 +32,9 @@ import {
   isValidPathInRecord,
 } from "@/lib/utils"
 import { SearchSelectInput } from "@/components/ui/custom/search-select-input";
+// Placeholder imports - will be used when field rendering is refactored
+import { SubtypeFormSelect } from "@/components/ui/custom/subtype-form-select";
+import { EmbeddedFormList } from "@/components/ui/custom/embedded-form-list";
 
 interface CaptureProps {
   fields: FieldDefinition[]
@@ -454,6 +457,29 @@ function Capture({ fields, initialValues, onValuesChange, specifications, onAddS
                             </div>
                           )
                         })()
+                      ) : fieldDef.type.input === "subtype-form-select" ? (
+                        <SubtypeFormSelect
+                          fieldName={fieldDef.name}
+                          fieldLabel={fieldDef.label}
+                          subtypeFields={(fieldDef as any).subtypeFields || {}}
+                          currentValues={watchedValues}
+                          onValuesChange={(fieldName, values) => {
+                            if (fieldName === fieldDef.name) {
+                              field.onChange((values as any)[fieldName]);
+                            } else {
+                              field.onChange(values);
+                            }
+                          }}
+                        />
+                      ) : fieldDef.type.input === "embedded-form-list" ? (
+                        <EmbeddedFormList
+                          fieldLabel={fieldDef.label}
+                          childSchema={(fieldDef as any).childSchema}
+                          linkedDocuments={(Array.isArray(field.value) ? field.value : []) as any}
+                          onCreateDocument={() => { }}
+                          onDeleteDocument={() => { }}
+                          onNavigateToDocument={() => { }}
+                        />
                       ) : null}
 
                       {fieldDef.description && (

@@ -198,7 +198,12 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             "Unknown"
                         ]
                     },
-                    { name: "report", label: "Report", type: { data: "array<string>", input: "select" } },
+                    { 
+                        name: "report", 
+                        label: "Report", 
+                        type: { data: "form", input: "embedded-form-list" } 
+
+                    },
                     {
                         name: "type_of_murder",
                         label: "Type of Murder",
@@ -576,6 +581,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             'Unknown/Other'
                         ]
                     },
+                    { name: "subtype_form", label: "Participant Type", type: { data: "form", input: "subtype-form-select" } },
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
                 ],
                 subtypeFields: {
