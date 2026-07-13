@@ -7,10 +7,19 @@ const dbWorkerAPI = {
   async init() {
     if (db) return true
 
-    console.log("=== OPFS DIAGNOSTICS ===");
-    console.log("1. Secure Context:", self.isSecureContext);
-    console.log("2. Cross Origin Isolated:", self.crossOriginIsolated);
-    console.log("3. SharedArrayBuffer:", typeof SharedArrayBuffer !== 'undefined');
+    console.log("=== OPFS DIAGNOSTICS ===")
+    console.log("1. Secure Context:", self.isSecureContext)
+    console.log("2. Cross Origin Isolated:", self.crossOriginIsolated)
+    console.log("3. SharedArrayBuffer:", typeof SharedArrayBuffer !== "undefined")
+    const hasSyncAccessHandleApi = "FileSystemSyncAccessHandle" in globalThis
+    console.log("4. Worker navigator.storage:", typeof navigator !== "undefined" && "storage" in navigator)
+    console.log(
+      "5. navigator.storage.getDirectory:",
+      typeof navigator !== "undefined" &&
+      "storage" in navigator &&
+      typeof navigator.storage?.getDirectory === "function"
+    )
+    console.log("6. FileSystemSyncAccessHandle:", hasSyncAccessHandleApi)
 
     try {
       // @ts-expect-error - SQLite WASM types are incomplete and incorrectly state this takes 0 arguments.
@@ -19,18 +28,33 @@ const dbWorkerAPI = {
         printErr: console.error
       })
 
-      if ("opfs" in sqlite3) {
-        db = new sqlite3.oo1.OpfsDb("/obsidian_vault.sqlite3")
-        console.log("SQLite successfully mounted onto OPFS storage.")
+      const hasOpfsDbCtor = typeof sqlite3?.oo1?.OpfsDb === "function"
+      const hasOpfsVfs = Boolean(sqlite3?.capi?.sqlite3_vfs_find?.("opfs"))
+      console.log("7. sqlite3.oo1.OpfsDb available:", hasOpfsDbCtor)
+      console.log("8. sqlite3 OPFS VFS registered:", hasOpfsVfs)
+
+      if (hasOpfsDbCtor && hasOpfsVfs) {
+        try {
+          db = new sqlite3.oo1.OpfsDb("/obsidian_vault.sqlite3")
+          console.log("SQLite successfully mounted onto OPFS storage.")
+        } catch (opfsError) {
+          console.error("OPFS setup failed at runtime, falling back to transient storage:", opfsError)
+          db = new sqlite3.oo1.DB("/obsidian_vault.sqlite3", "ct")
+          console.warn("OPFS fallback active: data will not survive refresh.")
+        }
       } else {
         if (!self.isSecureContext) {
-          console.error("OPFS Fail: Context is not secure (requires HTTPS or localhost).");
-        } else if (!("storage" in navigator && "getDirectory" in navigator.storage)) {
-          console.error("OPFS Fail: The browser API 'navigator.storage.getDirectory' is missing completely.");
+          console.error("OPFS Fail: Context is not secure (requires HTTPS or localhost).")
+        } else if (!("storage" in navigator && typeof navigator.storage?.getDirectory === "function")) {
+          console.error("OPFS Fail: The browser API 'navigator.storage.getDirectory' is missing.")
+        } else if (!hasSyncAccessHandleApi) {
+          console.error("OPFS Fail: 'FileSystemSyncAccessHandle' is unavailable in this browser.")
         } else if (typeof SharedArrayBuffer === "undefined") {
-          console.error("OPFS Fail: SharedArrayBuffer is missing! You MUST configure your server to emit COOP and COEP headers.");
+          console.error("OPFS Fail: SharedArrayBuffer is missing. Configure COOP/COEP headers.")
         } else if (!self.crossOriginIsolated) {
-          console.error("OPFS Fail: crossOriginIsolated is FALSE. Your COOP/COEP headers are being stripped by the PWA cache or Cloudflare.");
+          console.error("OPFS Fail: crossOriginIsolated is FALSE. COOP/COEP headers are not effective.")
+        } else if (!hasOpfsVfs || !hasOpfsDbCtor) {
+          console.error("OPFS Fail: SQLite OPFS VFS is not registered by the loaded sqlite3 build.")
         }
 
         db = new sqlite3.oo1.DB("/obsidian_vault.sqlite3", "ct")
