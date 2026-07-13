@@ -90,26 +90,22 @@ export default defineConfig({
   plugins: [
     react(), powerApps(), tailwindcss(),
     {
-      name: "sqlite-wasm-opfs-hide",
+      name: "sqlite-opfs-bypass",
       enforce: "pre",
       transform(code, id) {
         if (id.includes("@sqlite.org/sqlite-wasm")) {
           return code.replace(
-            /new URL\(['"]sqlite3-opfs-async-proxy\.js['"],\s*import\.meta\.url\)/g,
-            "new URL(['sqlite3', 'opfs', 'async', 'proxy.js'].join('-'), import.meta.url)"
+            /new\s+URL\(\s*['"]sqlite3-opfs-async-proxy\.js['"]\s*,\s*import\.meta\.url\s*\)/g,
+            "new URL('/sqlite3-opfs-async-proxy.js', self.location.origin)"
           );
         }
       }
     },
     viteStaticCopy({
       targets: [
-        {
-          src: 'node_modules/@sqlite.org/sqlite-wasm/**/*-proxy.js',
-          dest: 'assets'
-        },
-        {
-          src: 'node_modules/@sqlite.org/sqlite-wasm/**/*.wasm',
-          dest: 'assets'
+        { 
+          src: 'node_modules/@sqlite.org/sqlite-wasm/sqlite3-opfs-async-proxy.js', 
+          dest: '.' 
         }
       ]
     }),
