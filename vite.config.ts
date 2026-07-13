@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { powerApps } from "@microsoft/power-apps-vite/plugin";
 import path from "path";
 import tailwindcss from "@tailwindcss/vite";
-import { viteStaticCopy } from 'vite-plugin-static-copy';
+// import { viteStaticCopy } from 'vite-plugin-static-copy';
 // import { VitePWA } from 'vite-plugin-pwa';
 
 // const windowsIcons = [
@@ -89,26 +89,26 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 export default defineConfig({
   plugins: [
     react(), powerApps(), tailwindcss(),
-    {
-      name: "sqlite-opfs-bypass",
-      enforce: "pre",
-      transform(code, id) {
-        if (id.includes("@sqlite.org/sqlite-wasm")) {
-          return code.replace(
-            /new\s+URL\(\s*['"]sqlite3-opfs-async-proxy\.js['"]\s*,\s*import\.meta\.url\s*\)/g,
-            "new URL('/sqlite3-opfs-async-proxy.js', self.location.origin)"
-          );
-        }
-      }
-    },
-    viteStaticCopy({
-      targets: [
-        {
-          src: 'node_modules/@sqlite.org/sqlite-wasm/**/*-proxy.js',
-          dest: '.'
-        }
-      ]
-    }),
+    // {
+    //   name: "sqlite-opfs-bypass",
+    //   enforce: "pre",
+    //   transform(code, id) {
+    //     if (id.includes("@sqlite.org/sqlite-wasm")) {
+    //       return code.replace(
+    //         /new\s+URL\(\s*['"]sqlite3-opfs-async-proxy\.js['"]\s*,\s*import\.meta\.url\s*\)/g,
+    //         "new URL('/sqlite3-opfs-async-proxy.js', self.location.origin)"
+    //       );
+    //     }
+    //   }
+    // },
+    // viteStaticCopy({
+    //   targets: [
+    //     {
+    //       src: 'node_modules/@sqlite.org/sqlite-wasm/**/*-proxy.js',
+    //       dest: '.'
+    //     }
+    //   ]
+    // }),
     // VitePWA({
     //   registerType: 'autoUpdate',
     //   injectRegister: 'auto',
