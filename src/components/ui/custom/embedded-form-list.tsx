@@ -67,9 +67,35 @@ export function EmbeddedFormList({
         }
     };
 
+    const renderValue = (value: unknown) => {
+        if (Array.isArray(value)) {
+            if (value.length === 0) {
+                return <span className="text-foreground">[]</span>;
+            }
+
+            return (
+                <ul className="mt-1 space-y-1 text-left">
+                    {value.map((item, index) => (
+                        <li key={index} className="text-foreground">
+                            {typeof item === "string" || typeof item === "number" || typeof item === "boolean"
+                                ? String(item)
+                                : JSON.stringify(item)}
+                        </li>
+                    ))}
+                </ul>
+            );
+        }
+
+        if (value && typeof value === "object") {
+            return <pre className="mt-1 whitespace-pre-wrap text-left text-foreground">{JSON.stringify(value, null, 2)}</pre>;
+        }
+
+        return <span className="text-foreground">{value == null || value === "" ? "" : String(value)}</span>;
+    };
+
     return (
-        <div className="space-y-2 rounded-lg border border-border/50 bg-muted/20 p-4">
-            <div className="flex items-center justify-between">
+        <div className="space-y-2 rounded-lg border border-border/50 bg-muted/20 p-4 text-left">
+            <div className="flex items-center justify-between gap-2 text-left">
                 <h3 className="text-sm font-medium">{fieldLabel}</h3>
                 <Button
                     type="button"
@@ -124,16 +150,16 @@ export function EmbeddedFormList({
                     No {childSchema.name} documents yet. Add one to get started.
                 </p>
             ) : (
-                <div className="space-y-1">
+                <div className="space-y-1 text-left">
                     {linkedDocuments.map((doc) => {
                         const isExpanded = expandedDocs[doc.id]?.isExpanded ?? false;
 
                         return (
                             <div
                                 key={doc.id}
-                                className="rounded-md border border-border/40 bg-background p-2"
+                                className="rounded-md border border-border/40 bg-background p-2 text-left"
                             >
-                                <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center justify-between gap-2 text-left">
                                     <button
                                         type="button"
                                         onClick={() => toggleExpand(doc.id)}
@@ -174,15 +200,13 @@ export function EmbeddedFormList({
                                 </div>
 
                                 {isExpanded && (
-                                    <div className="mt-2 space-y-2 border-t border-border/30 pt-2">
+                                    <div className="mt-2 space-y-2 border-t border-border/30 pt-2 text-left">
                                         {Object.entries(doc.data || {}).map(([key, value]) => (
-                                            <div key={key} className="text-xs">
+                                            <div key={key} className="text-xs text-left">
                                                 <div className="font-medium text-muted-foreground">
                                                     {key}
                                                 </div>
-                                                <div className="text-foreground">
-                                                    {typeof value === "string" ? value : JSON.stringify(value)}
-                                                </div>
+                                                <div className="text-foreground">{renderValue(value)}</div>
                                             </div>
                                         ))}
                                         {Object.keys(doc.data || {}).length === 0 && (

@@ -487,6 +487,30 @@ function App() {
         setActiveSchemaId(schemaId);
     };
 
+    const getExistingLinkedDocuments = ({
+        parentDocumentId,
+        schemaId,
+    }: {
+        parentDocumentId?: string;
+        schemaId: string;
+    }) => {
+        if (!parentDocumentId) return [];
+
+        return documents
+            .filter((doc) => doc.parentId === parentDocumentId && doc.schemaId === schemaId)
+            .map((doc) => {
+                const draftData = drafts[doc.id];
+                const stored = storedDocuments[doc.id];
+
+                return {
+                    id: doc.id,
+                    title: doc.label || stored?.title || "",
+                    data: draftData ?? stored?.frontmatter ?? {},
+                    schemaId: doc.schemaId,
+                };
+            });
+    };
+
     return (
         <Layout
             schemas={schemas}
@@ -527,6 +551,7 @@ function App() {
                             onNavigateToLinkedDocument={(documentId, schemaId) => {
                                 handleSelectDocument(documentId, schemaId);
                             }}
+                            getExistingLinkedDocuments={getExistingLinkedDocuments}
                             onValuesChange={(values) => {
                                 if (!activeDocumentId) return;
                                 setDrafts((current) => ({ ...current, [activeDocumentId]: values }));

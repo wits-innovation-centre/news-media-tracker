@@ -60,6 +60,15 @@ interface CaptureProps {
   }
   onDeleteLinkedDocument?: (documentId: string) => void
   onNavigateToLinkedDocument?: (documentId: string, schemaId: string) => void
+  getExistingLinkedDocuments?: (params: {
+    parentDocumentId?: string
+    schemaId: string
+  }) => {
+    id: string
+    title: string
+    data: Record<string, any>
+    schemaId: string
+  }[]
   onSubmit: (frontmatter: Record<string, any>, markdownBody: string) => void
 };
 
@@ -190,6 +199,7 @@ function Capture({
   onCreateLinkedDocument,
   onDeleteLinkedDocument,
   onNavigateToLinkedDocument,
+  getExistingLinkedDocuments,
   onSubmit,
 }: CaptureProps) {
   const defaultValues = useMemo(() => {
@@ -516,13 +526,46 @@ function Capture({
 
                         if (childSchema) {
                           const rawLinkedDocuments = Array.isArray(field.value) ? (field.value as unknown[]) : [];
-                          const linkedDocuments = rawLinkedDocuments
+                          const fieldLinkedDocuments = rawLinkedDocuments
                             .filter((doc): doc is Record<string, unknown> => typeof doc === "object" && doc !== null)
                             .map((doc) => ({
                               id: typeof doc.id === "string" ? doc.id : (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
                               title: typeof doc.title === "string" ? doc.title : "",
                               data: typeof doc.data === "object" && doc.data !== null ? (doc.data as Record<string, any>) : {},
+                              schemaId: typeof doc.schemaId === "string" ? doc.schemaId : childSchema.id,
                             }));
+
+                          const existingLinkedDocuments = getExistingLinkedDocuments?.({
+                            parentDocumentId: activeDocumentId,
+                            schemaId: childSchema.id,
+                          }) ?? [];
+
+                          const mergedLinkedDocuments = new Map<string, {
+                            id: string
+                            title: string
+                            data: Record<string, any>
+                            schemaId: string
+                          }>();
+
+                          existingLinkedDocuments.forEach((doc) => {
+                            mergedLinkedDocuments.set(doc.id, {
+                              id: doc.id,
+                              title: doc.title,
+                              data: doc.data ?? {},
+                              schemaId: doc.schemaId || childSchema.id,
+                            });
+                          });
+
+                          fieldLinkedDocuments.forEach((doc) => {
+                            mergedLinkedDocuments.set(doc.id, {
+                              id: doc.id,
+                              title: doc.title,
+                              data: doc.data ?? {},
+                              schemaId: doc.schemaId || childSchema.id,
+                            });
+                          });
+
+                          const linkedDocuments = Array.from(mergedLinkedDocuments.values());
 
                           return (
                             <EmbeddedFormList
