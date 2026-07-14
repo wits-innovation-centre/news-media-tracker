@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import {
+  type DocumentSchema,
   type FieldDefinition,
   type SpecificationStore,
   type TieredOptions
@@ -31,6 +32,7 @@ import {
 import {
   isValidPathInRecord,
 } from "@/lib/utils"
+import { SearchSelect } from "@/components/ui/custom/search-select"
 import { SearchSelectInput } from "@/components/ui/custom/search-select-input";
 // Placeholder imports - will be used when field rendering is refactored
 import { SubtypeFormSelect } from "@/components/ui/custom/subtype-form-select";
@@ -38,10 +40,26 @@ import { EmbeddedFormList } from "@/components/ui/custom/embedded-form-list";
 
 interface CaptureProps {
   fields: FieldDefinition[]
+  subtypeFields?: Record<string, FieldDefinition[]>
   initialValues?: Record<string, any>
   onValuesChange?: (values: Record<string, any>) => void
   specifications: SpecificationStore
   onAddSpecification?: (specificationId: string, value: string) => Promise<void> | void
+  schemas?: Record<string, DocumentSchema>
+  activeDocumentId?: string
+  onCreateLinkedDocument?: (params: {
+    schemaId: string
+    title: string
+    parentDocumentId?: string
+    seedData?: Record<string, any>
+  }) => {
+    id: string
+    title: string
+    data: Record<string, any>
+    schemaId: string
+  }
+  onDeleteLinkedDocument?: (documentId: string) => void
+  onNavigateToLinkedDocument?: (documentId: string, schemaId: string) => void
   onSubmit: (frontmatter: Record<string, any>, markdownBody: string) => void
 };
 
@@ -160,7 +178,20 @@ const generateZodSchema = (fields: FieldDefinition[], currentValues: Record<stri
   return z.object(schemaShape)
 }
 
-function Capture({ fields, initialValues, onValuesChange, specifications, onAddSpecification, onSubmit }: CaptureProps) {
+function Capture({
+  fields,
+  subtypeFields,
+  initialValues,
+  onValuesChange,
+  specifications,
+  onAddSpecification,
+  schemas,
+  activeDocumentId,
+  onCreateLinkedDocument,
+  onDeleteLinkedDocument,
+  onNavigateToLinkedDocument,
+  onSubmit,
+}: CaptureProps) {
   const defaultValues = useMemo(() => {
     return { ...buildDefaultValues(fields), ...(initialValues ?? {}) }
   }, [fields, initialValues])
@@ -268,9 +299,11 @@ function Capture({ fields, initialValues, onValuesChange, specifications, onAddS
                     </>
                   ) : (
                     <>
-                      <FieldLabel htmlFor={fieldDef.name}>
-                        {fieldDef.label} {fieldDef.required && <span className="text-red-500">*</span>}
-                      </FieldLabel>
+                      {fieldDef.type.input !== "embedded-form-list" && fieldDef.type.input !== "subtype-form-select" ? (
+                        <FieldLabel htmlFor={fieldDef.name}>
+                          {fieldDef.label} {fieldDef.required && <span className="text-red-500">*</span>}
+                        </FieldLabel>
+                      ) : null}
 
                       {fieldDef.type.input === "text" || fieldDef.type.input === "date" ? (
                         <div className="relative">
@@ -319,10 +352,12 @@ function Capture({ fields, initialValues, onValuesChange, specifications, onAddS
                           placeholder={`Select ${fieldDef.label.toLowerCase()}...`}
                           onChange={field.onChange}
                         />
-                      ) : fieldDef.type.input === "search-select-input" ? (
+                      ) : fieldDef.type.input === "search-select-input" || fieldDef.type.input === "search-select" ? (
                         (() => {
                           const specificationKind = getSpecificationKind(fieldDef)
                           const searchOptions = getSearchSelectOptions(fieldDef)
+                          const isCreatable = fieldDef.type.input === "search-select-input" && Boolean(specificationKind)
+                          const SearchComponent = fieldDef.type.input === "search-select-input" ? SearchSelectInput : SearchSelect
 
                           if (fieldDef.type.data === "array<string>") {
                             const values = toStringArray(field.value)
@@ -344,17 +379,19 @@ function Capture({ fields, initialValues, onValuesChange, specifications, onAddS
                                 {listValues.map((entry, index) => (
                                   <div key={`${fieldDef.name}-${index}`} className="flex items-start gap-2">
                                     <div className="flex-1">
-                                      <SearchSelectInput
+                                      <SearchComponent
                                         id={`${fieldDef.name}-${index}`}
                                         value={entry}
                                         options={searchOptions}
                                         placeholder={`Search ${fieldDef.label.toLowerCase()}...`}
                                         onChange={(nextValue) => updateIndex(index, nextValue)}
-                                        allowCreate={Boolean(specificationKind)}
-                                        onCreateOption={async (nextValue) => {
-                                          if (!specificationKind) return
-                                          await onAddSpecification?.(specificationKind, nextValue)
-                                        }}
+                                        {...(fieldDef.type.input === "search-select-input" ? {
+                                          allowCreate: isCreatable,
+                                          onCreateOption: async (nextValue: string) => {
+                                            if (!specificationKind) return
+                                            await onAddSpecification?.(specificationKind, nextValue)
+                                          },
+                                        } : {})}
                                       />
                                     </div>
                                     {listValues.length > 1 ? (
@@ -377,17 +414,19 @@ function Capture({ fields, initialValues, onValuesChange, specifications, onAddS
                           }
 
                           return (
-                            <SearchSelectInput
+                            <SearchComponent
                               id={fieldDef.name}
                               value={(field.value as string) ?? ""}
                               options={searchOptions}
                               placeholder={`Search ${fieldDef.label.toLowerCase()}...`}
                               onChange={field.onChange}
-                              allowCreate={Boolean(specificationKind)}
-                              onCreateOption={async (nextValue) => {
-                                if (!specificationKind) return
-                                await onAddSpecification?.(specificationKind, nextValue)
-                              }}
+                              {...(fieldDef.type.input === "search-select-input" ? {
+                                allowCreate: isCreatable,
+                                onCreateOption: async (nextValue: string) => {
+                                  if (!specificationKind) return
+                                  await onAddSpecification?.(specificationKind, nextValue)
+                                },
+                              } : {})}
                             />
                           )
                         })()
@@ -461,7 +500,7 @@ function Capture({ fields, initialValues, onValuesChange, specifications, onAddS
                         <SubtypeFormSelect
                           fieldName={fieldDef.name}
                           fieldLabel={fieldDef.label}
-                          subtypeFields={(fieldDef as any).subtypeFields || {}}
+                          subtypeFields={subtypeFields || {}}
                           currentValues={watchedValues}
                           onValuesChange={(fieldName, values) => {
                             if (fieldName === fieldDef.name) {
@@ -471,16 +510,68 @@ function Capture({ fields, initialValues, onValuesChange, specifications, onAddS
                             }
                           }}
                         />
-                      ) : fieldDef.type.input === "embedded-form-list" ? (
-                        <EmbeddedFormList
-                          fieldLabel={fieldDef.label}
-                          childSchema={(fieldDef as any).childSchema}
-                          linkedDocuments={(Array.isArray(field.value) ? field.value : []) as any}
-                          onCreateDocument={() => { }}
-                          onDeleteDocument={() => { }}
-                          onNavigateToDocument={() => { }}
-                        />
-                      ) : null}
+                      ) : fieldDef.type.input === "embedded-form-list" ? (() => {
+                        const linkToSchemaId = (fieldDef as any).linkTo;
+                        const childSchema = linkToSchemaId && schemas ? schemas[linkToSchemaId] : undefined;
+
+                        if (childSchema) {
+                          const rawLinkedDocuments = Array.isArray(field.value) ? (field.value as unknown[]) : [];
+                          const linkedDocuments = rawLinkedDocuments
+                            .filter((doc): doc is Record<string, unknown> => typeof doc === "object" && doc !== null)
+                            .map((doc) => ({
+                              id: typeof doc.id === "string" ? doc.id : (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+                              title: typeof doc.title === "string" ? doc.title : "",
+                              data: typeof doc.data === "object" && doc.data !== null ? (doc.data as Record<string, any>) : {},
+                            }));
+
+                          return (
+                            <EmbeddedFormList
+                              fieldLabel={fieldDef.label}
+                              iconName={fieldDef.icon}
+                              childSchema={childSchema}
+                              linkedDocuments={linkedDocuments}
+                              onCreateDocument={(title, data) => {
+                                const seedData = Object.keys(data ?? {}).length > 0 ? data : buildDefaultValues(childSchema.fields);
+                                const created = onCreateLinkedDocument?.({
+                                  schemaId: childSchema.id,
+                                  title,
+                                  parentDocumentId: activeDocumentId,
+                                  seedData,
+                                });
+
+                                const nextDocument = created ?? {
+                                  id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                                  title,
+                                  data: seedData,
+                                  schemaId: childSchema.id,
+                                };
+
+                                field.onChange([...linkedDocuments, nextDocument]);
+                              }}
+                              onDeleteDocument={(documentId) => {
+                                field.onChange(linkedDocuments.filter((doc) => doc.id !== documentId));
+                                onDeleteLinkedDocument?.(documentId);
+                              }}
+                              onNavigateToDocument={(documentId, schemaId) => {
+                                const nextSchemaId = schemaId || childSchema.id;
+                                onNavigateToLinkedDocument?.(documentId, nextSchemaId);
+                              }}
+                            />
+                          );
+                        } else if (linkToSchemaId) {
+                          return (
+                            <div className="rounded-lg border border-border/50 bg-destructive/10 p-4 text-sm text-destructive">
+                              Error: Schema "{linkToSchemaId}" not found for field "{fieldDef.label}"
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div className="rounded-lg border border-border/50 bg-destructive/10 p-4 text-sm text-destructive">
+                              Error: Field "{fieldDef.label}" is missing linkTo configuration
+                            </div>
+                          );
+                        }
+                      })() : null}
 
                       {fieldDef.description && (
                         <FieldDescription>{fieldDef.description}</FieldDescription>

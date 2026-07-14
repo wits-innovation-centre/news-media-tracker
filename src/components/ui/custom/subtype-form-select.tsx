@@ -183,6 +183,14 @@ export function SubtypeFormSelect({
     currentValues,
     onValuesChange,
 }: SubtypeFormSelectProps) {
+    if (!fieldName || !fieldLabel) {
+        return (
+            <div className="rounded-lg border border-border/50 bg-destructive/10 p-4 text-sm text-destructive">
+                Error: fieldName or fieldLabel not provided
+            </div>
+        );
+    }
+
     const selectedSubtype = (currentValues[fieldName] as string) || "";
     const subtypeOptions = Object.keys(subtypeFields);
     const selectedFields = subtypeFields[selectedSubtype] || [];
@@ -233,6 +241,8 @@ export function SubtypeFormSelect({
     };
 
     const renderField = (fieldDef: FieldDefinition) => {
+        if (!fieldDef || !fieldDef.name) return null;
+
         const isVisible = evaluateVisibility(fieldDef.visibility, watchedValues);
         if (!isVisible) return null;
 

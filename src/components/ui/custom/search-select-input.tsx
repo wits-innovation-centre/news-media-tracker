@@ -16,20 +16,27 @@ interface SearchSelectInputProps {
 
 function SearchSelectInput({ id, value, options, placeholder = "Search and select...", onChange, onCreateOption, allowCreate = false }: SearchSelectInputProps) {
     const [isOpen, setIsOpen] = useState(false)
-    const [searchQuery, setSearchQuery] = useState("")
+    const [searchQuery, setSearchQuery] = useState(value)
     const containerRef = useRef<HTMLDivElement>(null)
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    useEffect(() => {
+        if (!isOpen) {
+            setSearchQuery(value)
+        }
+    }, [isOpen, value])
 
     useEffect(() => {
         const handlePointerDown = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
                 setIsOpen(false)
-                setSearchQuery("")
+                setSearchQuery(value)
             }
         }
 
         document.addEventListener("mousedown", handlePointerDown)
         return () => document.removeEventListener("mousedown", handlePointerDown)
-    }, [])
+    }, [value])
 
     const normalizedQuery = searchQuery.trim().toLowerCase()
 
@@ -42,14 +49,10 @@ function SearchSelectInput({ id, value, options, placeholder = "Search and selec
         ? options.some((option) => option.toLowerCase() === normalizedQuery)
         : false
 
-    const close = () => {
-        setIsOpen(false)
-        setSearchQuery("")
-    }
-
     const handleSelect = (nextValue: string) => {
         onChange(nextValue)
-        close()
+        setSearchQuery(nextValue)
+        setIsOpen(false)
     }
 
     const handleCreate = async () => {
@@ -58,63 +61,55 @@ function SearchSelectInput({ id, value, options, placeholder = "Search and selec
 
         await onCreateOption?.(nextValue)
         onChange(nextValue)
-        close()
+        setSearchQuery(nextValue)
+        setIsOpen(false)
     }
 
     return (
         <div ref={containerRef} className="w-full space-y-2">
-            <Button
-                type="button"
-                id={id}
-                variant="outline"
-                className="w-full justify-between"
-                onClick={() => setIsOpen((previous) => !previous)}
-            >
-                <span className="flex min-w-0 items-center gap-2 overflow-hidden">
-                    <Search className="size-4 shrink-0" />
-                    <span className={`truncate text-left ${value ? "text-foreground" : "text-muted-foreground"}`}>
-                        {value || placeholder}
-                    </span>
-                </span>
-                <span className="flex items-center gap-1">
-                    {value ? (
-                        <span
-                            role="button"
-                            tabIndex={0}
-                            className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                            onClick={(event) => {
-                                event.stopPropagation()
-                                onChange("")
-                            }}
-                            onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                    event.preventDefault()
-                                    event.stopPropagation()
-                                    onChange("")
-                                }
-                            }}
-                            aria-label="Clear selection"
-                        >
-                            <X className="size-3.5" />
-                        </span>
-                    ) : null}
-                    <Plus className={`size-4 transition-transform ${isOpen ? "rotate-45" : ""}`} />
-                </span>
-            </Button>
+            <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                    ref={inputRef}
+                    type="text"
+                    id={id}
+                    value={searchQuery}
+                    placeholder={placeholder}
+                    className="pl-9 pr-9"
+                    onFocus={() => setIsOpen(true)}
+                    onChange={(event) => {
+                        setSearchQuery(event.target.value)
+                        setIsOpen(true)
+                    }}
+                    onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                            event.preventDefault()
+                            setIsOpen(false)
+                            setSearchQuery(value)
+                            inputRef.current?.blur()
+                        }
+                    }}
+                />
+                {searchQuery ? (
+                    <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={() => {
+                            setSearchQuery("")
+                            onChange("")
+                            setIsOpen(true)
+                            inputRef.current?.focus()
+                        }}
+                        aria-label="Clear selection"
+                    >
+                        <X className="size-3.5" />
+                    </button>
+                ) : null}
+            </div>
 
             {isOpen ? (
                 <div className="rounded-2xl border bg-popover p-3 shadow-xl">
-                    <div className="relative">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            value={searchQuery}
-                            onChange={(event) => setSearchQuery(event.target.value)}
-                            placeholder="Search entries"
-                            className="pl-9"
-                        />
-                    </div>
-
-                    <div className="mt-3 max-h-72 space-y-1 overflow-y-auto">
+                    <div className="max-h-72 space-y-1 overflow-y-auto">
                         {filteredOptions.length > 0 ? (
                             filteredOptions.map((option) => {
                                 const isSelected = value === option

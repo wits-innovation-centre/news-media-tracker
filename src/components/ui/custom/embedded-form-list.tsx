@@ -1,17 +1,19 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, FilePlus2, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { DocumentSchema } from "@/lib/types";
+import { resolveIcon } from "@/lib/icon-registry";
+import type { DocumentSchema, IconName } from "@/lib/types";
 
 interface EmbeddedFormListProps {
     _fieldName: string;
     fieldLabel: string;
+    iconName?: IconName;
     childSchema: DocumentSchema;
-    linkedDocuments: { id: string; title: string; data: Record<string, any> }[];
+    linkedDocuments: { id: string; title: string; data: Record<string, any>; schemaId?: string }[];
     onCreateDocument: (title: string, data: Record<string, any>) => void;
     _onUpdateDocument: (documentId: string, data: Record<string, any>) => void;
     onDeleteDocument: (documentId: string) => void;
-    onNavigateToDocument?: (documentId: string) => void;
+    onNavigateToDocument?: (documentId: string, schemaId?: string) => void;
 }
 
 interface ExpandedDocument {
@@ -22,15 +24,25 @@ interface ExpandedDocument {
 
 export function EmbeddedFormList({
     fieldLabel,
+    iconName,
     childSchema,
     linkedDocuments,
     onCreateDocument,
     onDeleteDocument,
     onNavigateToDocument,
 }: Omit<EmbeddedFormListProps, "_fieldName" | "_onUpdateDocument">) {
+    const RowIcon = resolveIcon(iconName ?? childSchema.icon);
     const [expandedDocs, setExpandedDocs] = useState<Record<string, ExpandedDocument>>({});
     const [isCreating, setIsCreating] = useState(false);
     const [newDocTitle, setNewDocTitle] = useState("");
+
+    if (!childSchema) {
+        return (
+            <div className="rounded-lg border border-border/50 bg-destructive/10 p-4 text-sm text-destructive">
+                Error: Child schema not provided for {fieldLabel}
+            </div>
+        );
+    }
 
     const toggleExpand = (docId: string) => {
         setExpandedDocs((prev) => ({
@@ -132,7 +144,7 @@ export function EmbeddedFormList({
                                         ) : (
                                             <ChevronRight className="h-4 w-4 shrink-0" />
                                         )}
-                                        <FilePlus2 className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                                        <RowIcon className="h-3.5 w-3.5 shrink-0 opacity-70" />
                                         <span className="truncate text-sm font-medium">
                                             {doc.title || `Untitled ${childSchema.name}`}
                                         </span>
@@ -142,7 +154,7 @@ export function EmbeddedFormList({
                                         type="button"
                                         onClick={() => {
                                             if (onNavigateToDocument) {
-                                                onNavigateToDocument(doc.id);
+                                                onNavigateToDocument(doc.id, doc.schemaId);
                                             }
                                         }}
                                         className="rounded px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground"

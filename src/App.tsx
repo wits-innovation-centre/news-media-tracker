@@ -220,6 +220,11 @@ function App() {
         [schemaGroups, specifications]
     );
 
+    const schemasById = useMemo(
+        () => Object.fromEntries(schemas.map((schema) => [schema.id, schema])),
+        [schemas]
+    );
+
     const groupsWithSpecifications = useMemo(
         () => applySpecificationsToGroups(schemaGroups, specifications),
         [schemaGroups, specifications]
@@ -416,6 +421,44 @@ function App() {
         setActiveSchemaId(schema.id);
     };
 
+    const handleCreateLinkedDocument = ({
+        schemaId,
+        title,
+        parentDocumentId,
+        seedData,
+    }: {
+        schemaId: string;
+        title: string;
+        parentDocumentId?: string;
+        seedData?: Record<string, any>;
+    }) => {
+        const schema = schemasById[schemaId];
+        const nodeId = crypto.randomUUID();
+
+        const node: DocumentNode = {
+            id: nodeId,
+            schemaId,
+            parentId: parentDocumentId,
+            label: title,
+        };
+
+        setDocuments((current) => [...current, node]);
+        setDrafts((current) => ({
+            ...current,
+            [nodeId]: {
+                ...(seedData ?? {}),
+                name: (seedData?.name as string) ?? title,
+            },
+        }));
+
+        return {
+            id: nodeId,
+            title,
+            data: seedData ?? {},
+            schemaId: schema?.id ?? schemaId,
+        };
+    };
+
     const handleDeleteDocument = async (documentId: string) => {
         await dbClient.execute("DELETE FROM notes WHERE id = ?", [documentId]);
 
@@ -472,8 +515,18 @@ function App() {
                     {activeSchema && activeDocumentId ? (
                         <Capture
                             fields={activeSchema.fields}
+                            subtypeFields={activeSchema.subtypeFields}
                             initialValues={activeInitialValues}
                             specifications={specifications}
+                            schemas={schemasById}
+                            activeDocumentId={activeDocumentId}
+                            onCreateLinkedDocument={handleCreateLinkedDocument}
+                            onDeleteLinkedDocument={(documentId) => {
+                                void handleDeleteDocument(documentId);
+                            }}
+                            onNavigateToLinkedDocument={(documentId, schemaId) => {
+                                handleSelectDocument(documentId, schemaId);
+                            }}
                             onValuesChange={(values) => {
                                 if (!activeDocumentId) return;
                                 setDrafts((current) => ({ ...current, [activeDocumentId]: values }));

@@ -1,7 +1,8 @@
 import { Fragment, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, FilePlus2, Plus, Search, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Search, X } from "lucide-react";
 
 import { Sidebar as BaseSidebar, SidebarContent, SidebarGroup, SidebarHeader } from "@/components/ui/sidebar";
+import { resolveIcon } from "@/lib/icon-registry";
 import type { DocumentNode, DocumentSchema } from "@/lib/types";
 
 interface SidebarProps {
@@ -134,6 +135,7 @@ function Sidebar({ schemas, documents, activeSchemaId, activeDocumentId, onSelec
 
   const renderDocumentNode = (document: DocumentNode, depth = 0) => {
     const schema = schemaById.get(document.schemaId);
+    const SchemaIcon = resolveIcon(schema?.icon);
     const children = getChildDocuments(document.id);
     const childSchemaOptions = getChildSchemaOptions(document.schemaId);
     const canExpand = children.length > 0;
@@ -165,13 +167,10 @@ function Sidebar({ schemas, documents, activeSchemaId, activeDocumentId, onSelec
               ) : (
                 <div className="w-4" />
               )}
-              <FilePlus2 className="h-3.5 w-3.5 shrink-0 opacity-70" />
+              <SchemaIcon className="h-3.5 w-3.5 shrink-0 opacity-70" />
               <span className="truncate">{document.label}</span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="truncate rounded border border-border/70 px-1 py-0.5 text-[10px] text-muted-foreground">
-                {schema?.name ?? document.schemaId}
-              </span>
               <button
                 type="button"
                 onClick={(e) => {
