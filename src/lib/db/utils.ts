@@ -65,35 +65,6 @@ export async function saveSchemaWorkspace(groups: DocumentSchemaGroup[]) {
   }
 }
 
-<<<<<<< Updated upstream
-export async function saveCapturedNote(id: string, schemaId: string, title: string, frontmatter: Record<string, any>, body: string, parentId?: string) {
-  await dbClient.execute(
-    "INSERT OR REPLACE INTO notes (id, schema_id, parent_id, title, frontmatter, body) VALUES (?, ?, ?, ?, ?, ?)",
-    [id, schemaId, parentId ?? null, title, JSON.stringify(frontmatter), body]
-  )
-  return id
-}
-
-export async function loadCapturedDocuments() {
-  const records = await dbClient.query(
-    "SELECT id, schema_id, title, frontmatter, body, created_at FROM notes ORDER BY created_at DESC"
-  )
-
-  return records.map((row) => ({
-    id: row.id,
-    schema_id: row.schema_id,
-    title: row.title,
-    frontmatter: JSON.parse(row.frontmatter),
-    body: row.body,
-    parent_id: row.parent_id ?? undefined,
-    created_at: row.created_at,
-  })) as StoredDocument[]
-}
-
-export async function getNotesForWorkspaceExport() {
-  return await dbClient.query("SELECT title, frontmatter, body FROM notes")
-}
-=======
 export async function updateCapturedNoteSchema(noteId: string, schemaId: string) {
   await dbClient.execute(
     "UPDATE notes SET schema_id = ? WHERE id = ?",
@@ -104,7 +75,6 @@ export async function updateCapturedNoteSchema(noteId: string, schemaId: string)
 // ==========================================
 // SPECIFICATIONS & REGISTRY
 // ==========================================
->>>>>>> Stashed changes
 
 export async function loadSpecifications(): Promise<SpecificationStore> {
   const rows = await dbClient.query("SELECT kind, value FROM specifications ORDER BY kind, value")

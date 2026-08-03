@@ -635,8 +635,6 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             "Other"
                         ]
                     },
-<<<<<<< Updated upstream
-=======
                     {
                         name: "type_of_murder_specify",
                         label: "Specify",
@@ -648,7 +646,6 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         }
                     },
                     { name: "subtype_form", label: "Participant Type", type: { data: "form", input: "subtype-form-select" } },
->>>>>>> Stashed changes
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
                 ],
                 subtypeFields: {

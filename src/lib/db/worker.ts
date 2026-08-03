@@ -8,16 +8,6 @@ const dbWorkerAPI = {
     if (db) return true
 
     try {
-<<<<<<< Updated upstream
-      const sqlite3 = await sqlite3InitModule()
-
-      if ("opfs" in sqlite3) {
-        db = new sqlite3.oo1.OpfsDb("/obsidian_vault.sqlite3")
-        console.log("SQLite successfully mounted onto OPFS storage.")
-      } else {
-        db = new sqlite3.oo1.DB("/obsidian_vault.sqlite3", "ct")
-        console.warn("OPFS is unsupported. Operating on transient fallback storage.")
-=======
       // @ts-expect-error - SQLite WASM types are incomplete
       const sqlite3 = await sqlite3InitModule({
         print: console.log,
@@ -35,7 +25,6 @@ const dbWorkerAPI = {
         }
       } else {
         db = new sqlite3.oo1.DB("/obsidian_vault.sqlite3", "ct")
->>>>>>> Stashed changes
       }
 
       db.exec(`

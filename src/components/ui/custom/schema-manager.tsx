@@ -53,7 +53,6 @@ function schemaToEditableFields(schema?: DocumentSchema): EditableField[] {
         tooltipUseIcon: field.tooltip?.useIcon ?? true,
         tooltipMessage: field.tooltip?.message ?? "",
         noSelectionValue: field.noSelectionValue ?? "",
->>>>>>> Stashed changes
     }))
 }
 

@@ -11,11 +11,8 @@ type FieldDataType = "string" |
 type FieldInputType = "text" |
     "textarea" |
     "select" |
-<<<<<<< Updated upstream
-=======
     "search-select" |
     "multi-select" |
->>>>>>> Stashed changes
     "search-select-input" |
     "date" |
     "date-range" |
