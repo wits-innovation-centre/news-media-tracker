@@ -11,6 +11,7 @@ import {
 import { evaluateVisibility, flattenTieredOptions, generateFieldValue } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { HierarchicalSelect } from "@/components/ui/custom/hierarchical-select";
+import { MultiSelect } from "@/components/ui/custom/multi-select";
 
 import {
   Field,
@@ -32,6 +33,8 @@ import {
   isValidPathInRecord,
 } from "@/lib/utils"
 import { SearchSelectInput } from "@/components/ui/custom/search-select-input";
+import { SubtypeFormSelect } from "@/components/ui/custom/subtype-form-select";
+import { EmbeddedFormList } from "@/components/ui/custom/embedded-form-list";
 
 interface CaptureProps {
   fields: FieldDefinition[]
@@ -204,6 +207,20 @@ function Capture({ fields, initialValues, onValuesChange, specifications, onAddS
       const isVisible = evaluateVisibility(field.visibility, values);
       if (!isVisible) return;
 
+      let fieldValue = values[field.name];
+
+      if (field.noSelectionValue) {
+        const isEmptyArray = Array.isArray(fieldValue) && fieldValue.length === 0;
+        const isEmptyString = typeof fieldValue === "string" && fieldValue.trim() === "";
+        const isNil = fieldValue === undefined || fieldValue === null;
+
+        if (isEmptyArray || isEmptyString || isNil) {
+          fieldValue = field.type.data === "array<string>" 
+            ? [field.noSelectionValue] 
+            : field.noSelectionValue;
+        }
+      }
+
       if (field.type.data === "markdown") {
         markdownBody = (values[field.name] as string) || ""
       } else {
@@ -316,7 +333,20 @@ function Capture({ fields, initialValues, onValuesChange, specifications, onAddS
                           placeholder={`Select ${fieldDef.label.toLowerCase()}...`}
                           onChange={field.onChange}
                         />
-                      ) : fieldDef.type.input === "search-select-input" ? (
+                      ) : fieldDef.type.input === "multi-select" ? (
+                        (() => {
+                          const selectOptions = getSelectOptions(fieldDef)
+
+                          return (
+                            <MultiSelect
+                              options={selectOptions}
+                              value={toStringArray(field.value)}
+                              onChange={field.onChange}
+                              placeholder={`Select ${fieldDef.label.toLowerCase()}...`}
+                            />
+                          )
+                        })()
+                      ) : fieldDef.type.input === "search-select-input" || fieldDef.type.input === "search-select" ? (
                         (() => {
                           const specificationKind = getSpecificationKind(fieldDef)
                           const searchOptions = getSearchSelectOptions(fieldDef)

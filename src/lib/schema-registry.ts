@@ -559,23 +559,96 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         }
                     },
                     { name: "nationality", label: "Nationality", type: { data: "string", input: "text" } },
-                    { name: "mode_of_death_specific", label: "Mode of Death (Specific)", type: { data: "string", input: "text" } },
-                    { name: "mode_of_death_general", label: "Mode of Death (General)", type: { data: "string", input: "text" } },
+                    {
+                        name: "mode_of_death_general",
+                        label: "Mode of Death (General)",
+                        type: { data: "string", input: "select" },
+                        options: [
+                            "Sharp force trauma",
+                            "Blunt force trauma",
+                            "Sharp-blunt/Blunt-sharp force trauma",
+                            "Strangulation or asphyxiation",
+                            "Poison or burning",
+                            "Firearm injury"
+                        ]
+                    },
+                    {
+                        name: "mode_of_death_specific",
+                        label: "Mode of Death (Specific)",
+                        type: { data: "select", input: "select" },
+                        options: [
+                            "Gunshot",
+                            "Strangulation (manual or ligature)",
+                            "Suffocation",
+                            "Stabbing (knife or similar)",
+                            "Chopping (axe or panga or similar)",
+                            "Beating",
+                            "Poison",
+                            "Fire",
+                            "Chemical burns",
+                            "Electrical shock",
+                            "Dogs or other animals",
+                            "Lightning",
+                            "Drowning ",
+                            "Motor vehicle impact",
+                            "Falling from height",
+                            "Suicide",
+                            "Explosive device/explosion",
+                            "Missing presumed dead",
+                            "Unknown",
+                            "Other"
+                        ]
+                    },
                     {
                         name: "type_of_murder",
                         label: "Type of Murder",
-                        type: { data: "select", input: "select" },
+                        type: { data: "array<string>", input: "multi-select" },
                         options: [
-                            'Domestic Violence',
-                            'Gang Related',
-                            'Robbery Related',
-                            'Sexual Violence',
-                            'Child Murder',
-                            'Hate Crime',
-                            'Drug Related',
-                            'Unknown/Other'
+                            "Adult male homicide",
+                            "Adult female homicide",
+                            "Eldercide",
+                            "Child murder",
+                            "Multiple killing",
+                            "Political killing",
+                            "Gang-related killing",
+                            "Family killing",
+                            "Witch killing",
+                            "LGBTQ killing",
+                            "Sex worker killing",
+                            "Farm killing",
+                            "Serial killing",
+                            "Spree killing",
+                            "Intimate partner killing",
+                            "Rural killing",
+                            "Ritual killing",
+                            "Assassination",
+                            "Culpable homicide",
+                            "Matricide",
+                            "Patricide",
+                            "Natural causes",
+                            "Self-inflicted (including suicide)",
+                            "Killing in police custody",
+                            "Missing presumed dead",
+                            "Hired killers",
+                            "Concealment of birth",
+                            "Terrorism or war",
+                            "Other"
                         ]
                     },
+<<<<<<< Updated upstream
+=======
+                    {
+                        name: "type_of_murder_specify",
+                        label: "Specify",
+                        type: { data: "string", input: "text" },
+                        visibility: {
+                            dependsOn: "type_of_murder",
+                            operator: "eq",
+                            value: "Other"
+                        }
+                    },
+                    { name: "subtype_form", label: "Participant Type", type: { data: "form", input: "subtype-form-select" } },
+>>>>>>> Stashed changes
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
                 ],
                 subtypeFields: {
@@ -613,17 +686,51 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         {
                             name: "relationship_to_victim",
                             label: "Relationship to Victim",
-                            type: { data: "select", input: "select" },
+                            type: { data: "array<string>", input: "multi-select" },
                             options: [
-                                'Spouse/Partner',
-                                'Ex-Spouse/Ex-Partner',
-                                'Family Member',
-                                'Friend',
-                                'Acquaintance',
-                                'Stranger',
-                                'Unknown',
-                                'Other'
-                            ]
+                                "Stranger",
+                                "Current or former intimate partner",
+                                "Love rival",
+                                "Current or former employee",
+                                "Current or former employer",
+                                "Terrorist (state label)",
+                                "Parent",
+                                "Child",
+                                "Grandchild",
+                                "Grandparent",
+                                "Mother-in-law",
+                                "Sister-in-law",
+                                "Brother-in-law",
+                                "Son-in-law",
+                                "Daughter-in-law",
+                                "Father-in-law",
+                                "Aunt",
+                                "Uncle",
+                                "Niece",
+                                "Nephew",
+                                "Cousin",
+                                "Close family member (unknown relationship or more distant than first cousin)",
+                                "Stepchild",
+                                "Step-parent",
+                                "Foster child",
+                                "Foster parent",
+                                "Police officer",
+                                "Suspect in police or security custody",
+                                "Security Guard",
+                                "Community member",
+                                "Other"
+                            ],
+                            "noSelectionValue": "Unknown"
+                        },
+                        {
+                            name: "relationship_to_victim_specify",
+                            label: "Specify",
+                            type: { data: "string", input: "text" },
+                            visibility: {
+                                dependsOn: "relationship_to_victim",
+                                operator: "eq",
+                                value: "Other"
+                            }
                         },
                         {
                             name: "identified",

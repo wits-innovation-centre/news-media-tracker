@@ -22,8 +22,15 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
+.env*
 *.sw?
 
-.env
-
+*.ig**
 .legacy
+**.~lock.*
+
+# Cloudflare Wrangler local state & D1 databases
+.wrangler/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
