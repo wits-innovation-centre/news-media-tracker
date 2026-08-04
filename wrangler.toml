@@ -1,4 +1,4 @@
-name = "news-media-sync"
+name = "news-media-tracker"
 main = "src/lib/db/server.ts"
 compatibility_date = "2026-01-01"
 compatibility_flags = ["nodejs_compat"]

@@ -591,7 +591,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     {
                         name: "mode_of_death_specific",
                         label: "Mode of Death (Specific)",
-                        type: { data: "select", input: "select" },
+                        type: { data: "string", input: "select" },
                         options: [
                             "Gunshot",
                             "Strangulation (manual or ligature)",
@@ -731,7 +731,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             type: { data: "string", input: "text" },
                             visibility: {
                                 dependsOn: "relationship_to_victim",
-                                operator: "eq",
+                                operator: "includes",
                                 value: "Other"
                             }
                         },

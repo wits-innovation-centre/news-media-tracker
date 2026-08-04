@@ -692,7 +692,7 @@ export async function loadLedgerRecordByNoteId(
 
 export async function submitNoteProposal(
   documentId: string,
-  _schemaId: string,
+  schemaId: string,
   proposedTitle: string,
   proposedFrontmatter: Record<string, any>,
   proposedBody: string,
@@ -709,8 +709,8 @@ export async function submitNoteProposal(
       id, workspace_id, document_id, author_id, action,
       base_frontmatter, base_body,
       proposed_title, proposed_frontmatter, proposed_body,
-      status, created_at, updated_at, synced_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, NULL)`,
+      metadata, status, created_at, updated_at, synced_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, NULL)`,
     [
       proposalId,
       workspaceId,
@@ -722,6 +722,7 @@ export async function submitNoteProposal(
       proposedTitle,
       JSON.stringify(proposedFrontmatter),
       proposedBody,
+      JSON.stringify({ schemaId }),
       now,
       now
     ]
@@ -761,6 +762,10 @@ export async function approveMergeProposal(
     resolution?.frontmatter ?? safeJsonParse<Record<string, unknown>>(proposal.proposed_frontmatter, {})
   )
   const resolvedBody = resolution?.body ?? String(proposal.proposed_body ?? "")
+  const proposalMetadata = safeJsonParse<Record<string, unknown>>(proposal.metadata, {})
+  const proposalSchemaId = typeof proposalMetadata.schemaId === "string"
+    ? proposalMetadata.schemaId
+    : "event"
 
   if (proposal.action === "DELETE") {
     await dbClient.execute(
@@ -812,8 +817,9 @@ export async function approveMergeProposal(
       `INSERT INTO notes (
          id, workspace_id, schema_id, parent_id, title, frontmatter, body, 
          created_by, updated_by, user_id, device_id, created_at, updated_at, is_deleted, synced_at
-       ) VALUES (?, ?, 'event', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
+       ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
        ON CONFLICT(id) DO UPDATE SET
+         schema_id = excluded.schema_id,
          title = excluded.title,
          frontmatter = excluded.frontmatter,
          body = excluded.body,
@@ -826,6 +832,7 @@ export async function approveMergeProposal(
       [
         proposal.document_id,
         proposal.workspace_id,
+        proposalSchemaId,
         resolvedTitle,
         resolvedFrontmatter,
         resolvedBody,

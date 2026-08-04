@@ -264,9 +264,9 @@ function Capture({
       }
 
       if (field.type.data === "markdown") {
-        markdownBody = (values[field.name] as string) || ""
+        markdownBody = (fieldValue as string) || ""
       } else {
-        frontmatter[field.name] = values[field.name]
+        frontmatter[field.name] = fieldValue
       }
     })
 

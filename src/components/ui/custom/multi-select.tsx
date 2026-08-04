@@ -106,20 +106,14 @@ export function MultiSelect({
                   className="flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-normal bg-secondary text-secondary-foreground"
                 >
                   <span>{option ? option.label : val}</span>
-                  <span
-                    role="button"
-                    tabIndex={0}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${option ? option.label : val}`}
                     className="rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
                     onClick={(e) => handleRemove(val, e)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault()
-                        handleRemove(val, e as any)
-                      }
-                    }}
                   >
                     <X className="h-3 w-3 text-muted-foreground hover:text-foreground cursor-pointer" />
-                  </span>
+                  </button>
                 </Badge>
               )
             })
