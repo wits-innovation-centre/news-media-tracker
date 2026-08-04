@@ -11,7 +11,6 @@ import {
 import { evaluateVisibility, flattenTieredOptions, generateFieldValue } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { HierarchicalSelect } from "@/components/ui/custom/hierarchical-select";
-import { MultiSelect } from "@/components/ui/custom/multi-select";
 
 import {
   Field,

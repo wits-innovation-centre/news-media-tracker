@@ -1,12 +1,13 @@
-import { Fragment, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Plus, Search, X } from "lucide-react";
+import { Fragment, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import { ChevronDown, ChevronRight, FolderTree, GitMerge, PanelLeftClose, PanelLeftOpen, Plus, Search, X } from "lucide-react";
 
-import { Sidebar as BaseSidebar, SidebarContent, SidebarGroup, SidebarHeader } from "@/components/ui/sidebar";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { Sidebar as BaseSidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarHeader, SidebarRail, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { resolveIcon } from "@/lib/icon-registry";
-import type { DocumentNode, DocumentSchema } from "@/lib/types";
+import type { DocumentNode, DocumentSchema, WorkspaceRecord } from "@/lib/types";
 
 interface SidebarProps {
-  footerContent?: React.ReactNode;
+  footerContent?: ReactNode;
   schemas: DocumentSchema[];
   documents: DocumentNode[];
   workspaces: WorkspaceRecord[];
@@ -23,12 +24,30 @@ interface SidebarProps {
   onDeleteDocument: (documentId: string) => void;
 }
 
-function Sidebar({ schemas, documents, activeSchemaId, activeDocumentId, onSelectSchema, onSelectDocument, onCreateDocument, onDeleteDocument }: SidebarProps) {
+function Sidebar({
+  footerContent,
+  schemas,
+  documents,
+  workspaces,
+  activePath,
+  mergeQueueCount,
+  activeWorkspaceId,
+  activeSchemaId,
+  activeDocumentId,
+  onNavigate,
+  onSwitchWorkspace,
+  onSelectSchema,
+  onSelectDocument,
+  onCreateDocument,
+  onDeleteDocument,
+}: SidebarProps) {
+  const { state } = useSidebar();
+  const isIconCollapsed = state === "collapsed";
   const [searchQuery, setSearchQuery] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
   const [menuOpenAnchor, setMenuOpenAnchor] = useState<string | null>(null);
 
-  const toggleCollapse = (id: string, e: React.MouseEvent) => {
+  const toggleCollapse = (id: string, e: MouseEvent) => {
     e.stopPropagation();
     setCollapsedNodes((prev) => ({ ...prev, [id]: !prev[id] }));
   };

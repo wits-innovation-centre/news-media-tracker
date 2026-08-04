@@ -12,7 +12,7 @@ import { SpecificationsManager } from "@/components/ui/custom/specifications-man
 import { ImportDataModal } from "@/components/ui/custom/import-data-modal"
 
 interface SettingsModalProps {
-    trigger?: React.ReactNode
+    trigger?: React.ReactElement
     groups: DocumentSchemaGroup[]
     specificationRegistry: SpecificationDefinition[]
     specifications: SpecificationStore

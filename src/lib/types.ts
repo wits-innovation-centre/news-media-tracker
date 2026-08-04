@@ -13,6 +13,7 @@ type FieldDataType = "string" |
 type FieldInputType = "text" |
     "textarea" |
     "select" |
+    "multi-select" |
     "search-select" |
     "search-select-input" |
     "subtype-form-select" |
@@ -89,6 +90,7 @@ interface DocumentSchema {
     id: string;
     name: string;
     description?: string;
+    metadata?: Record<string, any>;
     icon?: IconName;
     parentSchemaId?: string;
     groupId?: string;

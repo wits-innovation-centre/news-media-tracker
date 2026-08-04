@@ -42,7 +42,7 @@ function SearchSelectInput({ id, value, options, placeholder = "Search and selec
         if (!isOpen) return
 
         const frame = window.requestAnimationFrame(() => {
-            searchInputRef.current?.focus()
+            inputRef.current?.focus()
         })
 
         return () => window.cancelAnimationFrame(frame)

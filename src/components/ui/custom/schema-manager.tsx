@@ -189,13 +189,6 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
         [selectedGroup, selectedSchemaId]
     )
 
-    const updateFieldAt = (index: number, updater: (field: EditableField) => EditableField) => {
-        setSchemaDraft((current) => ({
-            ...current,
-            fields: current.fields.map((item, itemIndex) => itemIndex === index ? updater(item) : item),
-        }))
-    }
-
     useEffect(() => {
         if (!selectedGroup && groups.length > 0) {
             setSelectedGroupId(groups[0].id)

@@ -285,16 +285,11 @@ export async function updateCapturedNoteSchema(noteId: string, schemaId: string,
   )
 }
 
-export async function updateCapturedNoteSchema(noteId: string, schemaId: string) {
-  await dbClient.execute(
-    "UPDATE notes SET schema_id = ? WHERE id = ?",
-    [schemaId, noteId]
-  )
-}
-
-export async function loadCapturedDocuments() {
-  const records = await dbClient.query(
-    "SELECT id, schema_id, parent_id, title, frontmatter, body, created_at FROM notes ORDER BY created_at DESC"
+export async function loadSpecifications(workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<SpecificationStore> {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  const rows = await dbClient.query(
+    "SELECT kind, value FROM specifications WHERE workspace_id = ? ORDER BY kind, value",
+    [scopedWorkspaceId]
   )
   const byId: SpecificationStore = {}
 

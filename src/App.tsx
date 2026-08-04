@@ -7,13 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Capture } from "@/components/ui/custom/capture";
 import { LedgerBadge } from "@/components/ui/custom/ledger-badge";
 import Layout from "@/components/ui/custom/layout";
-import { MergeQueueView } from "@/components/ui/custom/merge-queue-view";
 import { SettingsModal } from "@/components/ui/custom/settings-modal";
 import { WaybackArchiveStatus } from "@/components/ui/custom/wayback-archive-status";
 
 import { initializeDatabase, dbClient } from "@/lib/db/client";
 import {
-    approveMergeProposal,
     loadCapturedDocuments,
     loadLedgerRecordByNoteId,
     loadPendingProposals,
@@ -22,7 +20,6 @@ import {
     loadSpecificationRegistry,
     loadSpecifications,
     loadSchemaGroups,
-    rejectMergeProposal,
     saveCapturedNote,
     saveWaybackArchiveRequest,
     saveSpecificationRegistry,
@@ -50,7 +47,6 @@ import type {
     DocumentSchemaGroup,
     FieldDefinition,
     MergeProposal,
-    MergeResolutionPayload,
     SpecificationDefinition,
     SpecificationStore,
     StoredDocument,
@@ -886,22 +882,6 @@ function App() {
         />
     );
 
-    const handleApproveMerge = async (proposalId: string, resolution: MergeResolutionPayload) => {
-        await approveMergeProposal(proposalId, currentUserId, activeWorkspaceId, resolution);
-        await refreshDocumentState();
-        await refreshMergeQueue();
-        setStatusMessage("Merge proposal approved and duplicate reconciled.");
-    };
-
-    const handleRejectMerge = async (proposalId: string) => {
-        const comment = window.prompt("Reject reason", "Insufficient confidence for merge")?.trim();
-        if (!comment) return;
-
-        await rejectMergeProposal(proposalId, currentUserId, comment, activeWorkspaceId);
-        await refreshMergeQueue();
-        setStatusMessage("Merge proposal rejected.");
-    };
-
     const handleScanWorkspaceDuplicates = async () => {
         setIsScanningDuplicates(true);
         try {
@@ -964,18 +944,6 @@ function App() {
             onDeleteDocument={handleDeleteDocument}
         >
             <div className="relative min-h-screen bg-background text-foreground flex p-8">
-                <SettingsModal
-                    groups={groupsWithSpecifications}
-                    specificationRegistry={specificationRegistry}
-                    specifications={specifications}
-                    onSaveSchema={handleSaveSchema}
-                    onSaveGroup={handleSaveGroup}
-                    onDeleteGroup={handleDeleteGroup}
-                    onDeleteSchema={handleDeleteSchema}
-                    onSaveSpecifications={handleSaveSpecifications}
-                    onExportToObsidian={triggerObsidianVaultExport}
-                />
-
                 <main className="max-w-2xl mx-auto w-full space-y-4">
                     {activeSchema && activeDocumentId ? (
                         <Capture

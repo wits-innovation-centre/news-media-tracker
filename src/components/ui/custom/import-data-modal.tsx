@@ -20,7 +20,7 @@ import {
 import { toast } from "sonner"
 
 interface ImportDataModalProps {
-    children: React.ReactNode
+    children: React.ReactElement
     workspaceId?: string
     onImportCompleted: (summary: string) => void
 }
