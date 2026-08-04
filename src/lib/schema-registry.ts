@@ -10,6 +10,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 id: "event",
                 name: "event",
                 description: "Add notes to annotate reports of homicides.",
+                icon: "map-pin",
                 fields: [
                     { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "evt-{date}-{rand:6}" }, description: "Auto-generated event identifier." },
                     { name: "name", label: "Event Title", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "Event {date} {rand:4}" }, description: "Generated working title; you can rename this after details are known." },
@@ -198,7 +199,13 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             "Unknown"
                         ]
                     },
-                    { name: "report", label: "Report", type: { data: "array<string>", input: "select" } },
+                    {
+                        name: "articles_link",
+                        label: "Documented in",
+                        type: { data: "form", input: "embedded-form-list" },
+                        linkTo: "article",
+                        icon: "newspaper"
+                    },
                     {
                         name: "type_of_murder",
                         label: "Type of Murder",
@@ -219,12 +226,10 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 ],
             },
             {
-                id: "report",
-                name: "report",
-                description: "Capture a report of homicide.",
-                metadata: {
-                    archivable: true,
-                },
+                id: "article",
+                name: "article",
+                description: "Capture an article reporting a homicide.",
+                icon: "newspaper",
                 parentSchemaId: "event",
                 fields: [
                     { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "rpt-{date}-{rand:6}" }, description: "Auto-generated report identifier." },
@@ -266,7 +271,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     {
                         name: "language",
                         label: "Language",
-                        type: { data: "select", input: "select" },
+                        type: { data: "select", input: "search-select" },
                         options: [
                             '',
                             'English',
@@ -302,7 +307,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     {
                         name: "report_platform",
                         label: "Report Platform",
-                        type: { data: "select", input: "select" },
+                        type: { data: "select", input: "search-select" },
                         options: [
                             '100punt6',
                             'AFRIKANER',
@@ -483,13 +488,21 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             'ZULULAND OBSERVER',
                         ]
                     },
+                    {
+                        name: "participants_link",
+                        label: "Mentions",
+                        type: { data: "form", input: "embedded-form-list" },
+                        linkTo: "participant",
+                        icon: "users"
+                    },
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
                 ],
             },
             {
-                id: "actor",
-                name: "actor",
+                id: "participant",
+                name: "participant",
                 description: "The people that participated in the reported event.",
+                icon: "users",
                 parentSchemaId: "event",
                 fields: [
                     { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "act-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
@@ -637,16 +650,6 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             "Terrorism or war",
                             "Other"
                         ]
-                    },
-                    {
-                        name: "type_of_murder_specify",
-                        label: "Specify",
-                        type: { data: "string", input: "text" },
-                        visibility: {
-                            dependsOn: "type_of_murder",
-                            operator: "eq",
-                            value: "Other"
-                        }
                     },
                     { name: "subtype_form", label: "Participant Type", type: { data: "form", input: "subtype-form-select" } },
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
@@ -873,13 +876,15 @@ function createSchemaFromTemplate(
 
 function createSchemaGroupFromTemplate(
     template: DocumentSchemaGroup,
-    overrides?: Partial<DocumentSchemaGroup>
+    overrides?: Partial<DocumentSchemaGroup>,
+    options?: { preserveTemplateIds?: boolean }
 ): DocumentSchemaGroup {
-    const groupId = overrides?.id ?? `${template.id}-${crypto.randomUUID()}`;
+    const preserveTemplateIds = options?.preserveTemplateIds === true;
+    const groupId = overrides?.id ?? (preserveTemplateIds ? template.id : `${template.id}-${crypto.randomUUID()}`);
 
     const idMap: Record<string, string> = {};
     template.documents.forEach((doc) => {
-        idMap[doc.id] = `${doc.id}-${crypto.randomUUID()}`;
+        idMap[doc.id] = preserveTemplateIds ? doc.id : `${doc.id}-${crypto.randomUUID()}`;
     });
 
     const clonedDocuments = template.documents.map((doc) => {

@@ -11,6 +11,7 @@ import { MergeQueueView } from "@/components/ui/custom/merge-queue-view";
 import { SettingsModal } from "@/components/ui/custom/settings-modal";
 import { WaybackArchiveStatus } from "@/components/ui/custom/wayback-archive-status";
 
+import { initializeDatabase, dbClient } from "@/lib/db/client";
 import {
     approveMergeProposal,
     loadCapturedDocuments,
@@ -28,6 +29,7 @@ import {
     saveSpecificationsStore,
     saveSpecificationValues,
     saveSchemaWorkspace,
+    updateCapturedNoteSchema,
 } from "@/lib/db/utils";
 import {
     exportWorkspaceAsObsidianVault,
@@ -123,6 +125,27 @@ const applySpecificationsToGroups = (
     }));
 };
 
+const createDefaultSchemaGroups = () =>
+    DEFAULT_SCHEMA_TEMPLATES.map((template) =>
+        createSchemaGroupFromTemplate(template, undefined, { preserveTemplateIds: true })
+    );
+
+const TEMPLATE_SCHEMA_IDS = new Set(
+    DEFAULT_SCHEMA_TEMPLATES.flatMap((group) => group.documents.map((schema) => schema.id))
+);
+
+const normalizeLegacySchemaId = (schemaId: string, availableSchemaIds: Set<string>): string => {
+    if (availableSchemaIds.has(schemaId)) return schemaId;
+
+    for (const templateSchemaId of TEMPLATE_SCHEMA_IDS) {
+        if (schemaId.startsWith(`${templateSchemaId}-`) && availableSchemaIds.has(templateSchemaId)) {
+            return templateSchemaId;
+        }
+    }
+
+    return schemaId;
+};
+
 function App() {
     const {
         activeWorkspace,
@@ -137,7 +160,7 @@ function App() {
     const [currentUserId] = useState(() => getOrCreateUserId());
     const [activePath, setActivePath] = useState<string>(() => getCurrentPath());
     const [schemaGroups, setSchemaGroups] = useState<DocumentSchemaGroup[]>(() =>
-        DEFAULT_SCHEMA_TEMPLATES.map((template) => createSchemaGroupFromTemplate(template))
+        createDefaultSchemaGroups()
     );
     const [documents, setDocuments] = useState<DocumentNode[]>([]);
     const [storedDocuments, setStoredDocuments] = useState<Record<string, StoredDocument>>({});
@@ -212,12 +235,13 @@ function App() {
 
         void (async () => {
             try {
-                const storedGroups = await loadSchemaGroups(activeWorkspaceId);
-                const storedSchemas = await loadActiveSchemas(activeWorkspaceId);
-                const loadedDocuments = await loadCapturedDocuments(activeWorkspaceId);
-                const storedRegistry = await loadSpecificationRegistry(activeWorkspaceId);
-                const storedSpecifications = await loadSpecifications(activeWorkspaceId);
-                const defaultGroups = DEFAULT_SCHEMA_TEMPLATES.map((template) => createSchemaGroupFromTemplate(template));
+                await initializeDatabase();
+                const storedGroups = await loadSchemaGroups();
+                const storedSchemas = await loadActiveSchemas();
+                const loadedDocuments = await loadCapturedDocuments();
+                const storedRegistry = await loadSpecificationRegistry();
+                const storedSpecifications = await loadSpecifications();
+                const defaultGroups = createDefaultSchemaGroups();
 
                 const hydratedGroups =
                     storedGroups.length > 0 || storedSchemas.length > 0
@@ -249,6 +273,20 @@ function App() {
 
                 const normalizedSpecs = mergeSpecificationStore(storedSpecifications, specDefaults, normalizedRegistry);
 
+                const availableSchemaIds = new Set(hydratedGroups.flatMap((group) => group.documents.map((schema) => schema.id)));
+                const normalizedDocuments = loadedDocuments.map((record) => {
+                    const nextSchemaId = normalizeLegacySchemaId(record.schema_id, availableSchemaIds);
+                    if (nextSchemaId === record.schema_id) return record;
+                    return { ...record, schema_id: nextSchemaId };
+                });
+                const migratedSchemaRecords = normalizedDocuments.filter((record, index) => record.schema_id !== loadedDocuments[index].schema_id);
+
+                if (migratedSchemaRecords.length > 0) {
+                    await Promise.all(
+                        migratedSchemaRecords.map((record) => updateCapturedNoteSchema(record.id, record.schema_id))
+                    );
+                }
+
                 if (storedRegistry.length === 0 && normalizedRegistry.length > 0) {
                     await saveSpecificationRegistry(normalizedRegistry, activeWorkspaceId);
                 }
@@ -261,15 +299,14 @@ function App() {
                 setSpecificationRegistry(normalizedRegistry);
                 setSpecifications(normalizedSpecs);
                 setDocuments(
-                    loadedDocuments.map((record) => ({
+                    normalizedDocuments.map((record) => ({
                         id: record.id,
                         schemaId: record.schema_id,
                         label: record.title,
                         parentId: record.parent_id,
                     }))
                 );
-                setStoredDocuments(Object.fromEntries(loadedDocuments.map((record) => [record.id, record])));
-                await refreshMergeQueue();
+                setStoredDocuments(Object.fromEntries(normalizedDocuments.map((record) => [record.id, record])));
                 setIsDbReady(true);
             } catch (error) {
                 console.error("Failed preparing database", error);
@@ -285,6 +322,11 @@ function App() {
     const schemas = useMemo(
         () => applySpecificationsToGroups(schemaGroups, specifications).flatMap((group) => group.documents),
         [schemaGroups, specifications]
+    );
+
+    const schemasById = useMemo(
+        () => Object.fromEntries(schemas.map((schema) => [schema.id, schema])),
+        [schemas]
     );
 
     const groupsWithSpecifications = useMemo(
@@ -722,6 +764,67 @@ function App() {
         createDocumentNode(schema, parentId, true);
     };
 
+    const handleCreateLinkedDocument = ({
+        schemaId,
+        title,
+        parentDocumentId,
+        seedData,
+    }: {
+        schemaId: string;
+        title: string;
+        parentDocumentId?: string;
+        seedData?: Record<string, any>;
+    }) => {
+        const schema = schemasById[schemaId];
+        const nodeId = crypto.randomUUID();
+
+        const node: DocumentNode = {
+            id: nodeId,
+            schemaId,
+            parentId: parentDocumentId,
+            label: title,
+        };
+
+        setDocuments((current) => [...current, node]);
+        setDrafts((current) => ({
+            ...current,
+            [nodeId]: {
+                ...(seedData ?? {}),
+                name: (seedData?.name as string) ?? title,
+            },
+        }));
+
+        return {
+            id: nodeId,
+            title,
+            data: seedData ?? {},
+            schemaId: schema?.id ?? schemaId,
+        };
+    };
+
+    const handleDeleteDocument = async (documentId: string) => {
+        await dbClient.execute("DELETE FROM notes WHERE id = ?", [documentId]);
+
+        setDocuments((current) => current.filter((doc) => doc.id !== documentId));
+        setStoredDocuments((current) => {
+            const next = { ...current };
+            delete next[documentId];
+            return next;
+        });
+        setDrafts((current) => {
+            const next = { ...current };
+            delete next[documentId];
+            return next;
+        });
+
+        if (activeDocumentId === documentId) {
+            setActiveDocumentId(undefined);
+            setActiveSchemaId(undefined);
+        }
+
+        setStatusMessage("Document deleted.");
+    };
+
     const handleSelectDocument = (documentId: string, schemaId: string) => {
         setActiveDocumentId(documentId);
         setActiveSchemaId(schemaId);
@@ -815,6 +918,30 @@ function App() {
         }
     };
 
+    const getExistingLinkedDocuments = ({
+        parentDocumentId,
+        schemaId,
+    }: {
+        parentDocumentId?: string;
+        schemaId: string;
+    }) => {
+        if (!parentDocumentId) return [];
+
+        return documents
+            .filter((doc) => doc.parentId === parentDocumentId && doc.schemaId === schemaId)
+            .map((doc) => {
+                const draftData = drafts[doc.id];
+                const stored = storedDocuments[doc.id];
+
+                return {
+                    id: doc.id,
+                    title: doc.label || stored?.title || "",
+                    data: draftData ?? stored?.frontmatter ?? {},
+                    schemaId: doc.schemaId,
+                };
+            });
+    };
+
     return (
         <Layout
             footerContent={sidebarFooterContent}
@@ -834,17 +961,44 @@ function App() {
                 handleSelectDocument(documentId, schemaId);
             }}
             onCreateDocument={handleCreateDocument}
+            onDeleteDocument={handleDeleteDocument}
         >
             <div className="relative min-h-screen bg-background text-foreground flex p-8">
-                <main className="mx-auto w-full max-w-5xl space-y-4">
-                    {activePath === MERGE_QUEUE_PATH ? (
-                        <MergeQueueView
-                            proposals={mergeQueue}
-                            documents={storedDocuments}
-                            onApprove={handleApproveMerge}
-                            onReject={handleRejectMerge}
-                            onScanWorkspace={handleScanWorkspaceDuplicates}
-                            isScanning={isScanningDuplicates}
+                <SettingsModal
+                    groups={groupsWithSpecifications}
+                    specificationRegistry={specificationRegistry}
+                    specifications={specifications}
+                    onSaveSchema={handleSaveSchema}
+                    onSaveGroup={handleSaveGroup}
+                    onDeleteGroup={handleDeleteGroup}
+                    onDeleteSchema={handleDeleteSchema}
+                    onSaveSpecifications={handleSaveSpecifications}
+                    onExportToObsidian={triggerObsidianVaultExport}
+                />
+
+                <main className="max-w-2xl mx-auto w-full space-y-4">
+                    {activeSchema && activeDocumentId ? (
+                        <Capture
+                            fields={activeSchema.fields}
+                            subtypeFields={activeSchema.subtypeFields}
+                            initialValues={activeInitialValues}
+                            specifications={specifications}
+                            schemas={schemasById}
+                            activeDocumentId={activeDocumentId}
+                            onCreateLinkedDocument={handleCreateLinkedDocument}
+                            onDeleteLinkedDocument={(documentId) => {
+                                void handleDeleteDocument(documentId);
+                            }}
+                            onNavigateToLinkedDocument={(documentId, schemaId) => {
+                                handleSelectDocument(documentId, schemaId);
+                            }}
+                            getExistingLinkedDocuments={getExistingLinkedDocuments}
+                            onValuesChange={(values) => {
+                                if (!activeDocumentId) return;
+                                setDrafts((current) => ({ ...current, [activeDocumentId]: values }));
+                            }}
+                            onAddSpecification={handleAddSpecification}
+                            onSubmit={handleCaptureSubmit}
                         />
                     ) : activeSchema && activeDocumentId ? (
                         <>

@@ -16,21 +16,27 @@ interface SearchSelectInputProps {
 
 function SearchSelectInput({ id, value, options, placeholder = "Search and select...", onChange, onCreateOption, allowCreate = false }: SearchSelectInputProps) {
     const [isOpen, setIsOpen] = useState(false)
-    const [searchQuery, setSearchQuery] = useState("")
+    const [searchQuery, setSearchQuery] = useState(value)
     const containerRef = useRef<HTMLDivElement>(null)
-    const searchInputRef = useRef<HTMLInputElement>(null)
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    useEffect(() => {
+        if (!isOpen) {
+            setSearchQuery(value)
+        }
+    }, [isOpen, value])
 
     useEffect(() => {
         const handlePointerDown = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
                 setIsOpen(false)
-                setSearchQuery("")
+                setSearchQuery(value)
             }
         }
 
         document.addEventListener("mousedown", handlePointerDown)
         return () => document.removeEventListener("mousedown", handlePointerDown)
-    }, [])
+    }, [value])
 
     useEffect(() => {
         if (!isOpen) return
@@ -53,19 +59,10 @@ function SearchSelectInput({ id, value, options, placeholder = "Search and selec
         ? options.some((option) => option.toLowerCase() === normalizedQuery)
         : false
 
-    const close = () => {
-        setIsOpen(false)
-        setSearchQuery("")
-    }
-
-    const openForTyping = () => {
-        setIsOpen(true)
-        setSearchQuery(value)
-    }
-
     const handleSelect = (nextValue: string) => {
         onChange(nextValue)
-        close()
+        setSearchQuery(nextValue)
+        setIsOpen(false)
     }
 
     const handleCreate = async () => {
@@ -74,7 +71,8 @@ function SearchSelectInput({ id, value, options, placeholder = "Search and selec
 
         await onCreateOption?.(nextValue)
         onChange(nextValue)
-        close()
+        setSearchQuery(nextValue)
+        setIsOpen(false)
     }
 
     return (
@@ -82,35 +80,41 @@ function SearchSelectInput({ id, value, options, placeholder = "Search and selec
             <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                    ref={inputRef}
+                    type="text"
                     id={id}
-                    ref={searchInputRef}
-                    value={isOpen ? searchQuery : value}
-                    onFocus={openForTyping}
-                    onClick={openForTyping}
-                    onChange={(event) => {
-                        setIsOpen(true)
-                        setSearchQuery(event.target.value)
-                    }}
+                    value={searchQuery}
                     placeholder={placeholder}
-                    className="pl-9 pr-18"
+                    className="pl-9 pr-9"
+                    onFocus={() => setIsOpen(true)}
+                    onChange={(event) => {
+                        setSearchQuery(event.target.value)
+                        setIsOpen(true)
+                    }}
+                    onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                            event.preventDefault()
+                            setIsOpen(false)
+                            setSearchQuery(value)
+                            inputRef.current?.blur()
+                        }
+                    }}
                 />
-                <span className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
-                    {value ? (
-                        <button
-                            type="button"
-                            className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                            onClick={(event) => {
-                                event.preventDefault()
-                                event.stopPropagation()
-                                onChange("")
-                            }}
-                            aria-label="Clear selection"
-                        >
-                            <X className="size-3.5" />
-                        </button>
-                    ) : null}
-                    <Plus className={`size-4 text-muted-foreground transition-transform ${isOpen ? "rotate-45" : ""}`} />
-                </span>
+                {searchQuery ? (
+                    <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={() => {
+                            setSearchQuery("")
+                            onChange("")
+                            setIsOpen(true)
+                            inputRef.current?.focus()
+                        }}
+                        aria-label="Clear selection"
+                    >
+                        <X className="size-3.5" />
+                    </button>
+                ) : null}
             </div>
 
             {isOpen ? (

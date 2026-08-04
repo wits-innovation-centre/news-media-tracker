@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, Check, ChevronRight, Link2, Search, X } from "lucide-react"
+import { ArrowLeft, Check, ChevronRight, Search, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -67,9 +67,10 @@ function findNodeByPath(nodes: TierNode[], path: string[]): TierNode | undefined
 
 function HierarchicalSelect({ id, value, options, placeholder = "Select option...", onChange }: HierarchicalSelectProps) {
     const [isOpen, setIsOpen] = useState(false)
-    const [searchQuery, setSearchQuery] = useState("")
+    const [searchQuery, setSearchQuery] = useState(value)
     const [currentPath, setCurrentPath] = useState<TierNode[]>([])
     const containerRef = useRef<HTMLDivElement>(null)
+    const inputRef = useRef<HTMLInputElement>(null)
 
     const treeSchema = options.$schema
     const rootNodes = useMemo(() => buildNodes(options, treeSchema), [options, treeSchema])
@@ -79,14 +80,20 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
         const handlePointerDown = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
                 setIsOpen(false)
-                setSearchQuery("")
+                setSearchQuery(value)
                 setCurrentPath([])
             }
         }
 
         document.addEventListener("mousedown", handlePointerDown)
         return () => document.removeEventListener("mousedown", handlePointerDown)
-    }, [])
+    }, [value])
+
+    useEffect(() => {
+        if (!isOpen) {
+            setSearchQuery(value)
+        }
+    }, [isOpen, value])
 
     const filteredOptions = useMemo(() => {
         if (!searchQuery.trim()) return []
@@ -101,13 +108,11 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
         return currentPath[currentPath.length - 1].children ?? []
     }, [currentPath, rootNodes, searchQuery])
 
-    const selectedLabel = value || placeholder
-
     const handleSelect = (node: TierNode) => {
         const nextValue = node.path.join(" / ")
         onChange(nextValue)
+        setSearchQuery(nextValue)
         setIsOpen(false)
-        setSearchQuery("")
         setCurrentPath([])
     }
 
@@ -128,6 +133,8 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
         onChange("")
         setSearchQuery("")
         setCurrentPath([])
+        setIsOpen(true)
+        inputRef.current?.focus()
     }
 
     useEffect(() => {
@@ -138,60 +145,49 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
 
     return (
         <div ref={containerRef} className="w-full space-y-2">
-            <Button
-                type="button"
-                id={id}
-                variant="outline"
-                className="w-full justify-between"
-                onClick={() => setIsOpen((previous) => !previous)}
-            >
-                <span className="flex min-w-0 items-center gap-2 overflow-hidden">
-                    <Link2 className="size-4 shrink-0" />
-                    <span className={`truncate text-left ${value ? "text-foreground" : "text-muted-foreground"}`}>
-                        {selectedLabel}
-                    </span>
-                </span>
-                <span className="flex items-center gap-1">
-                    {value ? (
-                        <span
-                            role="button"
-                            tabIndex={0}
-                            className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                            onClick={(event) => {
-                                event.stopPropagation()
-                                clearSelection()
-                            }}
-                            onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                    event.preventDefault()
-                                    event.stopPropagation()
-                                    clearSelection()
-                                }
-                            }}
+            <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                    ref={inputRef}
+                    id={id}
+                    type="text"
+                    value={searchQuery}
+                    placeholder={placeholder}
+                    className="pl-9 pr-16"
+                    onFocus={() => setIsOpen(true)}
+                    onChange={(event) => {
+                        setSearchQuery(event.target.value)
+                        setCurrentPath([])
+                        setIsOpen(true)
+                    }}
+                    onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                            event.preventDefault()
+                            setIsOpen(false)
+                            setSearchQuery(value)
+                            setCurrentPath([])
+                            inputRef.current?.blur()
+                        }
+                    }}
+                />
+
+                <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1 text-muted-foreground">
+                    {searchQuery ? (
+                        <button
+                            type="button"
+                            className="rounded-full p-0.5 hover:bg-muted hover:text-foreground"
+                            onClick={clearSelection}
                             aria-label="Clear selection"
                         >
                             <X className="size-3.5" />
-                        </span>
+                        </button>
                     ) : null}
                     <ChevronRight className={`size-4 transition-transform ${isOpen ? "rotate-90" : ""}`} />
-                </span>
-            </Button>
+                </div>
+            </div>
 
             {isOpen ? (
                 <div className="rounded-2xl border bg-popover p-3 shadow-xl">
-                    <div className="relative">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            value={searchQuery}
-                            onChange={(event) => {
-                                setSearchQuery(event.target.value)
-                                setCurrentPath([])
-                            }}
-                            placeholder="Search locations"
-                            className="pl-9"
-                        />
-                    </div>
-
                     {!searchQuery.trim() ? (
                         <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                             <span>

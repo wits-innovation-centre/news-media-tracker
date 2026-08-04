@@ -7,13 +7,13 @@ type FieldDataType = "string" |
     "boolean" |
     "date" |
     "date-range" |
-    "markdown";
+    "markdown" |
+    "form";
 
 type FieldInputType = "text" |
     "textarea" |
     "select" |
     "search-select" |
-    "multi-select" |
     "search-select-input" |
     "subtype-form-select" |
     "embedded-form-list" |
@@ -21,7 +21,19 @@ type FieldInputType = "text" |
     "date-range" |
     "text-multi" |
     "checkbox" |
-    "switch"
+    "switch" |
+    "subtype-form-select" |
+    "embedded-form-list";
+
+type IconName =
+    "file-plus-2" |
+    "newspaper" |
+    "users" |
+    "user-round" |
+    "map-pin" |
+    "tag" |
+    "shield" |
+    "folder-tree";
 
 type TieredOptionsSchema = {
     [key: string]: string | TieredOptionsSchema | any;
@@ -47,6 +59,12 @@ interface FieldGeneratorConfig {
     uppercase?: boolean;
 }
 
+interface FieldTooltip {
+    kind: "help" | "warn" | "info";
+    useIcon: boolean;
+    message: string;
+}
+
 interface FieldDefinition {
     name: string;
     label: string;
@@ -62,15 +80,16 @@ interface FieldDefinition {
     options?: string[] | TieredOptions;
     specification?: string;
     description?: string;
+    linkTo?: string;
+    icon?: IconName;
+    tooltip?: FieldTooltip;
 };
 
 interface DocumentSchema {
     id: string;
     name: string;
     description?: string;
-    metadata?: {
-        archivable?: boolean;
-    };
+    icon?: IconName;
     parentSchemaId?: string;
     groupId?: string;
     groupName?: string;
@@ -205,7 +224,9 @@ type SpecificationStore = Record<string, string[]>;
 export type {
     FieldDataType,
     FieldInputType,
+    IconName,
     FieldDefinition,
+    FieldTooltip,
     FieldGeneratorConfig,
     TieredOptions,
     TieredOptionsSchema,
