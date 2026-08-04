@@ -33,8 +33,6 @@ import {
   isValidPathInRecord,
 } from "@/lib/utils"
 import { SearchSelectInput } from "@/components/ui/custom/search-select-input";
-import { SubtypeFormSelect } from "@/components/ui/custom/subtype-form-select";
-import { EmbeddedFormList } from "@/components/ui/custom/embedded-form-list";
 
 interface CaptureProps {
   fields: FieldDefinition[]
@@ -215,8 +213,8 @@ function Capture({ fields, initialValues, onValuesChange, specifications, onAddS
         const isNil = fieldValue === undefined || fieldValue === null;
 
         if (isEmptyArray || isEmptyString || isNil) {
-          fieldValue = field.type.data === "array<string>" 
-            ? [field.noSelectionValue] 
+          fieldValue = field.type.data === "array<string>"
+            ? [field.noSelectionValue]
             : field.noSelectionValue;
         }
       }

@@ -5,10 +5,40 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import type { DocumentSchema, DocumentSchemaGroup, FieldDataType, FieldDefinition, FieldInputType, SpecificationDefinition } from "@/lib/types"
+import type {
+    DocumentSchema,
+    DocumentSchemaGroup,
+    FieldDataType,
+    FieldDefinition,
+    FieldInputType,
+    SpecificationDefinition,
+} from "@/lib/types"
 
-const DATA_TYPES: FieldDataType[] = ["string", "array<string>", "hierarchical-select", "select", "number", "boolean", "date", "date-range", "markdown"]
-const INPUT_TYPES: FieldInputType[] = ["text", "textarea", "select", "search-select-input", "date", "date-range", "text-multi", "checkbox", "switch"]
+const DATA_TYPES: FieldDataType[] = [
+    "string",
+    "array<string>",
+    "hierarchical-select",
+    "select",
+    "number",
+    "boolean",
+    "date",
+    "date-range",
+    "markdown",
+]
+
+const INPUT_TYPES: FieldInputType[] = [
+    "text",
+    "textarea",
+    "select",
+    "search-select",
+    "multi-select",
+    "search-select-input",
+    "date",
+    "date-range",
+    "text-multi",
+    "checkbox",
+    "switch",
+]
 
 interface SchemaManagerProps {
     groups: DocumentSchemaGroup[]
@@ -21,7 +51,6 @@ interface SchemaManagerProps {
 
 interface EditableField extends FieldDefinition {
     optionsText: string
-    subtypeFieldsText?: string
 }
 
 function createEmptyField(): EditableField {
@@ -47,11 +76,6 @@ function schemaToEditableFields(schema?: DocumentSchema): EditableField[] {
                 ? field.options.join("\n")
                 : JSON.stringify(field.options, null, 2)
             : "",
-<<<<<<< Updated upstream
-=======
-        tooltipKind: field.tooltip?.kind ?? "info",
-        tooltipUseIcon: field.tooltip?.useIcon ?? true,
-        tooltipMessage: field.tooltip?.message ?? "",
         noSelectionValue: field.noSelectionValue ?? "",
     }))
 }
@@ -84,67 +108,6 @@ function parseField(field: EditableField): FieldDefinition {
     return nextField
 }
 
-<<<<<<< Updated upstream
-=======
-function moveItem<T>(items: T[], fromIndex: number, toIndex: number): T[] {
-    if (fromIndex === toIndex) return items
-    const nextItems = [...items]
-    const [moved] = nextItems.splice(fromIndex, 1)
-    nextItems.splice(toIndex, 0, moved)
-    return nextItems
-}
-
-const DATA_TYPE_GUIDANCE: Partial<Record<FieldDataType, string>> = {
-    "array<string>": "Use this for multi-value entries. Pick an input that supports repeated values.",
-    "hierarchical-select": "Expect nested options JSON with levels (for example Province -> Town).",
-    "date-range": "Stores a start and end value; make sure downstream filters handle ranges.",
-    "markdown": "Best for longer rich text notes that can include formatting.",
-    form: "Use form inputs when this field controls a composite UI (for example subtype or embedded records).",
-}
-
-const INPUT_TYPE_GUIDANCE: Partial<Record<FieldInputType, string>> = {
-    "search-select": "Searches and selects from existing options only.",
-    "search-select-input": "Lets users search existing options and create a new value when needed.",
-    "text-multi": "Use for multiple free-text values (aliases, tags, and similar lists).",
-    "subtype-form-select": "Switches the active subtype and displays subtype-specific fields.",
-    "embedded-form-list": "Manages linked documents directly from this field.",
-    switch: "Use with a short option set, typically binary states.",
-}
-
-const GENERATOR_GUIDANCE: Record<"uuid" | "timestamp" | "pattern", string> = {
-    uuid: "Generates a random unique identifier automatically.",
-    timestamp: "Generates a time-based value; useful for sortable IDs.",
-    pattern: "Builds values from tokens like {date} and {rand:n}. Example: evt-{date}-{rand:6}.",
-}
-
-function buildFieldGuidance(field: EditableField): string[] {
-    const guidance: string[] = []
-    const dataHint = DATA_TYPE_GUIDANCE[field.type.data]
-    const inputHint = INPUT_TYPE_GUIDANCE[field.type.input]
-
-    if (dataHint) guidance.push(`Data type: ${dataHint}`)
-    if (inputHint) guidance.push(`Input type: ${inputHint}`)
-
-    if (field.noSelectionValue?.trim()) {
-        guidance.push(`Fallback: Empty selections will default to "${field.noSelectionValue.trim()}".`)
-    }
-
-    if (field.generator?.strategy) {
-        guidance.push(`Generator: ${GENERATOR_GUIDANCE[field.generator.strategy]}`)
-    }
-
-    if (field.type.input === "search-select-input" && !field.specification) {
-        guidance.push("Consider setting a specification source so users search from maintained vocabularies.")
-    }
-
-    if (field.type.input === "embedded-form-list" && !field.linkTo) {
-        guidance.push("Set linkTo so this field knows which schema to embed.")
-    }
-
-    return guidance
-}
-
->>>>>>> Stashed changes
 function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGroup, onSaveSchema, onDeleteSchema }: SchemaManagerProps) {
     const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>(groups[0]?.id)
     const [selectedSchemaId, setSelectedSchemaId] = useState<string | undefined>(groups[0]?.documents[0]?.id)
@@ -153,6 +116,9 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
         id: "",
         name: "",
         description: "",
+        metadata: {
+            archivable: false,
+        },
         parentSchemaId: undefined,
         groupId: groups[0]?.id,
         groupName: groups[0]?.name,
@@ -169,6 +135,13 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
         () => groups.flatMap((group) => group.documents).find((schema) => schema.id === selectedSchemaId),
         [groups, selectedSchemaId]
     )
+
+    const updateFieldAt = (index: number, updater: (field: EditableField) => EditableField) => {
+        setSchemaDraft((current) => ({
+            ...current,
+            fields: current.fields.map((item, itemIndex) => itemIndex === index ? updater(item) : item),
+        }))
+    }
 
     useEffect(() => {
         if (!selectedGroup && groups.length > 0) {
@@ -192,6 +165,9 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
                 id: selectedSchema.id,
                 name: selectedSchema.name,
                 description: selectedSchema.description ?? "",
+                metadata: {
+                    archivable: Boolean(selectedSchema.metadata?.archivable),
+                },
                 parentSchemaId: selectedSchema.parentSchemaId,
                 groupId: selectedSchema.groupId,
                 groupName: selectedSchema.groupName,
@@ -212,6 +188,9 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
             id: crypto.randomUUID(),
             name: "",
             description: "",
+            metadata: {
+                archivable: false,
+            },
             parentSchemaId: undefined,
             groupId: selectedGroupId,
             groupName: selectedGroup?.name,
@@ -238,6 +217,9 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
             id: schemaDraft.id || crypto.randomUUID(),
             name: schemaDraft.name.trim(),
             description: (schemaDraft.description ?? "").trim() || undefined,
+            metadata: {
+                archivable: Boolean(schemaDraft.metadata?.archivable),
+            },
             parentSchemaId: schemaDraft.parentSchemaId || undefined,
             groupId: schemaDraft.groupId,
             groupName: group?.name,
@@ -346,6 +328,21 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
                         </Select>
                     </div>
 
+                    <label className="flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm">
+                        <input
+                            type="checkbox"
+                            checked={Boolean(schemaDraft.metadata?.archivable)}
+                            onChange={(event) => setSchemaDraft((current) => ({
+                                ...current,
+                                metadata: {
+                                    ...(current.metadata ?? {}),
+                                    archivable: event.target.checked,
+                                },
+                            }))}
+                        />
+                        Archivable document type
+                    </label>
+
                     <div className="space-y-3 rounded-xl border p-3">
                         <div className="flex items-center justify-between gap-2">
                             <h5 className="text-sm font-medium">Fields</h5>
@@ -357,54 +354,63 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
 
                         <div className="space-y-3">
                             {schemaDraft.fields.map((field, index) => (
-                                <div key={`${field.name}-${index}`} className="rounded-xl border p-3 space-y-2">
+                                <div key={`${field.name}-${index}`} className="space-y-3 rounded-xl border p-3">
                                     <div className="grid gap-2 md:grid-cols-2">
-                                        <Input value={field.name} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item) }))} placeholder="Field key" />
-                                        <Input value={field.label} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item) }))} placeholder="Field label" />
-                                        <Select value={field.type.data} onValueChange={(value) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, type: { ...item.type, data: value as FieldDataType } } : item) }))}>
+                                        <Input value={field.name} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, name: event.target.value }))} placeholder="Field key" />
+                                        <Input value={field.label} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, label: event.target.value }))} placeholder="Field label" />
+                                        <Select value={field.type.data} onValueChange={(value) => updateFieldAt(index, (item) => ({ ...item, type: { ...item.type, data: value as FieldDataType } }))}>
                                             <SelectTrigger><SelectValue placeholder="Data type" /></SelectTrigger>
-                                            <SelectContent>{DATA_TYPES.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                                            <SelectContent>
+                                                {DATA_TYPES.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                                            </SelectContent>
                                         </Select>
-                                        <Select value={field.type.input} onValueChange={(value) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, type: { ...item.type, input: value as FieldInputType } } : item) }))}>
+                                        <Select value={field.type.input} onValueChange={(value) => updateFieldAt(index, (item) => ({ ...item, type: { ...item.type, input: value as FieldInputType } }))}>
                                             <SelectTrigger><SelectValue placeholder="Input type" /></SelectTrigger>
-                                            <SelectContent>{INPUT_TYPES.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                                            <SelectContent>
+                                                {INPUT_TYPES.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                                            </SelectContent>
                                         </Select>
-                                        <Input value={field.default == null ? "" : String(field.default)} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, default: event.target.value } : item) }))} placeholder="Default value" />
-                                        <Input value={field.description ?? ""} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, description: event.target.value } : item) }))} placeholder="Description" />
+                                        <Input value={field.default == null ? "" : String(field.default)} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, default: event.target.value }))} placeholder="Default value" />
+                                        <Input value={field.description ?? ""} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, description: event.target.value }))} placeholder="Description" />
                                     </div>
 
-                                    {field.type.input === "search-select-input" ? (
-                                        <div className="grid gap-2 md:grid-cols-2">
-                                            <Select value={field.specification ?? "__none__"} onValueChange={(value) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, specification: !value || value === "__none__" ? undefined : value } : item) }))}>
-                                                <SelectTrigger><SelectValue placeholder="Specification source" /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="__none__">No specification source</SelectItem>
-                                                    {specificationRegistry.map((item) => <SelectItem key={item.id} value={item.id}>{item.name} ({item.id})</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    ) : null}
+                                    <div className="grid gap-2 md:grid-cols-2">
+                                        <Select value={field.specification ?? "__none__"} onValueChange={(value) => updateFieldAt(index, (item) => ({ ...item, specification: !value || value === "__none__" ? undefined : value }))}>
+                                            <SelectTrigger><SelectValue placeholder="Specification source" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="__none__">No specification source</SelectItem>
+                                                {specificationRegistry.map((item) => (
+                                                    <SelectItem key={item.id} value={item.id}>{item.name} ({item.id})</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Input value={field.noSelectionValue ?? ""} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, noSelectionValue: event.target.value }))} placeholder="No selection fallback" />
+                                    </div>
 
-                                    <Textarea value={field.optionsText} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, optionsText: event.target.value } : item) }))} placeholder={field.type.input === "search-select-input" ? "Optional fallback options" : field.type.data === "hierarchical-select" ? "Options JSON" : "One option per line or JSON array"} className="min-h-24" />
+                                    <Textarea
+                                        value={field.optionsText}
+                                        onChange={(event) => updateFieldAt(index, (item) => ({ ...item, optionsText: event.target.value }))}
+                                        placeholder={field.type.data === "hierarchical-select" ? "Options JSON" : "One option per line or JSON array"}
+                                        className="min-h-24"
+                                    />
 
                                     <div className="grid gap-2 md:grid-cols-4">
-                                        <Input value={field.visibility?.dependsOn ?? ""} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, visibility: { ...item.visibility, dependsOn: event.target.value, operator: item.visibility?.operator ?? "eq" } } : item) }))} placeholder="Visibility dependsOn" />
-                                        <Select value={field.visibility?.operator ?? "eq"} onValueChange={(value) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, visibility: { ...item.visibility, dependsOn: item.visibility?.dependsOn ?? "", operator: value as "eq" | "neq" | "includes" | "notEmpty", value: item.visibility?.value } } : item) }))}>
+                                        <Input value={field.visibility?.dependsOn ?? ""} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, visibility: { ...item.visibility, dependsOn: event.target.value, operator: item.visibility?.operator ?? "eq" } }))} placeholder="Visibility dependsOn" />
+                                        <Select value={field.visibility?.operator ?? "eq"} onValueChange={(value) => updateFieldAt(index, (item) => ({ ...item, visibility: { ...item.visibility, dependsOn: item.visibility?.dependsOn ?? "", operator: value as "eq" | "neq" | "includes" | "notEmpty", value: item.visibility?.value } }))}>
                                             <SelectTrigger><SelectValue placeholder="Operator" /></SelectTrigger>
                                             <SelectContent>
                                                 {(["eq", "neq", "includes", "notEmpty"] as const).map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
-                                        <Input value={field.visibility?.value == null ? "" : String(field.visibility.value)} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, visibility: { ...item.visibility, dependsOn: item.visibility?.dependsOn ?? "", operator: item.visibility?.operator ?? "eq", value: event.target.value } } : item) }))} placeholder="Visibility value" />
+                                        <Input value={field.visibility?.value == null ? "" : String(field.visibility.value)} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, visibility: { ...item.visibility, dependsOn: item.visibility?.dependsOn ?? "", operator: item.visibility?.operator ?? "eq", value: event.target.value } }))} placeholder="Visibility value" />
                                         <label className="flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm">
-                                            <input type="checkbox" checked={field.required ?? false} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, required: event.target.checked } : item) }))} />
+                                            <input type="checkbox" checked={field.required ?? false} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, required: event.target.checked }))} />
                                             Required
                                         </label>
                                     </div>
 
-<<<<<<< Updated upstream
                                     <div className="grid gap-2 md:grid-cols-4">
-                                        <Select value={field.generator?.strategy ?? "__none__"} onValueChange={(value) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, generator: value === "__none__" ? undefined : { ...item.generator, strategy: value as "uuid" | "timestamp" | "pattern" } } : item) }))}>
+                                        <Select value={field.generator?.strategy ?? "__none__"} onValueChange={(value) => updateFieldAt(index, (item) => ({ ...item, generator: value === "__none__" ? undefined : { ...item.generator, strategy: value as "uuid" | "timestamp" | "pattern" } }))}>
                                             <SelectTrigger><SelectValue placeholder="Generator" /></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="__none__">No generator</SelectItem>
@@ -413,155 +419,9 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
                                                 <SelectItem value="pattern">pattern</SelectItem>
                                             </SelectContent>
                                         </Select>
-                                        <Input value={field.generator?.pattern ?? ""} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, generator: { ...item.generator, strategy: item.generator?.strategy ?? "pattern", pattern: event.target.value } } : item) }))} placeholder="Generator pattern" />
-                                        <Input value={field.generator?.prefix ?? ""} onChange={(event) => setSchemaDraft((current) => ({ ...current, fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, generator: { ...item.generator, strategy: item.generator?.strategy ?? "pattern", prefix: event.target.value } } : item) }))} placeholder="Generator prefix" />
+                                        <Input value={field.generator?.pattern ?? ""} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, generator: { ...item.generator, strategy: item.generator?.strategy ?? "pattern", pattern: event.target.value } }))} placeholder="Generator pattern" />
+                                        <Input value={field.generator?.prefix ?? ""} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, generator: { ...item.generator, strategy: item.generator?.strategy ?? "pattern", prefix: event.target.value } }))} placeholder="Generator prefix" />
                                         <Button type="button" variant="ghost" size="sm" className="justify-start" onClick={() => setSchemaDraft((current) => ({ ...current, fields: current.fields.filter((_, itemIndex) => itemIndex !== index) }))}>
-=======
-                                    <div className="space-y-1">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Options and Source</div>
-                                        <div className="space-y-3 rounded-xl border p-3">
-                                            {field.type.input === "search-select-input" ? (
-                                                <div className="space-y-1">
-                                                    <label className="text-xs text-muted-foreground">Specification source</label>
-                                                    <Select value={field.specification ?? "__none__"} onValueChange={(value) => updateFieldAt(index, (item) => ({ ...item, specification: !value || value === "__none__" ? undefined : value }))}>
-                                                        <SelectTrigger><SelectValue placeholder="Specification source" /></SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="__none__">No specification source</SelectItem>
-                                                            {specificationRegistry.map((item) => <SelectItem key={item.id} value={item.id}>{item.name} ({item.id})</SelectItem>)}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            ) : null}
-
-                                            <div className="space-y-1">
-                                                <label className="text-xs text-muted-foreground">No selection fallback value</label>
-                                                <Input
-                                                    value={field.noSelectionValue ?? ""}
-                                                    onChange={(event) => updateFieldAt(index, (item) => ({ ...item, noSelectionValue: event.target.value }))}
-                                                    placeholder="Fallback when no option selected (e.g. Unknown)"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <label className="text-xs text-muted-foreground">Options</label>
-                                                <Textarea
-                                                    value={field.optionsText}
-                                                    onChange={(event) => updateFieldAt(index, (item) => ({ ...item, optionsText: event.target.value }))}
-                                                    placeholder={field.type.input === "search-select-input" ? "Optional fallback options" : field.type.data === "hierarchical-select" ? "Options JSON" : "One option per line or JSON array"}
-                                                    className="min-h-24"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Visibility and Rules</div>
-                                        <div className="space-y-3 rounded-xl border p-3">
-                                            <div className="space-y-1">
-                                                <label className="text-xs text-muted-foreground">Visibility depends on</label>
-                                                <Input value={field.visibility?.dependsOn ?? ""} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, visibility: { ...item.visibility, dependsOn: event.target.value, operator: item.visibility?.operator ?? "eq" } }))} placeholder="other_field_key" />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-xs text-muted-foreground">Visibility operator</label>
-                                                <Select value={field.visibility?.operator ?? "eq"} onValueChange={(value) => updateFieldAt(index, (item) => ({ ...item, visibility: { ...item.visibility, dependsOn: item.visibility?.dependsOn ?? "", operator: value as "eq" | "neq" | "includes" | "notEmpty", value: item.visibility?.value } }))}>
-                                                    <SelectTrigger><SelectValue placeholder="Operator" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {(["eq", "neq", "includes", "notEmpty"] as const).map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-xs text-muted-foreground">Visibility value</label>
-                                                <Input value={field.visibility?.value == null ? "" : String(field.visibility.value)} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, visibility: { ...item.visibility, dependsOn: item.visibility?.dependsOn ?? "", operator: item.visibility?.operator ?? "eq", value: event.target.value } }))} placeholder="Value to compare against" />
-                                            </div>
-                                            <label className="flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm">
-                                                <input type="checkbox" checked={field.required ?? false} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, required: event.target.checked }))} />
-                                                Required field
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tooltip</div>
-                                        <div className="space-y-3 rounded-xl border p-3">
-                                            <div className="space-y-1">
-                                                <label className="text-xs text-muted-foreground">Tooltip kind</label>
-                                                <Select value={field.tooltipKind} onValueChange={(value) => updateFieldAt(index, (item) => ({ ...item, tooltipKind: value as "help" | "warn" | "info" }))}>
-                                                    <SelectTrigger><SelectValue placeholder="Tooltip kind" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="help">help</SelectItem>
-                                                        <SelectItem value="warn">warn</SelectItem>
-                                                        <SelectItem value="info">info</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-xs text-muted-foreground">Tooltip message</label>
-                                                <Input value={field.tooltipMessage} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, tooltipMessage: event.target.value }))} placeholder="Explain how this field works" />
-                                            </div>
-                                            <label className="flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm">
-                                                <input type="checkbox" checked={field.tooltipUseIcon} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, tooltipUseIcon: event.target.checked }))} />
-                                                Show tooltip icon
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Generator</div>
-                                        <div className="space-y-3 rounded-xl border p-3">
-                                            <div className="space-y-1">
-                                                <label className="text-xs text-muted-foreground">Generator strategy</label>
-                                                <Select value={field.generator?.strategy ?? "__none__"} onValueChange={(value) => updateFieldAt(index, (item) => ({ ...item, generator: value === "__none__" ? undefined : { ...item.generator, strategy: value as "uuid" | "timestamp" | "pattern" } }))}>
-                                                    <SelectTrigger><SelectValue placeholder="Generator" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="__none__">No generator</SelectItem>
-                                                        <SelectItem value="uuid">uuid</SelectItem>
-                                                        <SelectItem value="timestamp">timestamp</SelectItem>
-                                                        <SelectItem value="pattern">pattern</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-xs text-muted-foreground">Generator pattern</label>
-                                                <Input value={field.generator?.pattern ?? ""} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, generator: { ...item.generator, strategy: item.generator?.strategy ?? "pattern", pattern: event.target.value } }))} placeholder="evt-{date}-{rand:6}" />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-xs text-muted-foreground">Generator prefix</label>
-                                                <Input value={field.generator?.prefix ?? ""} onChange={(event) => updateFieldAt(index, (item) => ({ ...item, generator: { ...item.generator, strategy: item.generator?.strategy ?? "pattern", prefix: event.target.value } }))} placeholder="Optional prefix" />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Built-in Guidance</div>
-                                        <div className="rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
-                                            {buildFieldGuidance(field).length > 0 ? (
-                                                <div className="space-y-1">
-                                                    {buildFieldGuidance(field).map((hint, hintIndex) => (
-                                                        <p key={`${field.name || index}-hint-${hintIndex}`}>{hint}</p>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <p>No specific guidance for this combination yet.</p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="flex justify-end">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="justify-start"
-                                            onClick={() => {
-                                                setSchemaDraft((current) => ({ ...current, fields: current.fields.filter((_, itemIndex) => itemIndex !== index) }))
-                                                setExpandedFieldIndex((prev) => {
-                                                    if (prev == null) return null
-                                                    return index <= prev ? Math.max(0, prev - 1) : prev
-                                                })
-                                            }}
-                                        >
->>>>>>> Stashed changes
                                             <Trash2 className="mr-1 h-3.5 w-3.5" />
                                             Remove field
                                         </Button>

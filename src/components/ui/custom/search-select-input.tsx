@@ -18,6 +18,7 @@ function SearchSelectInput({ id, value, options, placeholder = "Search and selec
     const [isOpen, setIsOpen] = useState(false)
     const [searchQuery, setSearchQuery] = useState("")
     const containerRef = useRef<HTMLDivElement>(null)
+    const searchInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
         const handlePointerDown = (event: MouseEvent) => {
@@ -30,6 +31,16 @@ function SearchSelectInput({ id, value, options, placeholder = "Search and selec
         document.addEventListener("mousedown", handlePointerDown)
         return () => document.removeEventListener("mousedown", handlePointerDown)
     }, [])
+
+    useEffect(() => {
+        if (!isOpen) return
+
+        const frame = window.requestAnimationFrame(() => {
+            searchInputRef.current?.focus()
+        })
+
+        return () => window.cancelAnimationFrame(frame)
+    }, [isOpen])
 
     const normalizedQuery = searchQuery.trim().toLowerCase()
 
@@ -45,6 +56,11 @@ function SearchSelectInput({ id, value, options, placeholder = "Search and selec
     const close = () => {
         setIsOpen(false)
         setSearchQuery("")
+    }
+
+    const openForTyping = () => {
+        setIsOpen(true)
+        setSearchQuery(value)
     }
 
     const handleSelect = (nextValue: string) => {
@@ -63,58 +79,43 @@ function SearchSelectInput({ id, value, options, placeholder = "Search and selec
 
     return (
         <div ref={containerRef} className="w-full space-y-2">
-            <Button
-                type="button"
-                id={id}
-                variant="outline"
-                className="w-full justify-between"
-                onClick={() => setIsOpen((previous) => !previous)}
-            >
-                <span className="flex min-w-0 items-center gap-2 overflow-hidden">
-                    <Search className="size-4 shrink-0" />
-                    <span className={`truncate text-left ${value ? "text-foreground" : "text-muted-foreground"}`}>
-                        {value || placeholder}
-                    </span>
-                </span>
-                <span className="flex items-center gap-1">
+            <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                    id={id}
+                    ref={searchInputRef}
+                    value={isOpen ? searchQuery : value}
+                    onFocus={openForTyping}
+                    onClick={openForTyping}
+                    onChange={(event) => {
+                        setIsOpen(true)
+                        setSearchQuery(event.target.value)
+                    }}
+                    placeholder={placeholder}
+                    className="pl-9 pr-18"
+                />
+                <span className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
                     {value ? (
-                        <span
-                            role="button"
-                            tabIndex={0}
+                        <button
+                            type="button"
                             className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                             onClick={(event) => {
+                                event.preventDefault()
                                 event.stopPropagation()
                                 onChange("")
-                            }}
-                            onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                    event.preventDefault()
-                                    event.stopPropagation()
-                                    onChange("")
-                                }
                             }}
                             aria-label="Clear selection"
                         >
                             <X className="size-3.5" />
-                        </span>
+                        </button>
                     ) : null}
-                    <Plus className={`size-4 transition-transform ${isOpen ? "rotate-45" : ""}`} />
+                    <Plus className={`size-4 text-muted-foreground transition-transform ${isOpen ? "rotate-45" : ""}`} />
                 </span>
-            </Button>
+            </div>
 
             {isOpen ? (
                 <div className="rounded-2xl border bg-popover p-3 shadow-xl">
-                    <div className="relative">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            value={searchQuery}
-                            onChange={(event) => setSearchQuery(event.target.value)}
-                            placeholder="Search entries"
-                            className="pl-9"
-                        />
-                    </div>
-
-                    <div className="mt-3 max-h-72 space-y-1 overflow-y-auto">
+                    <div className="max-h-72 space-y-1 overflow-y-auto">
                         {filteredOptions.length > 0 ? (
                             filteredOptions.map((option) => {
                                 const isSelected = value === option
@@ -139,9 +140,15 @@ function SearchSelectInput({ id, value, options, placeholder = "Search and selec
                     </div>
 
                     {allowCreate && searchQuery.trim() && !exactMatch ? (
-                        <Button type="button" variant="outline" className="mt-3 w-full" onClick={() => void handleCreate()}>
-                            <Plus className="mr-1 size-4" />
-                            Add "{searchQuery.trim()}" to specification
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            className="mt-3"
+                            onClick={() => void handleCreate()}
+                            aria-label={`Add ${searchQuery.trim()} as a new option`}
+                        >
+                            <Plus className="size-4" />
                         </Button>
                     ) : null}
                 </div>

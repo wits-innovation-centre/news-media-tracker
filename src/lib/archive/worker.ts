@@ -1,4 +1,5 @@
 import * as Comlink from "comlink";
+import { hashArrayBufferToSha256Hex } from "../ledger-cron/utils";
 
 export interface SaveArchiveInput {
   recordId: string;
@@ -25,19 +26,16 @@ const archiveWorkerAPI = {
     const { recordId, fileBuffer, fileName } = input;
 
     // 1. Calculate SHA-256 Hash off the main thread
-    const hashBuffer = await crypto.subtle.digest("SHA-256", fileBuffer);
-    const sha256Hash = Array.from(new Uint8Array(hashBuffer))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
+    const sha256Hash = await hashArrayBufferToSha256Hex(fileBuffer);
 
     // 2. Access OPFS Root -> /archives directory
     const root = await navigator.storage.getDirectory();
     const archivesDir = await root.getDirectoryHandle("archives", { create: true });
-    
+
     // Save as /archives/{recordId}_{fileName}
     const safeStorageName = `${recordId}_${fileName}`;
     const fileHandle = await archivesDir.getFileHandle(safeStorageName, { create: true });
-    
+
     const writableStream = await fileHandle.createWritable();
     await writableStream.write(fileBuffer);
     await writableStream.close();
@@ -62,16 +60,13 @@ const archiveWorkerAPI = {
       const root = await navigator.storage.getDirectory();
       const pathParts = storagePath.split("/");
       const fileName = pathParts[pathParts.length - 1];
-      
+
       const archivesDir = await root.getDirectoryHandle("archives");
       const fileHandle = await archivesDir.getFileHandle(fileName);
       const file = await fileHandle.getFile();
-      
+
       const arrayBuffer = await file.arrayBuffer();
-      const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer);
-      const currentHash = Array.from(new Uint8Array(hashBuffer))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
+      const currentHash = await hashArrayBufferToSha256Hex(arrayBuffer);
 
       const isMatch = currentHash.toLowerCase() === expectedHash.toLowerCase();
 

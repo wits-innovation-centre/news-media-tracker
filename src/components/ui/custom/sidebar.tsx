@@ -1,20 +1,51 @@
 import { Fragment, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, FilePlus2, Plus, Search, X } from "lucide-react";
+import { ChevronDown, ChevronRight, FilePlus2, PanelLeftClose, Plus, Search, X } from "lucide-react";
 
-import { Sidebar as BaseSidebar, SidebarContent, SidebarGroup, SidebarHeader } from "@/components/ui/sidebar";
-import type { DocumentNode, DocumentSchema } from "@/lib/types";
+import {
+  Sidebar as BaseSidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarHeader,
+  SidebarRail,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { DocumentNode, DocumentSchema, WorkspaceRecord } from "@/lib/types";
 
 interface SidebarProps {
+  footerContent?: React.ReactNode;
   schemas: DocumentSchema[];
   documents: DocumentNode[];
+  workspaces: WorkspaceRecord[];
+  activePath: string;
+  mergeQueueCount: number;
+  activeWorkspaceId: string;
   activeSchemaId?: string;
   activeDocumentId?: string;
+  onNavigate: (path: string) => void;
+  onSwitchWorkspace: (workspaceId: string) => void | Promise<void>;
   onSelectSchema: (schemaId: string) => void;
   onSelectDocument: (documentId: string, schemaId: string) => void;
   onCreateDocument: (schema: DocumentSchema, parentId?: string) => void;
 }
 
-function Sidebar({ schemas, documents, activeSchemaId, activeDocumentId, onSelectSchema, onSelectDocument, onCreateDocument }: SidebarProps) {
+function Sidebar({
+  footerContent,
+  schemas,
+  documents,
+  workspaces,
+  activePath,
+  mergeQueueCount,
+  activeWorkspaceId,
+  activeSchemaId,
+  activeDocumentId,
+  onNavigate,
+  onSwitchWorkspace,
+  onSelectSchema,
+  onSelectDocument,
+  onCreateDocument,
+}: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
   const [menuOpenAnchor, setMenuOpenAnchor] = useState<string | null>(null);
@@ -89,6 +120,10 @@ function Sidebar({ schemas, documents, activeSchemaId, activeDocumentId, onSelec
     return visibleDocuments.filter((doc) => !doc.parentId);
   }, [visibleDocuments]);
 
+  const activeWorkspace = useMemo(() => {
+    return workspaces.find((workspace) => workspace.id === activeWorkspaceId);
+  }, [activeWorkspaceId, workspaces]);
+
   const renderAddMenu = (anchorId: string, parentDocument?: DocumentNode) => {
     const options = getAvailableSchemasForAnchor(parentDocument);
     if (options.length === 0) return null;
@@ -144,6 +179,7 @@ function Sidebar({ schemas, documents, activeSchemaId, activeDocumentId, onSelec
         <div className="group" style={{ marginLeft: `${depth * 14}px` }}>
           <div
             onClick={() => {
+              onNavigate("/");
               onSelectDocument(document.id, document.schemaId);
               onSelectSchema(document.schemaId);
             }}
@@ -186,10 +222,14 @@ function Sidebar({ schemas, documents, activeSchemaId, activeDocumentId, onSelec
   };
 
   return (
-    <BaseSidebar>
+    <BaseSidebar collapsible="icon">
       <SidebarHeader className="px-4 py-3 border-b border-border space-y-3">
-        <div className="space-y-1">
+        <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-semibold text-foreground">Vault Explorer</p>
+          <SidebarTrigger className="h-7 w-7">
+            <PanelLeftClose className="h-4 w-4" />
+            <span className="sr-only">Collapse Sidebar</span>
+          </SidebarTrigger>
         </div>
 
         <div className="relative">
@@ -215,10 +255,28 @@ function Sidebar({ schemas, documents, activeSchemaId, activeDocumentId, onSelec
 
       <SidebarContent className="pt-2">
         <SidebarGroup>
-          <div className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Document Tree
+          <div className="px-1 pb-3">
+            <div className="grid grid-cols-2 gap-1 rounded-full border border-border bg-muted/30 p-1">
+            <button
+              type="button"
+              className={`flex w-full items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs transition-all ${activePath === "/" ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-accent hover:text-accent-foreground"}`}
+              onClick={() => onNavigate("/")}
+            >
+              <span>Document Tree</span>
+            </button>
+            <button
+              type="button"
+              className={`flex w-full items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs transition-all ${activePath === "/merge-queue" ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-accent hover:text-accent-foreground"}`}
+              onClick={() => onNavigate("/merge-queue")}
+            >
+              <span>Merge Queue</span>
+              <span className="rounded border border-current/30 px-1 py-0.5 text-[10px]">{mergeQueueCount}</span>
+            </button>
+            </div>
           </div>
+        </SidebarGroup>
 
+        <SidebarGroup>
           {renderAddMenu("tree-start")}
 
           {rootDocuments.length === 0 ? (
@@ -228,6 +286,37 @@ function Sidebar({ schemas, documents, activeSchemaId, activeDocumentId, onSelec
           )}
         </SidebarGroup>
       </SidebarContent>
+
+      <SidebarFooter className="mt-auto border-t border-border px-3 py-3 space-y-3">
+        <div className="flex items-center justify-between gap-2 rounded-md border border-border/70 bg-background/70 px-2.5 py-2">
+          <Select
+            value={activeWorkspaceId}
+            onValueChange={(nextWorkspaceId) => {
+              if (!nextWorkspaceId) return;
+              void onSwitchWorkspace(nextWorkspaceId);
+            }}
+          >
+            <SelectTrigger className="h-auto min-h-0 flex-1 border-0 bg-transparent px-0 py-0 text-left shadow-none hover:bg-transparent focus-visible:ring-0">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Workspace</p>
+                <span data-slot="select-value" className="flex flex-1 text-left truncate text-xs text-foreground">
+                  {activeWorkspace?.name ?? "My Workspace"}
+                </span>
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              {workspaces.map((workspace) => (
+                <SelectItem key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {footerContent}
+        </div>
+      </SidebarFooter>
+
+      <SidebarRail />
     </BaseSidebar>
   );
 }

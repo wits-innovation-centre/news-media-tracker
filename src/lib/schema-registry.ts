@@ -222,16 +222,19 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 id: "report",
                 name: "report",
                 description: "Capture a report of homicide.",
+                metadata: {
+                    archivable: true,
+                },
                 parentSchemaId: "event",
                 fields: [
                     { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "rpt-{date}-{rand:6}" }, description: "Auto-generated report identifier." },
                     { name: "headline", label: "Headline", type: { data: "string", input: "text" }, required: true },
                     { name: "url", label: "URL", type: { data: "string", input: "text" }, required: true },
                     { name: "date", label: "Publication Date", type: { data: "date", input: "date" } },
-                    { 
-                        name: "author_identity_status", 
-                        label: "Author Identity Status", 
-                        type: { data: "string", input: "select" } ,
+                    {
+                        name: "author_identity_status",
+                        label: "Author Identity Status",
+                        type: { data: "string", input: "select" },
                         options: [
                             "Known",
                             "Undisclosed",
@@ -240,16 +243,16 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         ],
                         default: "Known"
                     },
-                    { 
-                        name: "author", 
-                        label: "Author(s)", 
+                    {
+                        name: "author",
+                        label: "Author(s)",
                         type: { data: "array<string>", input: "search-select-input" },
                         specification: "author",
                         visibility: {
                             dependsOn: "author_identity_status",
                             operator: "eq",
                             value: "Known"
-                        } 
+                        }
                     },
                     {
                         name: "wire_service",

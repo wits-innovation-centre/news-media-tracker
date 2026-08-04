@@ -6,7 +6,7 @@
   "runArgs": [
     "--label='com.docker.compose.project=development",
     "--label='com.docker.compose.service=news-media-tracker",
-    "--name=dev.news-media-tracker"
+    "--name=news-media-tracker"
   ],
   "shutdownAction": "none",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",

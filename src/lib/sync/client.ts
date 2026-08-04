@@ -13,6 +13,8 @@ interface SyncPullResponse {
     created_by?: string | null;
     updated_by?: string | null;
     deleted_by?: string | null;
+    user_id?: string | null;
+    device_id?: string | null;
     created_at: number;
     updated_at: number;
     is_deleted: number;
@@ -23,7 +25,13 @@ interface SyncPullResponse {
     document_id: string;
     secondary_document_id?: string | null;
     author_id: string;
+    user_id?: string | null;
+    device_id?: string | null;
     action: string;
+    source_id?: string | null;
+    target_id?: string | null;
+    entity_type?: string | null;
+    similarity_score?: number | null;
     base_frontmatter?: string | null;
     base_body?: string | null;
     secondary_base_frontmatter?: string | null;
@@ -38,11 +46,33 @@ interface SyncPullResponse {
     created_at: number;
     updated_at: number;
   }>;
+  archives: Array<{
+    id: string;
+    article_id: string;
+    workspace_id: string;
+    archive_type: string;
+    sha256_hash: string;
+    ipfs_cid?: string | null;
+    torrent_infohash?: string | null;
+    uri_or_path?: string | null;
+    file_size_bytes?: number | null;
+    device_id: string;
+    last_verified_at?: number | null;
+    health_status: string;
+    sync_status?: string | null;
+    blockchain_tx_hash?: string | null;
+    blockchain_network?: string | null;
+    ots_proof_payload?: string | null;
+    anchored_at?: string | null;
+    created_at: number;
+    updated_at: number;
+    is_deleted: number;
+  }>;
 }
 
 // Vite replaces `import.meta.env.DEV` at build time.
 // In production, the local URL string is completely tree-shaken away.
-const SYNC_SERVER_URL = import.meta.env.DEV
+export const SYNC_SERVER_URL = import.meta.env.DEV
   ? "http://localhost:8787"
   : import.meta.env.VITE_SYNC_SERVER_URL;
 
@@ -115,14 +145,18 @@ export async function synchronizeWorkspace(workspaceId: string = "default") {
         await dbClient.execute(
           `INSERT INTO notes (
              id, workspace_id, schema_id, parent_id, title, frontmatter, body, 
-             created_by, updated_by, deleted_by, created_at, updated_at, is_deleted, synced_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             created_by, updated_by, deleted_by, user_id, device_id, created_at, updated_at, is_deleted, synced_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
+             schema_id = excluded.schema_id,
+             parent_id = excluded.parent_id,
              title = excluded.title,
              frontmatter = excluded.frontmatter,
              body = excluded.body,
              updated_by = excluded.updated_by,
              deleted_by = excluded.deleted_by,
+             user_id = excluded.user_id,
+             device_id = excluded.device_id,
              updated_at = excluded.updated_at,
              is_deleted = excluded.is_deleted,
              synced_at = excluded.synced_at
@@ -138,6 +172,8 @@ export async function synchronizeWorkspace(workspaceId: string = "default") {
             remoteNote.created_by,
             remoteNote.updated_by,
             remoteNote.deleted_by,
+            remoteNote.user_id,
+            remoteNote.device_id,
             remoteNote.created_at,
             remoteNote.updated_at,
             remoteNote.is_deleted,
@@ -149,12 +185,23 @@ export async function synchronizeWorkspace(workspaceId: string = "default") {
       for (const remoteProp of data.proposals) {
         await dbClient.execute(
           `INSERT INTO merge_queue (
-             id, workspace_id, document_id, secondary_document_id, author_id, action, 
+             id, workspace_id, document_id, secondary_document_id, author_id, user_id, device_id, action,
+             source_id, target_id, entity_type, similarity_score,
              base_frontmatter, base_body, secondary_base_frontmatter, secondary_base_body,
              proposed_title, proposed_frontmatter, proposed_body, metadata, status, 
              reviewed_by, review_comment, created_at, updated_at, synced_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
+             document_id = excluded.document_id,
+             secondary_document_id = excluded.secondary_document_id,
+             source_id = excluded.source_id,
+             target_id = excluded.target_id,
+             entity_type = excluded.entity_type,
+             similarity_score = excluded.similarity_score,
+             proposed_title = excluded.proposed_title,
+             proposed_frontmatter = excluded.proposed_frontmatter,
+             proposed_body = excluded.proposed_body,
+             metadata = excluded.metadata,
              status = excluded.status,
              reviewed_by = excluded.reviewed_by,
              review_comment = excluded.review_comment,
@@ -167,7 +214,13 @@ export async function synchronizeWorkspace(workspaceId: string = "default") {
             remoteProp.document_id,
             remoteProp.secondary_document_id,
             remoteProp.author_id,
+            remoteProp.user_id,
+            remoteProp.device_id,
             remoteProp.action,
+            remoteProp.source_id,
+            remoteProp.target_id,
+            remoteProp.entity_type,
+            remoteProp.similarity_score,
             remoteProp.base_frontmatter,
             remoteProp.base_body,
             remoteProp.secondary_base_frontmatter,
@@ -182,6 +235,61 @@ export async function synchronizeWorkspace(workspaceId: string = "default") {
             remoteProp.created_at,
             remoteProp.updated_at,
             data.timestamp
+          ]
+        );
+      }
+
+      for (const remoteArchive of data.archives) {
+        await dbClient.execute(
+          `INSERT INTO archival_records (
+             id, article_id, workspace_id, archive_type, sha256_hash,
+             ipfs_cid, torrent_infohash, uri_or_path, file_size_bytes, device_id,
+             last_verified_at, health_status, sync_status, blockchain_tx_hash,
+             blockchain_network, ots_proof_payload, anchored_at,
+             created_at, updated_at, is_deleted, synced_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             article_id = excluded.article_id,
+             archive_type = excluded.archive_type,
+             sha256_hash = excluded.sha256_hash,
+             ipfs_cid = excluded.ipfs_cid,
+             torrent_infohash = excluded.torrent_infohash,
+             uri_or_path = excluded.uri_or_path,
+             file_size_bytes = excluded.file_size_bytes,
+             device_id = excluded.device_id,
+             last_verified_at = excluded.last_verified_at,
+             health_status = excluded.health_status,
+             sync_status = excluded.sync_status,
+             blockchain_tx_hash = excluded.blockchain_tx_hash,
+             blockchain_network = excluded.blockchain_network,
+             ots_proof_payload = excluded.ots_proof_payload,
+             anchored_at = excluded.anchored_at,
+             updated_at = excluded.updated_at,
+             is_deleted = excluded.is_deleted,
+             synced_at = excluded.synced_at
+           WHERE excluded.updated_at > archival_records.updated_at`,
+          [
+            remoteArchive.id,
+            remoteArchive.article_id,
+            remoteArchive.workspace_id,
+            remoteArchive.archive_type,
+            remoteArchive.sha256_hash,
+            remoteArchive.ipfs_cid ?? null,
+            remoteArchive.torrent_infohash ?? null,
+            remoteArchive.uri_or_path ?? null,
+            remoteArchive.file_size_bytes ?? null,
+            remoteArchive.device_id,
+            remoteArchive.last_verified_at ?? null,
+            remoteArchive.health_status,
+            remoteArchive.sync_status ?? "PENDING_ANCHOR",
+            remoteArchive.blockchain_tx_hash ?? null,
+            remoteArchive.blockchain_network ?? null,
+            remoteArchive.ots_proof_payload ?? null,
+            remoteArchive.anchored_at ?? null,
+            remoteArchive.created_at,
+            remoteArchive.updated_at,
+            remoteArchive.is_deleted,
+            data.timestamp,
           ]
         );
       }

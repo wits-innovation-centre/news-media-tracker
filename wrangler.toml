@@ -1,6 +1,10 @@
 name = "news-media-sync"
-main = "src/lib/server.ts"  
+main = "src/lib/db/server.ts"
 compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["0 * * * *"]
 
 [[d1_databases]]
 binding = "DB"

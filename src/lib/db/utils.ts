@@ -1,20 +1,206 @@
 import { dbClient } from "@/lib/db/client"
-import type { 
-  DocumentSchema, 
-  DocumentSchemaGroup, 
-  FieldDefinition, 
-  MergeProposal, 
-  SpecificationDefinition, 
-  SpecificationStore, 
-  StoredDocument 
+import { getOrCreateDeviceId } from "@/lib/archive/client"
+import { getMutationActor } from "@/lib/provenance"
+import {
+  WAYBACK_ARCHIVE_TYPE,
+  WAYBACK_SYNC_STATUS,
+  buildWaybackArchiveSeed,
+} from "@/lib/archive/utils"
+import type {
+  ArchivalLedgerRecord,
+  DuplicateDetectionMetadata,
+  DocumentSchema,
+  DocumentSchemaGroup,
+  FieldDefinition,
+  MergeResolutionPayload,
+  MergeProposal,
+  SpecificationDefinition,
+  SpecificationStore,
+  StoredDocument,
+  WorkspaceRecord
 } from "@/lib/types"
+
+const DEFAULT_WORKSPACE_ID = "default"
+
+const normalizeWorkspaceId = (workspaceId?: string) => workspaceId?.trim() || DEFAULT_WORKSPACE_ID
+
+const safeJsonParse = <T>(value: unknown, fallback: T): T => {
+  if (typeof value !== "string") return fallback
+
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
+}
+
+const mapMergeProposalRecord = (row: Record<string, any>): MergeProposal => ({
+  id: String(row.id),
+  workspace_id: String(row.workspace_id ?? DEFAULT_WORKSPACE_ID),
+  document_id: String(row.document_id),
+  secondary_document_id: row.secondary_document_id ? String(row.secondary_document_id) : null,
+  author_id: String(row.author_id),
+  user_id: row.user_id ? String(row.user_id) : null,
+  device_id: row.device_id ? String(row.device_id) : null,
+  action: String(row.action) as MergeProposal["action"],
+  source_id: row.source_id ? String(row.source_id) : null,
+  target_id: row.target_id ? String(row.target_id) : null,
+  entity_type: row.entity_type ? String(row.entity_type) : null,
+  similarity_score: typeof row.similarity_score === "number" ? row.similarity_score : row.similarity_score ? Number(row.similarity_score) : null,
+  base_frontmatter: row.base_frontmatter ? String(row.base_frontmatter) : null,
+  base_body: row.base_body ? String(row.base_body) : null,
+  secondary_base_frontmatter: row.secondary_base_frontmatter ? String(row.secondary_base_frontmatter) : null,
+  secondary_base_body: row.secondary_base_body ? String(row.secondary_base_body) : null,
+  proposed_title: String(row.proposed_title ?? ""),
+  proposed_frontmatter: String(row.proposed_frontmatter ?? "{}"),
+  proposed_body: String(row.proposed_body ?? ""),
+  metadata: row.metadata ? String(row.metadata) : null,
+  status: String(row.status) as MergeProposal["status"],
+  reviewed_by: row.reviewed_by ? String(row.reviewed_by) : null,
+  review_comment: row.review_comment ? String(row.review_comment) : null,
+  created_at: Number(row.created_at),
+  updated_at: Number(row.updated_at),
+  synced_at: typeof row.synced_at === "number" ? row.synced_at : null,
+})
+
+export async function ensureDefaultWorkspace(): Promise<WorkspaceRecord> {
+  const now = Date.now()
+  await dbClient.execute(
+    `INSERT OR IGNORE INTO workspaces (id, name, description, template_group_id, created_at, last_accessed_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [DEFAULT_WORKSPACE_ID, "My Workspace", "Primary local workspace", null, now, now]
+  )
+
+  await dbClient.execute(
+    `UPDATE workspaces
+     SET name = ?
+     WHERE id = ? AND name = ?`,
+    ["My Workspace", DEFAULT_WORKSPACE_ID, "Default Workspace"]
+  )
+
+  const rows = await dbClient.query(
+    `SELECT id, name, description, template_group_id, created_at, last_accessed_at
+     FROM workspaces
+     WHERE id = ?
+     LIMIT 1`,
+    [DEFAULT_WORKSPACE_ID]
+  )
+
+  const row = rows[0]
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    description: row.description ? String(row.description) : undefined,
+    template_group_id: row.template_group_id ? String(row.template_group_id) : undefined,
+    created_at: Number(row.created_at),
+    last_accessed_at: Number(row.last_accessed_at),
+  }
+}
+
+export async function listWorkspaces(): Promise<WorkspaceRecord[]> {
+  await ensureDefaultWorkspace()
+  const rows = await dbClient.query(
+    `SELECT id, name, description, template_group_id, created_at, last_accessed_at
+     FROM workspaces
+     ORDER BY last_accessed_at DESC, created_at ASC`
+  )
+
+  return rows.map((row) => ({
+    id: String(row.id),
+    name: String(row.name),
+    description: row.description ? String(row.description) : undefined,
+    template_group_id: row.template_group_id ? String(row.template_group_id) : undefined,
+    created_at: Number(row.created_at),
+    last_accessed_at: Number(row.last_accessed_at),
+  }))
+}
+
+export async function createWorkspace(name: string, description?: string): Promise<WorkspaceRecord> {
+  const now = Date.now()
+  const trimmedName = name.trim()
+  if (!trimmedName) {
+    throw new Error("Workspace name is required.")
+  }
+
+  const id = `ws-${crypto.randomUUID()}`
+  await dbClient.execute(
+    `INSERT INTO workspaces (id, name, description, template_group_id, created_at, last_accessed_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, trimmedName, description?.trim() || null, null, now, now]
+  )
+
+  return {
+    id,
+    name: trimmedName,
+    description: description?.trim() || undefined,
+    template_group_id: undefined,
+    created_at: now,
+    last_accessed_at: now,
+  }
+}
+
+export async function renameWorkspace(workspaceId: string, name: string, description?: string): Promise<void> {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  const trimmedName = name.trim()
+  if (!trimmedName) {
+    throw new Error("Workspace name is required.")
+  }
+
+  await dbClient.execute(
+    `UPDATE workspaces
+     SET name = ?, description = ?
+     WHERE id = ?`,
+    [trimmedName, description?.trim() || null, scopedWorkspaceId]
+  )
+}
+
+export async function setWorkspaceTemplateGroup(workspaceId: string, templateGroupId?: string): Promise<void> {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  await dbClient.execute(
+    `UPDATE workspaces
+     SET template_group_id = ?
+     WHERE id = ?`,
+    [templateGroupId?.trim() || null, scopedWorkspaceId]
+  )
+}
+
+export async function touchWorkspace(workspaceId: string): Promise<void> {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  await dbClient.execute(
+    `UPDATE workspaces
+     SET last_accessed_at = ?
+     WHERE id = ?`,
+    [Date.now(), scopedWorkspaceId]
+  )
+}
+
+export async function deleteWorkspace(workspaceId: string): Promise<void> {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  if (scopedWorkspaceId === DEFAULT_WORKSPACE_ID) {
+    throw new Error("Default workspace cannot be deleted.")
+  }
+
+  await dbClient.execute("DELETE FROM notes WHERE workspace_id = ?", [scopedWorkspaceId])
+  await dbClient.execute("DELETE FROM merge_queue WHERE workspace_id = ?", [scopedWorkspaceId])
+  await dbClient.execute("DELETE FROM archival_records WHERE workspace_id = ?", [scopedWorkspaceId])
+  await dbClient.execute("DELETE FROM schemas WHERE workspace_id = ?", [scopedWorkspaceId])
+  await dbClient.execute("DELETE FROM schema_metadata WHERE workspace_id = ?", [scopedWorkspaceId])
+  await dbClient.execute("DELETE FROM schema_groups WHERE workspace_id = ?", [scopedWorkspaceId])
+  await dbClient.execute("DELETE FROM specifications WHERE workspace_id = ?", [scopedWorkspaceId])
+  await dbClient.execute("DELETE FROM specification_registry WHERE workspace_id = ?", [scopedWorkspaceId])
+  await dbClient.execute("DELETE FROM workspaces WHERE id = ?", [scopedWorkspaceId])
+}
 
 // ==========================================
 // SCHEMAS & GROUPS
 // ==========================================
 
-export async function loadSchemaGroups() {
-  const records = await dbClient.query("SELECT * FROM schema_groups WHERE is_deleted = 0 ORDER BY name")
+export async function loadSchemaGroups(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  const records = await dbClient.query(
+    "SELECT * FROM schema_groups WHERE workspace_id = ? AND is_deleted = 0 ORDER BY name",
+    [scopedWorkspaceId]
+  )
   return records.map((row) => ({
     id: row.id,
     name: row.name,
@@ -23,12 +209,28 @@ export async function loadSchemaGroups() {
   })) as DocumentSchemaGroup[]
 }
 
-export async function loadActiveSchemas() {
-  const records = await dbClient.query("SELECT * FROM schemas WHERE is_deleted = 0")
+export async function loadActiveSchemas(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  const records = await dbClient.query(
+    "SELECT * FROM schemas WHERE workspace_id = ? AND is_deleted = 0",
+    [scopedWorkspaceId]
+  )
+  const metadataRows = await dbClient.query(
+    "SELECT schema_id, metadata FROM schema_metadata WHERE workspace_id = ?",
+    [scopedWorkspaceId]
+  )
+  const metadataBySchemaId = new Map<string, { archivable?: boolean }>()
+  metadataRows.forEach((row) => {
+    const schemaId = String(row.schema_id)
+    const metadata = safeJsonParse<{ archivable?: boolean }>(row.metadata, {})
+    metadataBySchemaId.set(schemaId, metadata)
+  })
+
   return records.map((row) => ({
     id: row.id,
     name: row.name,
     description: row.description ?? undefined,
+    metadata: metadataBySchemaId.get(String(row.id)) ?? undefined,
     parentSchemaId: row.parentSchemaId ?? undefined,
     groupId: row.groupId ?? undefined,
     groupName: row.groupName ?? undefined,
@@ -37,21 +239,24 @@ export async function loadActiveSchemas() {
   })) as DocumentSchema[]
 }
 
-export async function saveSchemaWorkspace(groups: DocumentSchemaGroup[]) {
-  await dbClient.execute("DELETE FROM schemas")
-  await dbClient.execute("DELETE FROM schema_groups")
+export async function saveSchemaWorkspace(groups: DocumentSchemaGroup[], workspaceId: string = DEFAULT_WORKSPACE_ID) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  await dbClient.execute("DELETE FROM schemas WHERE workspace_id = ?", [scopedWorkspaceId])
+  await dbClient.execute("DELETE FROM schema_metadata WHERE workspace_id = ?", [scopedWorkspaceId])
+  await dbClient.execute("DELETE FROM schema_groups WHERE workspace_id = ?", [scopedWorkspaceId])
 
   for (const group of groups) {
     await dbClient.execute(
-      "INSERT INTO schema_groups (id, name, description) VALUES (?, ?, ?)",
-      [group.id, group.name, group.description ?? null]
+      "INSERT INTO schema_groups (id, workspace_id, name, description) VALUES (?, ?, ?, ?)",
+      [group.id, scopedWorkspaceId, group.name, group.description ?? null]
     )
 
     for (const schema of group.documents) {
       await dbClient.execute(
-        "INSERT INTO schemas (id, name, description, parentSchemaId, groupId, groupName, subtypeFields, fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO schemas (id, workspace_id, name, description, parentSchemaId, groupId, groupName, subtypeFields, fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
           schema.id,
+          scopedWorkspaceId,
           schema.name,
           schema.description ?? null,
           schema.parentSchemaId ?? null,
@@ -61,14 +266,22 @@ export async function saveSchemaWorkspace(groups: DocumentSchemaGroup[]) {
           JSON.stringify(schema.fields),
         ]
       )
+
+      if (schema.metadata) {
+        await dbClient.execute(
+          "INSERT INTO schema_metadata (schema_id, workspace_id, metadata) VALUES (?, ?, ?)",
+          [schema.id, scopedWorkspaceId, JSON.stringify(schema.metadata)]
+        )
+      }
     }
   }
 }
 
-export async function updateCapturedNoteSchema(noteId: string, schemaId: string) {
+export async function updateCapturedNoteSchema(noteId: string, schemaId: string, workspaceId: string = DEFAULT_WORKSPACE_ID) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   await dbClient.execute(
-    "UPDATE notes SET schema_id = ? WHERE id = ?",
-    [schemaId, noteId]
+    "UPDATE notes SET schema_id = ? WHERE workspace_id = ? AND id = ?",
+    [schemaId, scopedWorkspaceId, noteId]
   )
 }
 
@@ -76,8 +289,12 @@ export async function updateCapturedNoteSchema(noteId: string, schemaId: string)
 // SPECIFICATIONS & REGISTRY
 // ==========================================
 
-export async function loadSpecifications(): Promise<SpecificationStore> {
-  const rows = await dbClient.query("SELECT kind, value FROM specifications ORDER BY kind, value")
+export async function loadSpecifications(workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<SpecificationStore> {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  const rows = await dbClient.query(
+    "SELECT kind, value FROM specifications WHERE workspace_id = ? ORDER BY kind, value",
+    [scopedWorkspaceId]
+  )
   const byId: SpecificationStore = {}
 
   rows.forEach((row) => {
@@ -91,8 +308,12 @@ export async function loadSpecifications(): Promise<SpecificationStore> {
   return byId
 }
 
-export async function loadSpecificationRegistry(): Promise<SpecificationDefinition[]> {
-  const rows = await dbClient.query("SELECT id, name, description FROM specification_registry ORDER BY name")
+export async function loadSpecificationRegistry(workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<SpecificationDefinition[]> {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  const rows = await dbClient.query(
+    "SELECT id, name, description FROM specification_registry WHERE workspace_id = ? ORDER BY name",
+    [scopedWorkspaceId]
+  )
   const byId = new Map<string, SpecificationDefinition>()
 
   rows.forEach((row) => {
@@ -106,8 +327,9 @@ export async function loadSpecificationRegistry(): Promise<SpecificationDefiniti
   return [...byId.values()]
 }
 
-export async function saveSpecificationRegistry(registry: SpecificationDefinition[]) {
-  await dbClient.execute("DELETE FROM specification_registry")
+export async function saveSpecificationRegistry(registry: SpecificationDefinition[], workspaceId: string = DEFAULT_WORKSPACE_ID) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  await dbClient.execute("DELETE FROM specification_registry WHERE workspace_id = ?", [scopedWorkspaceId])
 
   const normalized = new Map<string, SpecificationDefinition>()
   registry.forEach((item) => {
@@ -122,34 +344,36 @@ export async function saveSpecificationRegistry(registry: SpecificationDefinitio
 
   for (const item of normalized.values()) {
     await dbClient.execute(
-      "INSERT OR REPLACE INTO specification_registry (id, name, description) VALUES (?, ?, ?)",
-      [item.id, item.name, item.description ?? null]
+      "INSERT OR REPLACE INTO specification_registry (id, workspace_id, name, description) VALUES (?, ?, ?, ?)",
+      [item.id, scopedWorkspaceId, item.name, item.description ?? null]
     )
   }
 }
 
-export async function saveSpecificationValues(specificationId: string, values: string[]) {
+export async function saveSpecificationValues(specificationId: string, values: string[], workspaceId: string = DEFAULT_WORKSPACE_ID) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const normalized = [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right))
-  await dbClient.execute("DELETE FROM specifications WHERE kind = ?", [specificationId])
+  await dbClient.execute("DELETE FROM specifications WHERE workspace_id = ? AND kind = ?", [scopedWorkspaceId, specificationId])
 
   for (const value of normalized) {
     await dbClient.execute(
-      "INSERT INTO specifications (kind, value) VALUES (?, ?)",
-      [specificationId, value]
+      "INSERT INTO specifications (kind, value, workspace_id) VALUES (?, ?, ?)",
+      [specificationId, value, scopedWorkspaceId]
     )
   }
 }
 
-export async function saveSpecificationsStore(store: SpecificationStore) {
-  await dbClient.execute("DELETE FROM specifications")
+export async function saveSpecificationsStore(store: SpecificationStore, workspaceId: string = DEFAULT_WORKSPACE_ID) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  await dbClient.execute("DELETE FROM specifications WHERE workspace_id = ?", [scopedWorkspaceId])
 
   const entries = Object.entries(store)
   for (const [specificationId, values] of entries) {
     const normalized = [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right))
     for (const value of normalized) {
       await dbClient.execute(
-        "INSERT INTO specifications (kind, value) VALUES (?, ?)",
-        [specificationId, value]
+        "INSERT INTO specifications (kind, value, workspace_id) VALUES (?, ?, ?)",
+        [specificationId, value, scopedWorkspaceId]
       )
     }
   }
@@ -160,21 +384,23 @@ export async function saveSpecificationsStore(store: SpecificationStore) {
 // ==========================================
 
 export async function saveCapturedNote(
-  id: string, 
-  schemaId: string, 
-  title: string, 
-  frontmatter: Record<string, any>, 
-  body: string, 
-  userId: string = "system-user",
+  id: string,
+  schemaId: string,
+  title: string,
+  frontmatter: Record<string, any>,
+  body: string,
+  userId?: string,
   parentId?: string,
-  workspaceId: string = "default"
+  workspaceId: string = "default",
+  deviceId?: string
 ) {
+  const actor = getMutationActor({ userId, deviceId })
   const now = Date.now()
   await dbClient.execute(
     `INSERT INTO notes (
        id, workspace_id, schema_id, parent_id, title, frontmatter, body, 
-       created_by, updated_by, created_at, updated_at, is_deleted, synced_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
+       created_by, updated_by, user_id, device_id, created_at, updated_at, is_deleted, synced_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
      ON CONFLICT(id) DO UPDATE SET
        schema_id = excluded.schema_id,
        parent_id = excluded.parent_id,
@@ -182,35 +408,165 @@ export async function saveCapturedNote(
        frontmatter = excluded.frontmatter,
        body = excluded.body,
        updated_by = excluded.updated_by,
+       user_id = excluded.user_id,
+       device_id = excluded.device_id,
        updated_at = excluded.updated_at,
        is_deleted = 0,
        synced_at = NULL`,
-    [id, workspaceId, schemaId, parentId ?? null, title, JSON.stringify(frontmatter), body, userId, userId, now, now]
+    [id, workspaceId, schemaId, parentId ?? null, title, JSON.stringify(frontmatter), body, actor.userId, actor.userId, actor.userId, actor.deviceId, now, now]
   )
+
+  const urlValue = frontmatter.url
+  if (typeof urlValue === "string" && urlValue.trim()) {
+    await saveWaybackArchiveRequest(id, urlValue, workspaceId)
+  }
+
   return id
 }
 
-export async function softDeleteCapturedNote(id: string, userId: string = "system-user") {
+export async function saveWaybackArchiveRequest(
+  articleId: string,
+  sourceUrl: string,
+  workspaceId: string = "default",
+  syncStatus: string = WAYBACK_SYNC_STATUS.pending,
+  snapshotUrl?: string | null,
+  lastVerifiedAt?: number | null
+) {
+  const seed = await buildWaybackArchiveSeed(articleId, sourceUrl, workspaceId)
+  const now = Date.now()
+
+  await dbClient.execute(
+    `INSERT INTO archival_records (
+       id, article_id, workspace_id, archive_type, sha256_hash,
+       uri_or_path, file_size_bytes, device_id, last_verified_at,
+       health_status, sync_status, blockchain_tx_hash, blockchain_network,
+       ots_proof_payload, anchored_at, created_at, updated_at, is_deleted, synced_at
+     ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, 0, NULL)
+     ON CONFLICT(id) DO UPDATE SET
+       article_id = excluded.article_id,
+       workspace_id = excluded.workspace_id,
+       archive_type = excluded.archive_type,
+       sha256_hash = excluded.sha256_hash,
+       uri_or_path = excluded.uri_or_path,
+       last_verified_at = excluded.last_verified_at,
+       health_status = excluded.health_status,
+       sync_status = excluded.sync_status,
+       updated_at = excluded.updated_at,
+       is_deleted = 0,
+       synced_at = NULL`,
+    [
+      seed.id,
+      articleId,
+      workspaceId,
+      WAYBACK_ARCHIVE_TYPE,
+      seed.sha256Hash,
+      snapshotUrl ?? seed.sourceUrl,
+      getOrCreateDeviceId(),
+      lastVerifiedAt ?? null,
+      syncStatus,
+      seed.createdAt,
+      now,
+    ]
+  )
+
+  return {
+    ...seed,
+    uriOrPath: snapshotUrl ?? seed.sourceUrl,
+    syncStatus,
+    lastVerifiedAt: lastVerifiedAt ?? null,
+  }
+}
+
+export async function loadWaybackArchiveRecordByArticleId(
+  articleId: string,
+  workspaceId: string = DEFAULT_WORKSPACE_ID
+): Promise<ArchivalLedgerRecord | null> {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  const rows = await dbClient.query(
+    `SELECT
+       id,
+       article_id,
+       workspace_id,
+       archive_type,
+       sha256_hash,
+       uri_or_path,
+       file_size_bytes,
+       device_id,
+       last_verified_at,
+       health_status,
+       sync_status,
+       blockchain_tx_hash,
+       blockchain_network,
+       ots_proof_payload,
+       anchored_at,
+       created_at,
+       updated_at
+     FROM archival_records
+     WHERE workspace_id = ?
+       AND article_id = ?
+       AND archive_type = 'WAYBACK_MACHINE'
+       AND is_deleted = 0
+     ORDER BY updated_at DESC
+     LIMIT 1`,
+    [scopedWorkspaceId, articleId]
+  )
+
+  if (rows.length === 0) {
+    return null
+  }
+
+  const row = rows[0]
+  return {
+    id: String(row.id),
+    article_id: String(row.article_id),
+    workspace_id: row.workspace_id ? String(row.workspace_id) : undefined,
+    archive_type: String(row.archive_type),
+    sha256_hash: String(row.sha256_hash),
+    uri_or_path: row.uri_or_path ? String(row.uri_or_path) : null,
+    file_size_bytes: typeof row.file_size_bytes === "number" ? row.file_size_bytes : null,
+    device_id: row.device_id ? String(row.device_id) : undefined,
+    last_verified_at: typeof row.last_verified_at === "number" ? row.last_verified_at : null,
+    health_status: row.health_status ? String(row.health_status) : undefined,
+    sync_status: row.sync_status ? String(row.sync_status) : undefined,
+    blockchain_tx_hash: row.blockchain_tx_hash ? String(row.blockchain_tx_hash) : null,
+    blockchain_network: row.blockchain_network ? String(row.blockchain_network) : null,
+    ots_proof_payload: row.ots_proof_payload ? String(row.ots_proof_payload) : null,
+    anchored_at: row.anchored_at ? String(row.anchored_at) : null,
+    created_at: typeof row.created_at === "number" ? row.created_at : undefined,
+    updated_at: typeof row.updated_at === "number" ? row.updated_at : undefined,
+  }
+}
+
+export async function softDeleteCapturedNote(
+  id: string,
+  userId?: string,
+  workspaceId: string = DEFAULT_WORKSPACE_ID,
+  deviceId?: string
+) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  const actor = getMutationActor({ userId, deviceId })
   const now = Date.now()
   await dbClient.execute(
     `UPDATE notes 
-     SET is_deleted = 1, deleted_by = ?, updated_by = ?, updated_at = ?, synced_at = NULL 
-     WHERE id = ?`,
-    [userId, userId, now, id]
+     SET is_deleted = 1, deleted_by = ?, updated_by = ?, user_id = ?, device_id = ?, updated_at = ?, synced_at = NULL 
+     WHERE workspace_id = ? AND id = ?`,
+    [actor.userId, actor.userId, actor.userId, actor.deviceId, now, scopedWorkspaceId, id]
   )
 }
 
-export async function loadCapturedDocuments(workspaceId: string = "default") {
+export async function loadCapturedDocuments(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const records = await dbClient.query(
-    `SELECT id, schema_id, parent_id, title, frontmatter, body, created_at, created_by, updated_by 
+    `SELECT id, workspace_id, schema_id, parent_id, title, frontmatter, body, created_at, created_by, updated_by, user_id, device_id, updated_at 
      FROM notes 
      WHERE workspace_id = ? AND is_deleted = 0 
      ORDER BY created_at DESC`,
-    [workspaceId]
+    [scopedWorkspaceId]
   )
 
   return records.map((row) => ({
     id: row.id,
+    workspace_id: row.workspace_id,
     schema_id: row.schema_id,
     title: row.title,
     frontmatter: JSON.parse(row.frontmatter),
@@ -218,32 +574,115 @@ export async function loadCapturedDocuments(workspaceId: string = "default") {
     parent_id: row.parent_id ?? undefined,
     created_at: typeof row.created_at === "number" ? new Date(row.created_at).toISOString() : row.created_at,
     created_by: row.created_by ?? undefined,
-    updated_by: row.updated_by ?? undefined
+    updated_by: row.updated_by ?? undefined,
+    user_id: row.user_id ?? undefined,
+    device_id: row.device_id ?? undefined,
+    updated_at: typeof row.updated_at === "number" ? row.updated_at : undefined,
   })) as StoredDocument[]
 }
 
-export async function loadDeletedDocumentsForReview(workspaceId: string = "default") {
+export async function loadDeletedDocumentsForReview(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   return await dbClient.query(
     `SELECT id, schema_id, title, created_by, deleted_by, updated_at 
      FROM notes 
      WHERE workspace_id = ? AND is_deleted = 1 
      ORDER BY updated_at DESC`,
-    [workspaceId]
+    [scopedWorkspaceId]
   )
 }
 
-export async function restoreDeletedNote(id: string, userId: string = "system-user") {
+export async function restoreDeletedNote(
+  id: string,
+  userId?: string,
+  workspaceId: string = DEFAULT_WORKSPACE_ID,
+  deviceId?: string
+) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  const actor = getMutationActor({ userId, deviceId })
   const now = Date.now()
   await dbClient.execute(
     `UPDATE notes 
-     SET is_deleted = 0, deleted_by = NULL, updated_by = ?, updated_at = ?, synced_at = NULL 
-     WHERE id = ?`,
-    [userId, now, id]
+     SET is_deleted = 0, deleted_by = NULL, updated_by = ?, user_id = ?, device_id = ?, updated_at = ?, synced_at = NULL 
+     WHERE workspace_id = ? AND id = ?`,
+    [actor.userId, actor.userId, actor.deviceId, now, scopedWorkspaceId, id]
   )
 }
 
-export async function getNotesForWorkspaceExport() {
-  return await dbClient.query("SELECT title, frontmatter, body FROM notes WHERE is_deleted = 0")
+export async function getNotesForWorkspaceExport(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  return await dbClient.query(
+    "SELECT title, frontmatter, body FROM notes WHERE workspace_id = ? AND is_deleted = 0",
+    [scopedWorkspaceId]
+  )
+}
+
+export async function loadLedgerRecordByArticleId(
+  articleId: string,
+  workspaceId: string = DEFAULT_WORKSPACE_ID
+): Promise<ArchivalLedgerRecord | null> {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  const rows = await dbClient.query(
+    `SELECT
+       id,
+       article_id,
+       workspace_id,
+       archive_type,
+       sha256_hash,
+       uri_or_path,
+       file_size_bytes,
+       device_id,
+       last_verified_at,
+       health_status,
+       sync_status,
+       blockchain_tx_hash,
+       blockchain_network,
+       ots_proof_payload,
+       anchored_at,
+       created_at,
+       updated_at
+     FROM archival_records
+     WHERE workspace_id = ?
+       AND article_id = ?
+       AND is_deleted = 0
+     ORDER BY
+       CASE WHEN archive_type = 'REPORT_CONTENT' THEN 0 ELSE 1 END,
+       updated_at DESC
+     LIMIT 1`,
+    [scopedWorkspaceId, articleId]
+  )
+
+  if (rows.length === 0) {
+    return null
+  }
+
+  const row = rows[0]
+  return {
+    id: String(row.id),
+    article_id: String(row.article_id),
+    workspace_id: row.workspace_id ? String(row.workspace_id) : undefined,
+    archive_type: String(row.archive_type),
+    sha256_hash: String(row.sha256_hash),
+    uri_or_path: row.uri_or_path ? String(row.uri_or_path) : null,
+    file_size_bytes: typeof row.file_size_bytes === "number" ? row.file_size_bytes : null,
+    device_id: row.device_id ? String(row.device_id) : undefined,
+    last_verified_at: typeof row.last_verified_at === "number" ? row.last_verified_at : null,
+    health_status: row.health_status ? String(row.health_status) : undefined,
+    sync_status: row.sync_status ? String(row.sync_status) : undefined,
+    blockchain_tx_hash: row.blockchain_tx_hash ? String(row.blockchain_tx_hash) : null,
+    blockchain_network: row.blockchain_network ? String(row.blockchain_network) : null,
+    ots_proof_payload: row.ots_proof_payload ? String(row.ots_proof_payload) : null,
+    anchored_at: row.anchored_at ? String(row.anchored_at) : null,
+    created_at: typeof row.created_at === "number" ? row.created_at : undefined,
+    updated_at: typeof row.updated_at === "number" ? row.updated_at : undefined,
+  }
+}
+
+export async function loadLedgerRecordByNoteId(
+  noteId: string,
+  workspaceId: string = DEFAULT_WORKSPACE_ID
+): Promise<ArchivalLedgerRecord | null> {
+  return loadLedgerRecordByArticleId(noteId, workspaceId)
 }
 
 // ==========================================
@@ -295,42 +734,75 @@ export async function loadPendingProposals(workspaceId: string = "default") {
     `SELECT * FROM merge_queue WHERE workspace_id = ? AND status = 'pending' ORDER BY created_at ASC`,
     [workspaceId]
   )
-  return records as MergeProposal[]
+  return records.map((row) => mapMergeProposalRecord(row as Record<string, any>))
 }
 
-export async function approveMergeProposal(proposalId: string, reviewerId: string) {
-  const [proposal] = await dbClient.query("SELECT * FROM merge_queue WHERE id = ?", [proposalId])
+export async function approveMergeProposal(
+  proposalId: string,
+  reviewerId?: string,
+  workspaceId: string = DEFAULT_WORKSPACE_ID,
+  resolution?: MergeResolutionPayload,
+  reviewerDeviceId?: string
+) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  const actor = getMutationActor({ userId: reviewerId, deviceId: reviewerDeviceId })
+  const [proposal] = await dbClient.query(
+    "SELECT * FROM merge_queue WHERE workspace_id = ? AND id = ?",
+    [scopedWorkspaceId, proposalId]
+  )
   if (!proposal || proposal.status !== "pending") {
     throw new Error("Proposal is invalid or already processed.")
   }
 
   const now = Date.now()
+  const resolvedTitle = resolution?.title ?? String(proposal.proposed_title ?? "")
+  const resolvedFrontmatter = JSON.stringify(
+    resolution?.frontmatter ?? safeJsonParse<Record<string, unknown>>(proposal.proposed_frontmatter, {})
+  )
+  const resolvedBody = resolution?.body ?? String(proposal.proposed_body ?? "")
 
   if (proposal.action === "DELETE") {
     await dbClient.execute(
       `UPDATE notes 
-       SET is_deleted = 1, deleted_by = ?, updated_by = ?, updated_at = ?, synced_at = NULL 
-       WHERE id = ?`,
-      [proposal.author_id, reviewerId, now, proposal.document_id]
+       SET is_deleted = 1, deleted_by = ?, updated_by = ?, user_id = ?, device_id = ?, updated_at = ?, synced_at = NULL 
+       WHERE workspace_id = ? AND id = ?`,
+      [actor.userId, actor.userId, actor.userId, actor.deviceId, now, scopedWorkspaceId, proposal.document_id]
     )
   } else if (proposal.action === "MERGE_DUPLICATE") {
     await dbClient.execute(
-      `UPDATE notes 
-       SET is_deleted = 1, deleted_by = ?, updated_by = ?, updated_at = ?, synced_at = NULL 
-       WHERE id = ?`,
-      [proposal.author_id, reviewerId, now, proposal.secondary_document_id]
+      `UPDATE notes
+       SET parent_id = ?, updated_by = ?, user_id = ?, device_id = ?, updated_at = ?, synced_at = NULL
+       WHERE workspace_id = ? AND parent_id = ?`,
+      [proposal.document_id, actor.userId, actor.userId, actor.deviceId, now, scopedWorkspaceId, proposal.secondary_document_id]
+    )
+
+    await dbClient.execute(
+      `UPDATE archival_records
+       SET article_id = ?, device_id = ?, updated_at = ?, synced_at = NULL
+       WHERE workspace_id = ? AND article_id = ?`,
+      [proposal.document_id, actor.deviceId, now, scopedWorkspaceId, proposal.secondary_document_id]
     )
 
     await dbClient.execute(
       `UPDATE notes 
-       SET title = ?, frontmatter = ?, body = ?, updated_by = ?, updated_at = ?, synced_at = NULL 
-       WHERE id = ?`,
+       SET is_deleted = 1, deleted_by = ?, updated_by = ?, user_id = ?, device_id = ?, updated_at = ?, synced_at = NULL 
+       WHERE workspace_id = ? AND id = ?`,
+      [actor.userId, actor.userId, actor.userId, actor.deviceId, now, scopedWorkspaceId, proposal.secondary_document_id]
+    )
+
+    await dbClient.execute(
+      `UPDATE notes 
+       SET title = ?, frontmatter = ?, body = ?, updated_by = ?, user_id = ?, device_id = ?, updated_at = ?, synced_at = NULL 
+       WHERE workspace_id = ? AND id = ?`,
       [
-        proposal.proposed_title,
-        proposal.proposed_frontmatter,
-        proposal.proposed_body,
-        reviewerId,
+        resolvedTitle,
+        resolvedFrontmatter,
+        resolvedBody,
+        actor.userId,
+        actor.userId,
+        actor.deviceId,
         now,
+        scopedWorkspaceId,
         proposal.document_id
       ]
     )
@@ -338,24 +810,28 @@ export async function approveMergeProposal(proposalId: string, reviewerId: strin
     await dbClient.execute(
       `INSERT INTO notes (
          id, workspace_id, schema_id, parent_id, title, frontmatter, body, 
-         created_by, updated_by, created_at, updated_at, is_deleted, synced_at
-       ) VALUES (?, ?, 'event', NULL, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
+         created_by, updated_by, user_id, device_id, created_at, updated_at, is_deleted, synced_at
+       ) VALUES (?, ?, 'event', NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
        ON CONFLICT(id) DO UPDATE SET
          title = excluded.title,
          frontmatter = excluded.frontmatter,
          body = excluded.body,
          updated_by = excluded.updated_by,
+         user_id = excluded.user_id,
+         device_id = excluded.device_id,
          updated_at = excluded.updated_at,
          is_deleted = 0,
          synced_at = NULL`,
       [
         proposal.document_id,
         proposal.workspace_id,
-        proposal.proposed_title,
-        proposal.proposed_frontmatter,
-        proposal.proposed_body,
-        proposal.author_id,
-        reviewerId,
+        resolvedTitle,
+        resolvedFrontmatter,
+        resolvedBody,
+        actor.userId,
+        actor.userId,
+        actor.userId,
+        actor.deviceId,
         now,
         now
       ]
@@ -364,19 +840,27 @@ export async function approveMergeProposal(proposalId: string, reviewerId: strin
 
   await dbClient.execute(
     `UPDATE merge_queue 
-     SET status = 'approved', reviewed_by = ?, updated_at = ?, synced_at = NULL 
-     WHERE id = ?`,
-    [reviewerId, now, proposalId]
+     SET proposed_title = ?, proposed_frontmatter = ?, proposed_body = ?, status = 'approved', reviewed_by = ?, review_comment = ?, updated_at = ?, synced_at = NULL 
+     WHERE workspace_id = ? AND id = ?`,
+    [resolvedTitle, resolvedFrontmatter, resolvedBody, actor.userId, "Merged from review UI", now, scopedWorkspaceId, proposalId]
   )
 }
 
-export async function rejectMergeProposal(proposalId: string, reviewerId: string, comment: string) {
+export async function rejectMergeProposal(
+  proposalId: string,
+  reviewerId: string,
+  comment: string,
+  workspaceId: string = DEFAULT_WORKSPACE_ID,
+  deviceId?: string
+) {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  const actor = getMutationActor({ userId: reviewerId, deviceId })
   const now = Date.now()
   await dbClient.execute(
     `UPDATE merge_queue 
      SET status = 'rejected', reviewed_by = ?, review_comment = ?, updated_at = ?, synced_at = NULL 
-     WHERE id = ?`,
-    [reviewerId, comment, now, proposalId]
+     WHERE workspace_id = ? AND id = ?`,
+    [actor.userId, comment, now, scopedWorkspaceId, proposalId]
   )
 }
 
@@ -387,25 +871,35 @@ export async function proposeDuplicateMerge(
   mergedFrontmatter: Record<string, any>,
   mergedBody: string,
   authorId: string = "system:duplicate-detector",
-  detectionMetadata: { similarityScore: number; matchReasons: string[] }
+  detectionMetadata: DuplicateDetectionMetadata,
+  entityType: string = "documents",
+  deviceId?: string
 ) {
   const proposalId = `dup-${crypto.randomUUID()}`
   const now = Date.now()
+  const actor = getMutationActor({ userId: authorId, deviceId })
 
   await dbClient.execute(
     `INSERT INTO merge_queue (
-      id, workspace_id, document_id, secondary_document_id, author_id, action,
+      id, workspace_id, document_id, secondary_document_id, author_id, user_id, device_id, action,
+      source_id, target_id, entity_type, similarity_score,
       base_frontmatter, base_body,
       secondary_base_frontmatter, secondary_base_body,
       proposed_title, proposed_frontmatter, proposed_body,
       metadata, status, created_at, updated_at, synced_at
-    ) VALUES (?, ?, ?, ?, ?, 'MERGE_DUPLICATE', ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, NULL)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'MERGE_DUPLICATE', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, NULL)`,
     [
       proposalId,
       primaryDoc.workspace_id ?? "default",
       primaryDoc.id,
       duplicateDoc.id,
       authorId,
+      actor.userId,
+      actor.deviceId,
+      duplicateDoc.id,
+      primaryDoc.id,
+      entityType,
+      detectionMetadata.similarityScore,
       JSON.stringify(primaryDoc.frontmatter),
       primaryDoc.body,
       JSON.stringify(duplicateDoc.frontmatter),

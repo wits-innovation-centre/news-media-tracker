@@ -1,25 +1,32 @@
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "news-media-tracker",
-	"compatibility_date": "2026-07-10",
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
-	"build": {
-		"command": "pnpm run build",
-	},
-	"assets": {
-		"directory": "dist",
-		"not_found_handling": "single-page-application",
-	},
-	"observability": {
-		"enabled": true,
-	},
-	"d1_databases": [
-		{
-			"binding": "news_media_db",
-			"database_name": "news_media_db",
-			"database_id": "36ace725-b1db-42f1-846c-97eee708a6d4"
-		}
-	],
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "news-media-tracker",
+  "main": "src/lib/db/server.ts",
+  "compatibility_date": "2026-07-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "build": {
+    "command": "pnpm run build",
+  },
+  "assets": {
+    "directory": "dist",
+    "not_found_handling": "single-page-application",
+  },
+  "observability": {
+    "enabled": true,
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "news_media_db",
+      "database_id": "36ace725-b1db-42f1-846c-97eee708a6d4",
+    },
+    {
+      "binding": "news_media_db",
+      "database_name": "news_media_db",
+      "database_id": "36ace725-b1db-42f1-846c-97eee708a6d4",
+    },
+  ],
+  "triggers": {
+    "crons": ["0 * * * *"],
+  },
 }
