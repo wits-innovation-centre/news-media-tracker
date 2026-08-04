@@ -1,0 +1,12 @@
+name = "news-media-tracker"
+main = "src/lib/db/server.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["0 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "news_media_db"
+database_id = "36ace725-b1db-42f1-846c-97eee708a6d4"

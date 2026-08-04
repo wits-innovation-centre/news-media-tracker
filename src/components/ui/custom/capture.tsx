@@ -11,6 +11,7 @@ import {
 import { evaluateVisibility, flattenTieredOptions, generateFieldValue } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { HierarchicalSelect } from "@/components/ui/custom/hierarchical-select";
+import { MultiSelect } from "@/components/ui/custom/multi-select";
 
 import {
   Field,
@@ -248,10 +249,24 @@ function Capture({
       const isVisible = evaluateVisibility(field.visibility, values);
       if (!isVisible) return;
 
+      let fieldValue = values[field.name];
+
+      if (field.noSelectionValue) {
+        const isEmptyArray = Array.isArray(fieldValue) && fieldValue.length === 0;
+        const isEmptyString = typeof fieldValue === "string" && fieldValue.trim() === "";
+        const isNil = fieldValue === undefined || fieldValue === null;
+
+        if (isEmptyArray || isEmptyString || isNil) {
+          fieldValue = field.type.data === "array<string>"
+            ? [field.noSelectionValue]
+            : field.noSelectionValue;
+        }
+      }
+
       if (field.type.data === "markdown") {
-        markdownBody = (values[field.name] as string) || ""
+        markdownBody = (fieldValue as string) || ""
       } else {
-        frontmatter[field.name] = values[field.name]
+        frontmatter[field.name] = fieldValue
       }
     })
 

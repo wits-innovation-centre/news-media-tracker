@@ -5,7 +5,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import type { DocumentSchema, DocumentSchemaGroup, FieldDataType, FieldDefinition, FieldInputType, SpecificationDefinition } from "@/lib/types"
+import type {
+    DocumentSchema,
+    DocumentSchemaGroup,
+    FieldDataType,
+    FieldDefinition,
+    FieldInputType,
+    SpecificationDefinition,
+} from "@/lib/types"
 
 const DATA_TYPES: FieldDataType[] = ["string", "array<string>", "hierarchical-select", "select", "number", "boolean", "date", "date-range", "markdown", "form"]
 const INPUT_TYPES: FieldInputType[] = ["text", "textarea", "select", "search-select", "search-select-input", "date", "date-range", "text-multi", "checkbox", "switch", "subtype-form-select", "embedded-form-list"]
@@ -33,6 +40,7 @@ function createEmptyField(): EditableField {
         type: { data: "string", input: "text" },
         required: false,
         description: "",
+        noSelectionValue: "",
         optionsText: "",
         specification: undefined,
         tooltipKind: "info",
@@ -67,6 +75,7 @@ function parseField(field: EditableField): FieldDefinition {
         default: field.default === "" ? undefined : field.default,
         generator: field.generator,
         visibility: field.visibility?.dependsOn ? field.visibility : undefined,
+        noSelectionValue: field.noSelectionValue?.trim() || undefined,
         specification: field.specification,
     }
 
@@ -160,6 +169,9 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
         id: "",
         name: "",
         description: "",
+        metadata: {
+            archivable: false,
+        },
         parentSchemaId: undefined,
         groupId: groups[0]?.id,
         groupName: groups[0]?.name,
@@ -176,6 +188,13 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
         () => selectedGroup?.documents.find((schema) => schema.id === selectedSchemaId),
         [selectedGroup, selectedSchemaId]
     )
+
+    const updateFieldAt = (index: number, updater: (field: EditableField) => EditableField) => {
+        setSchemaDraft((current) => ({
+            ...current,
+            fields: current.fields.map((item, itemIndex) => itemIndex === index ? updater(item) : item),
+        }))
+    }
 
     useEffect(() => {
         if (!selectedGroup && groups.length > 0) {
@@ -199,6 +218,9 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
                 id: selectedSchema.id,
                 name: selectedSchema.name,
                 description: selectedSchema.description ?? "",
+                metadata: {
+                    archivable: Boolean(selectedSchema.metadata?.archivable),
+                },
                 parentSchemaId: selectedSchema.parentSchemaId,
                 groupId: selectedSchema.groupId,
                 groupName: selectedSchema.groupName,
@@ -236,6 +258,9 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
             id: crypto.randomUUID(),
             name: "",
             description: "",
+            metadata: {
+                archivable: false,
+            },
             parentSchemaId: undefined,
             groupId: selectedGroupId,
             groupName: selectedGroup?.name,
@@ -298,6 +323,9 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
             id: schemaDraft.id || crypto.randomUUID(),
             name: schemaDraft.name.trim(),
             description: (schemaDraft.description ?? "").trim() || undefined,
+            metadata: {
+                archivable: Boolean(schemaDraft.metadata?.archivable),
+            },
             parentSchemaId: schemaDraft.parentSchemaId || undefined,
             groupId: schemaDraft.groupId,
             groupName: group?.name,

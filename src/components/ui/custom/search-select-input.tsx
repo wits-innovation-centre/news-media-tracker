@@ -38,6 +38,16 @@ function SearchSelectInput({ id, value, options, placeholder = "Search and selec
         return () => document.removeEventListener("mousedown", handlePointerDown)
     }, [value])
 
+    useEffect(() => {
+        if (!isOpen) return
+
+        const frame = window.requestAnimationFrame(() => {
+            searchInputRef.current?.focus()
+        })
+
+        return () => window.cancelAnimationFrame(frame)
+    }, [isOpen])
+
     const normalizedQuery = searchQuery.trim().toLowerCase()
 
     const filteredOptions = useMemo(() => {
@@ -134,9 +144,15 @@ function SearchSelectInput({ id, value, options, placeholder = "Search and selec
                     </div>
 
                     {allowCreate && searchQuery.trim() && !exactMatch ? (
-                        <Button type="button" variant="outline" className="mt-3 w-full" onClick={() => void handleCreate()}>
-                            <Plus className="mr-1 size-4" />
-                            Add "{searchQuery.trim()}" to specification
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            className="mt-3"
+                            onClick={() => void handleCreate()}
+                            aria-label={`Add ${searchQuery.trim()} as a new option`}
+                        >
+                            <Plus className="size-4" />
                         </Button>
                     ) : null}
                 </div>
