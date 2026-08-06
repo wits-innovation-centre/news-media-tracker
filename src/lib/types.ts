@@ -89,6 +89,7 @@ interface FieldDefinition {
 interface DocumentSchema {
     id: string;
     name: string;
+    titleField: string;
     description?: string;
     metadata?: Record<string, any>;
     icon?: IconName;

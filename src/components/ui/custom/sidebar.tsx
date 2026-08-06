@@ -129,16 +129,6 @@ function Sidebar({
 
     return (
       <div className="group relative my-1">
-        <button
-          type="button"
-          onClick={() => toggleAddMenu(anchorId)}
-          className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-muted-foreground opacity-0 transition-opacity hover:border-primary hover:text-foreground group-hover:opacity-100"
-          title={parentDocument ? `Add document under ${parentDocument.label}` : "Add top-level document"}
-        >
-          <Plus className="h-3 w-3" />
-          Add
-        </button>
-
         {isOpen ? (
           <div className="absolute left-0 z-20 mt-1 min-w-40 rounded-md border border-border bg-popover p-1 shadow-lg">
             {options.map((schema) => (
@@ -159,6 +149,16 @@ function Sidebar({
             ))}
           </div>
         ) : null}
+
+        <button
+          type="button"
+          onClick={() => toggleAddMenu(anchorId)}
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-muted-foreground opacity-0 transition-opacity hover:border-primary hover:text-foreground group-hover:opacity-100"
+          title={parentDocument ? `Add document under ${parentDocument.label}` : "Add top-level document"}
+        >
+          <Plus className="h-3 w-3" />
+          Add
+        </button>
       </div>
     );
   };
@@ -306,21 +306,6 @@ function Sidebar({
         <SidebarGroup>
           {isIconCollapsed ? (
             <div className="flex flex-col items-center gap-1 px-1">
-              <button
-                type="button"
-                onClick={() => {
-                  const defaultSchema = rootSchemas[0];
-                  if (!defaultSchema) return;
-                  onCreateDocument(defaultSchema);
-                  onNavigate("/");
-                }}
-                disabled={rootSchemas.length === 0}
-                title={rootSchemas[0] ? `Add ${rootSchemas[0].name}` : "No root schema available"}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition hover:border-primary hover:text-foreground disabled:opacity-40"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-
               {rootDocuments.length === 0 ? (
                 <p className="px-1 py-2 text-center text-[10px] text-muted-foreground">No docs</p>
               ) : (
@@ -348,6 +333,21 @@ function Sidebar({
                   ) : null}
                 </div>
               )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  const defaultSchema = rootSchemas[0];
+                  if (!defaultSchema) return;
+                  onCreateDocument(defaultSchema);
+                  onNavigate("/");
+                }}
+                disabled={rootSchemas.length === 0}
+                title={rootSchemas[0] ? `Add ${rootSchemas[0].name}` : "No root schema available"}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition hover:border-primary hover:text-foreground disabled:opacity-40"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
             </div>
           ) : (
             <>

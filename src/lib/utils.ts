@@ -1,11 +1,17 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import JSZip from "jszip"
-import type { FieldDefinition, TieredOptions } from "@/lib/types";
+import type { FieldDefinition, TieredOptions, DocumentSchema, StoredDocument } from "@/lib/types";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
+
+interface GetDocumentTitleOptions {
+    schema?: DocumentSchema
+    document?: Partial<StoredDocument> | Record<string, any>
+    fallbackIndex?: number
+};
 
 interface SQLiteNoteRecord {
   title: string
@@ -192,11 +198,34 @@ function generateFieldValue(field: FieldDefinition, formValues: Record<string, a
   return ""
 }
 
+function getDocumentTitle({ schema, document, fallbackIndex }: GetDocumentTitleOptions): string {
+    const documentType = schema?.name || schema?.id || "Document"
+    const countLabel = fallbackIndex !== undefined ? ` ${fallbackIndex}` : ""
+
+    if (!schema || !document) {
+        return `${documentType}${countLabel}`
+    }
+
+    // Extract raw field values from either frontmatter or direct object
+    const values = "frontmatter" in document && document.frontmatter ? document.frontmatter : document
+
+    if (schema.titleField && values[schema.titleField]) {
+        const val = values[schema.titleField]
+        if (typeof val === "string" && val.trim().length > 0) {
+            return val.trim()
+        }
+    }
+
+    // Fallback if titleField is missing, empty, or undefined
+    return `${documentType}${countLabel}`
+}
+
 export {
   cn,
   exportSqliteToObsidianWorkspace,
   isValidPathInRecord,
   flattenTieredOptions,
   evaluateVisibility,
-  generateFieldValue
+  generateFieldValue,
+  getDocumentTitle
 }

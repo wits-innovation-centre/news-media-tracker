@@ -130,6 +130,7 @@ const TEMPLATE_SCHEMA_IDS = new Set(
     DEFAULT_SCHEMA_TEMPLATES.flatMap((group) => group.documents.map((schema) => schema.id))
 );
 
+
 const normalizeLegacySchemaId = (schemaId: string, availableSchemaIds: Set<string>): string => {
     if (availableSchemaIds.has(schemaId)) return schemaId;
 
@@ -340,6 +341,31 @@ function App() {
         [activeDocumentId, documents]
     );
 
+    const displayDocuments = useMemo(() => {
+        return documents.map((doc) => {
+            const draft = drafts[doc.id];
+            const stored = storedDocuments[doc.id];
+            const values = { ...stored?.frontmatter, ...draft };
+
+            const titleKey = Object.keys(values).find(
+                (k) => !k.startsWith("__") && (k === "title" || k === "name" || /title/i.test(k) || /name/i.test(k))
+            );
+            const titleVal = titleKey && typeof values[titleKey] === "string" ? (values[titleKey] as string).trim() : "";
+
+            const idKey = Object.keys(values).find(
+                (k) => !k.startsWith("__") && (k === "id" || /_id$/i.test(k) || /^id_/i.test(k))
+            );
+            const idVal = idKey && typeof values[idKey] === "string" ? (values[idKey] as string).trim() : "";
+
+            const effectiveLabel = titleVal || idVal || doc.label;
+
+            return {
+                ...doc,
+                label: effectiveLabel,
+            };
+        });
+    }, [documents, drafts, storedDocuments]);
+
     const isArchivableActiveSchema = activeSchema
         ? Boolean(activeSchema.metadata?.archivable)
         : false;
@@ -417,15 +443,23 @@ function App() {
             }
         }
 
-        const documentTitle =
-            (frontmatter.title as string) ||
-            (frontmatter.name as string) ||
-            (frontmatter.id as string) ||
-            `Untitled_${Date.now()}`;
-        if (!isDbReady) {
-            setStatusMessage("Database not ready yet; document saved to local shell only");
-            return;
-        }
+        const getDocumentTitleFromValues = (frontmatter: Record<string, unknown>, fallbackLabel: string) => {
+            const titleKey = Object.keys(frontmatter).find(
+                (k) => !k.startsWith("__") && (k === "title" || k === "name" || /title/i.test(k) || /name/i.test(k))
+            );
+            const titleVal = titleKey && typeof frontmatter[titleKey] === "string" ? (frontmatter[titleKey] as string).trim() : "";
+            if (titleVal) return titleVal;
+
+            const idKey = Object.keys(frontmatter).find(
+                (k) => !k.startsWith("__") && (k === "id" || /_id$/i.test(k) || /^id_/i.test(k))
+            );
+            const idVal = idKey && typeof frontmatter[idKey] === "string" ? (frontmatter[idKey] as string).trim() : "";
+            if (idVal) return idVal;
+
+            return fallbackLabel || `Untitled_${Date.now()}`;
+        };
+
+        const documentTitle = getDocumentTitleFromValues(frontmatter, document.label);
 
         const noteId = await saveCapturedNote(
             document.id,
@@ -907,7 +941,7 @@ function App() {
     }) => {
         if (!parentDocumentId) return [];
 
-        return documents
+        return displayDocuments
             .filter((doc) => doc.parentId === parentDocumentId && doc.schemaId === schemaId)
             .map((doc) => {
                 const draftData = drafts[doc.id];
@@ -926,7 +960,7 @@ function App() {
         <Layout
             footerContent={sidebarFooterContent}
             schemas={schemas}
-            documents={documents}
+            documents={displayDocuments}
             workspaces={workspaces}
             activePath={activePath}
             mergeQueueCount={mergeQueue.length}

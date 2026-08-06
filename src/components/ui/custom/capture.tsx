@@ -11,6 +11,7 @@ import {
 import { evaluateVisibility, flattenTieredOptions, generateFieldValue } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { HierarchicalSelect } from "@/components/ui/custom/hierarchical-select";
+import { MultiSelect } from "@/components/ui/custom/multi-select";
 
 import {
   Field,
@@ -22,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import {
   type DocumentSchema,
@@ -34,8 +36,6 @@ import {
 } from "@/lib/utils"
 import { SearchSelect } from "@/components/ui/custom/search-select"
 import { SearchSelectInput } from "@/components/ui/custom/search-select-input";
-// Placeholder imports - will be used when field rendering is refactored
-import { SubtypeFormSelect } from "@/components/ui/custom/subtype-form-select";
 import { EmbeddedFormList } from "@/components/ui/custom/embedded-form-list";
 
 interface CaptureProps {
@@ -242,7 +242,36 @@ function Capture({
     const frontmatter: Record<string, any> = {}
     let markdownBody = ""
 
-    fields.forEach((field) => {
+    const collectRenderableFields = (fieldSet: FieldDefinition[]): FieldDefinition[] => {
+      const collected: FieldDefinition[] = []
+
+      fieldSet.forEach((field) => {
+        if (isDeferredRelationField(field)) return
+
+        const isVisible = evaluateVisibility(field.visibility, values)
+        if (!isVisible) return
+
+        collected.push(field)
+
+        if (field.type.input === "subtype-form-select") {
+          const selectedSubtype = String(values[field.name] ?? "")
+          const nestedFields = selectedSubtype ? subtypeFields?.[selectedSubtype] ?? [] : []
+          if (nestedFields.length > 0) {
+            collected.push(...collectRenderableFields(nestedFields))
+          }
+        }
+      })
+
+      return collected
+    }
+
+    const renderableFields = collectRenderableFields(fields)
+    const renderedFieldNames = new Set<string>()
+
+    renderableFields.forEach((field) => {
+      if (renderedFieldNames.has(field.name)) return
+      renderedFieldNames.add(field.name)
+
       if (isDeferredRelationField(field)) return;
 
       const isVisible = evaluateVisibility(field.visibility, values);
@@ -281,374 +310,421 @@ function Capture({
     )
   }
 
+  const renderField = (fieldDef: FieldDefinition, keyPrefix: string = "") => {
+    if (isDeferredRelationField(fieldDef)) return null;
+
+    const isVisible = evaluateVisibility(fieldDef.visibility, watchedValues);
+    if (!isVisible) return null;
+
+    return (
+      <Controller
+        key={`${keyPrefix}${fieldDef.name}`}
+        control={form.control}
+        name={fieldDef.name}
+        render={({ field, fieldState }) => (
+          <Field
+            data-invalid={fieldState.invalid}
+            className={
+              fieldDef.type.input === "checkbox" || fieldDef.type.input === "switch"
+                ? "flex flex-row items-center gap-3 space-y-0 rounded-md border p-4 *:w-auto"
+                : ""
+            }
+          >
+
+            {fieldDef.type.input === "checkbox" || fieldDef.type.input === "switch" ? (
+              <>
+                {fieldDef.type.input === "switch" ? (
+                  <Switch
+                    id={fieldDef.name}
+                    checked={Boolean(field.value)}
+                    onCheckedChange={field.onChange}
+                    aria-invalid={fieldState.invalid}
+                    className="shrink-0 w-auto"
+                  />
+                ) : (
+                  <Checkbox
+                    id={fieldDef.name}
+                    checked={Boolean(field.value)}
+                    onCheckedChange={field.onChange}
+                    aria-invalid={fieldState.invalid}
+                    className="shrink-0 w-auto"
+                  />
+                )}
+                <div className="flex-1 space-y-1 leading-none">
+                  <FieldLabel htmlFor={fieldDef.name}>
+                    {fieldDef.label} {fieldDef.required && <span className="text-red-500">*</span>}
+                  </FieldLabel>
+                  {fieldDef.description && (
+                    <FieldDescription>{fieldDef.description}</FieldDescription>
+                  )}
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                {fieldDef.type.input !== "embedded-form-list" && fieldDef.type.input !== "subtype-form-select" ? (
+                  <FieldLabel htmlFor={fieldDef.name}>
+                    {fieldDef.label} {fieldDef.required && <span className="text-red-500">*</span>}
+                  </FieldLabel>
+                ) : null}
+
+                {fieldDef.type.input === "text" || fieldDef.type.input === "date" ? (
+                  <div className="relative">
+                    <Input
+                      {...field}
+                      value={(field.value as string | number) ?? ""}
+                      id={fieldDef.name}
+                      type={fieldDef.type.input === "date" ? "date" : "text"}
+                      placeholder={`Enter ${fieldDef.label.toLowerCase()}...`}
+                      aria-invalid={fieldState.invalid}
+                      className={fieldDef.generator && fieldDef.type.input === "text" ? "pr-28" : undefined}
+                    />
+                    {fieldDef.generator && fieldDef.type.input === "text" ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        className="absolute top-1/2 right-1 h-6 -translate-y-1/2 px-2 text-[11px]"
+                        onClick={() => handleRegenerateField(fieldDef)}
+                      >
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <RefreshCw className="mr-1 h-3 w-3" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Generate New
+                          </TooltipContent>
+                        </Tooltip>
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : fieldDef.type.input === "textarea" ? (
+                  <Textarea
+                    {...field}
+                    value={(field.value as string) ?? ""}
+                    id={fieldDef.name}
+                    placeholder="Write your content here..."
+                    className="min-h-50 resize-y font-mono"
+                    aria-invalid={fieldState.invalid}
+                  />
+                ) : fieldDef.type.data === "hierarchical-select" && fieldDef.type.input === "select" ? (
+                  <HierarchicalSelect
+                    id={fieldDef.name}
+                    value={(field.value as string) ?? ""}
+                    options={fieldDef.options as TieredOptions}
+                    placeholder={`Select ${fieldDef.label.toLowerCase()}...`}
+                    onChange={field.onChange}
+                  />
+                ) : fieldDef.type.input === "search-select-input" || fieldDef.type.input === "search-select" ? (
+                  (() => {
+                    const specificationKind = getSpecificationKind(fieldDef)
+                    const searchOptions = getSearchSelectOptions(fieldDef)
+                    const isCreatable = fieldDef.type.input === "search-select-input" && Boolean(specificationKind)
+                    const SearchComponent = fieldDef.type.input === "search-select-input" ? SearchSelectInput : SearchSelect
+
+                    if (fieldDef.type.data === "array<string>") {
+                      const values = toStringArray(field.value)
+                      const listValues = values.length > 0 ? values : [""]
+
+                      const updateIndex = (index: number, nextValue: string) => {
+                        const next = [...listValues]
+                        next[index] = nextValue
+                        field.onChange(next.filter((entry) => entry.trim().length > 0))
+                      }
+
+                      const removeIndex = (index: number) => {
+                        const next = listValues.filter((_, itemIndex) => itemIndex !== index)
+                        field.onChange(next.filter((entry) => entry.trim().length > 0))
+                      }
+
+                      return (
+                        <div className="space-y-2">
+                          {listValues.map((entry, index) => (
+                            <div key={`${fieldDef.name}-${index}`} className="flex items-start gap-2">
+                              <div className="flex-1">
+                                <SearchComponent
+                                  id={`${fieldDef.name}-${index}`}
+                                  value={entry}
+                                  options={searchOptions}
+                                  placeholder={`Search ${fieldDef.label.toLowerCase()}...`}
+                                  onChange={(nextValue) => updateIndex(index, nextValue)}
+                                  {...(fieldDef.type.input === "search-select-input" ? {
+                                    allowCreate: isCreatable,
+                                    onCreateOption: async (nextValue: string) => {
+                                      if (!specificationKind) return
+                                      await onAddSpecification?.(specificationKind, nextValue)
+                                    },
+                                  } : {})}
+                                />
+                              </div>
+                              {listValues.length > 1 ? (
+                                <Button type="button" variant="outline" size="icon-xs" onClick={() => removeIndex(index)}>
+                                  ×
+                                </Button>
+                              ) : null}
+                            </div>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => field.onChange([...listValues, ""])}
+                          >
+                            Add {fieldDef.label}
+                          </Button>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <SearchComponent
+                        id={fieldDef.name}
+                        value={(field.value as string) ?? ""}
+                        options={searchOptions}
+                        placeholder={`Search ${fieldDef.label.toLowerCase()}...`}
+                        onChange={field.onChange}
+                        {...(fieldDef.type.input === "search-select-input" ? {
+                          allowCreate: isCreatable,
+                          onCreateOption: async (nextValue: string) => {
+                            if (!specificationKind) return
+                            await onAddSpecification?.(specificationKind, nextValue)
+                          },
+                        } : {})}
+                      />
+                    )
+                  })()
+                ) : fieldDef.type.input === "select" ? (
+                  (() => {
+                    const selectOptions = getSelectOptions(fieldDef)
+
+                    return (
+                      <Select
+                        value={(field.value as string) ?? ""}
+                        onValueChange={field.onChange}
+                      >
+                        <SelectTrigger id={fieldDef.name} aria-invalid={fieldState.invalid}>
+                          <SelectValue placeholder={`Select ${fieldDef.label.toLowerCase()}...`} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {selectOptions.map((option) => (
+                            <SelectItem key={String(option)} value={String(option)}>
+                              {String(option)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )
+                  })()
+                ) : fieldDef.type.input === "multi-select" ? (
+                  <MultiSelect
+                    options={getSelectOptions(fieldDef)}
+                    value={toStringArray(field.value)}
+                    onChange={field.onChange}
+                    placeholder={`Select ${fieldDef.label.toLowerCase()}...`}
+                  />
+                ) : fieldDef.type.input === "text-multi" ? (
+                  (() => {
+                    const values = toStringArray(field.value)
+
+                    const updateIndex = (index: number, nextValue: string) => {
+                      const next = values.length > 0 ? [...values] : [""]
+                      next[index] = nextValue
+                      field.onChange(next)
+                    }
+
+                    const removeIndex = (index: number) => {
+                      const next = values.filter((_, itemIndex) => itemIndex !== index)
+                      field.onChange(next.length > 0 ? next : [""])
+                    }
+
+                    return (
+                      <div className="space-y-2">
+                        {(values.length > 0 ? values : [""]).map((entry, index) => (
+                          <div key={`${fieldDef.name}-${index}`} className="flex items-center gap-2">
+                            <Input
+                              id={`${fieldDef.name}-${index}`}
+                              value={entry}
+                              onChange={(event) => updateIndex(index, event.target.value)}
+                              placeholder={`${fieldDef.label} ${index + 1}`}
+                              aria-invalid={fieldState.invalid}
+                            />
+                            {index > 0 ? (
+                              <Button type="button" variant="outline" size="icon-xs" onClick={() => removeIndex(index)}>
+                                ×
+                              </Button>
+                            ) : null}
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => field.onChange([...(values.length > 0 ? values : [""]), ""])}
+                        >
+                          Add {fieldDef.label}
+                        </Button>
+                      </div>
+                    )
+                  })()
+                ) : fieldDef.type.input === "subtype-form-select" ? (
+                  (() => {
+                    const selectedSubtype = String(field.value ?? "")
+                    const subtypeOptions = Object.keys(subtypeFields || {})
+                    const nestedFields = selectedSubtype ? subtypeFields?.[selectedSubtype] ?? [] : []
+
+                    return (
+                      <div className="space-y-4 rounded-lg border border-border/50 bg-muted/30 p-4">
+                        <div>
+                          <FieldLabel htmlFor={fieldDef.name}>
+                            {fieldDef.label} {fieldDef.required && <span className="text-red-500">*</span>}
+                          </FieldLabel>
+                          <Select
+                            value={selectedSubtype}
+                            onValueChange={field.onChange}
+                          >
+                            <SelectTrigger id={fieldDef.name} aria-invalid={fieldState.invalid}>
+                              <SelectValue placeholder={`Select ${fieldDef.label.toLowerCase()}...`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {subtypeOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option.charAt(0).toUpperCase() + option.slice(1)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {selectedSubtype && nestedFields.length > 0 ? (
+                          <div className="space-y-3">
+                            {nestedFields.map((nestedField) => renderField(nestedField, `${keyPrefix}${fieldDef.name}__${selectedSubtype}__`))}
+                          </div>
+                        ) : null}
+                      </div>
+                    )
+                  })()
+                ) : fieldDef.type.input === "embedded-form-list" ? (() => {
+                  const linkToSchemaId = fieldDef.linkTo;
+                  const childSchema = linkToSchemaId && schemas ? schemas[linkToSchemaId] : undefined;
+
+                  if (childSchema) {
+                    const rawLinkedDocuments = Array.isArray(field.value) ? (field.value as unknown[]) : [];
+                    const fieldLinkedDocuments = rawLinkedDocuments
+                      .filter((doc): doc is Record<string, unknown> => typeof doc === "object" && doc !== null)
+                      .map((doc) => ({
+                        id: typeof doc.id === "string" ? doc.id : (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+                        title: typeof doc.title === "string" ? doc.title : "",
+                        data: typeof doc.data === "object" && doc.data !== null ? (doc.data as Record<string, any>) : {},
+                        schemaId: typeof doc.schemaId === "string" ? doc.schemaId : childSchema.id,
+                      }));
+
+                    const existingLinkedDocuments = getExistingLinkedDocuments?.({
+                      parentDocumentId: activeDocumentId,
+                      schemaId: childSchema.id,
+                    }) ?? [];
+
+                    const mergedLinkedDocuments = new Map<string, {
+                      id: string
+                      title: string
+                      data: Record<string, any>
+                      schemaId: string
+                    }>();
+
+                    existingLinkedDocuments.forEach((doc) => {
+                      mergedLinkedDocuments.set(doc.id, {
+                        id: doc.id,
+                        title: doc.title,
+                        data: doc.data ?? {},
+                        schemaId: doc.schemaId || childSchema.id,
+                      });
+                    });
+
+                    fieldLinkedDocuments.forEach((doc) => {
+                      mergedLinkedDocuments.set(doc.id, {
+                        id: doc.id,
+                        title: doc.title,
+                        data: doc.data ?? {},
+                        schemaId: doc.schemaId || childSchema.id,
+                      });
+                    });
+
+                    const linkedDocuments = Array.from(mergedLinkedDocuments.values());
+
+                    return (
+                      <EmbeddedFormList
+                        fieldLabel={fieldDef.label}
+                        iconName={fieldDef.icon}
+                        childSchema={childSchema}
+                        linkedDocuments={linkedDocuments}
+                        onCreateDocument={(title, data) => {
+                          const seedData = Object.keys(data ?? {}).length > 0 ? data : buildDefaultValues(childSchema.fields);
+                          const created = onCreateLinkedDocument?.({
+                            schemaId: childSchema.id,
+                            title,
+                            parentDocumentId: activeDocumentId,
+                            seedData,
+                          });
+
+                          const nextDocument = created ?? {
+                            id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                            title,
+                            data: seedData,
+                            schemaId: childSchema.id,
+                          };
+
+                          field.onChange([...linkedDocuments, nextDocument]);
+                        }}
+                        onDeleteDocument={(documentId) => {
+                          field.onChange(linkedDocuments.filter((doc) => doc.id !== documentId));
+                          onDeleteLinkedDocument?.(documentId);
+                        }}
+                        onNavigateToDocument={(documentId, schemaId) => {
+                          const nextSchemaId = schemaId || childSchema.id;
+                          onNavigateToLinkedDocument?.(documentId, nextSchemaId);
+                        }}
+                      />
+                    );
+                  } else if (linkToSchemaId) {
+                    return (
+                      <div className="rounded-lg border border-border/50 bg-destructive/10 p-4 text-sm text-destructive">
+                        Error: Schema "{linkToSchemaId}" not found for field "{fieldDef.label}"
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="rounded-lg border border-border/50 bg-destructive/10 p-4 text-sm text-destructive">
+                      Error: Field "{fieldDef.label}" is missing linkTo configuration
+                    </div>
+                  );
+                })() : null}
+
+                {fieldDef.description && (
+                  <FieldDescription>{fieldDef.description}</FieldDescription>
+                )}
+                {fieldDef.generator && !fieldDef.description ? (
+                  <FieldDescription>
+                    This value is generated from the schema rule and can be regenerated.
+                  </FieldDescription>
+                ) : null}
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </>
+            )}
+
+          </Field>
+        )}
+      />
+    )
+  }
+
   return (
     <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
       <FieldGroup>
-        {fields.map((fieldDef) => {
-          if (isDeferredRelationField(fieldDef)) return null;
-
-          const isVisible = evaluateVisibility(fieldDef.visibility, watchedValues);
-          if (!isVisible) return null;
-
-          return (
-            <Controller
-              key={fieldDef.name}
-              control={form.control}
-              name={fieldDef.name}
-              render={({ field, fieldState }) => (
-                <Field
-                  data-invalid={fieldState.invalid}
-                  className={fieldDef.type.input === "checkbox" || fieldDef.type.input === "switch" ? "flex flex-row items-center gap-3 space-y-0 rounded-md border p-4" : ""}
-                >
-
-                  {fieldDef.type.input === "checkbox" || fieldDef.type.input === "switch" ? (
-                    <>
-                      <Checkbox
-                        id={fieldDef.name}
-                        checked={field.value as boolean}
-                        onCheckedChange={field.onChange}
-                        aria-invalid={fieldState.invalid}
-                      />
-                      <div className="space-y-1 leading-none w-full">
-                        <FieldLabel htmlFor={fieldDef.name}>
-                          {fieldDef.label} {fieldDef.required && <span className="text-red-500">*</span>}
-                        </FieldLabel>
-                        {fieldDef.description && (
-                          <FieldDescription>{fieldDef.description}</FieldDescription>
-                        )}
-                        {fieldState.invalid && (
-                          <FieldError errors={[fieldState.error]} />
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {fieldDef.type.input !== "embedded-form-list" && fieldDef.type.input !== "subtype-form-select" ? (
-                        <FieldLabel htmlFor={fieldDef.name}>
-                          {fieldDef.label} {fieldDef.required && <span className="text-red-500">*</span>}
-                        </FieldLabel>
-                      ) : null}
-
-                      {fieldDef.type.input === "text" || fieldDef.type.input === "date" ? (
-                        <div className="relative">
-                          <Input
-                            {...field}
-                            value={(field.value as string | number) ?? ""}
-                            id={fieldDef.name}
-                            type={fieldDef.type.input === "date" ? "date" : "text"}
-                            placeholder={`Enter ${fieldDef.label.toLowerCase()}...`}
-                            aria-invalid={fieldState.invalid}
-                            className={fieldDef.generator && fieldDef.type.input === "text" ? "pr-28" : undefined}
-                          />
-                          {fieldDef.generator && fieldDef.type.input === "text" ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="xs"
-                              className="absolute top-1/2 right-1 h-6 -translate-y-1/2 px-2 text-[11px]"
-                              onClick={() => handleRegenerateField(fieldDef)}
-                            >
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <RefreshCw className="mr-1 h-3 w-3" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  Generate New
-                                </TooltipContent>
-                              </Tooltip>
-                            </Button>
-                          ) : null}
-                        </div>
-                      ) : fieldDef.type.input === "textarea" ? (
-                        <Textarea
-                          {...field}
-                          value={(field.value as string) ?? ""}
-                          id={fieldDef.name}
-                          placeholder="Write your content here..."
-                          className="min-h-50 resize-y font-mono"
-                          aria-invalid={fieldState.invalid}
-                        />
-                      ) : fieldDef.type.data === "hierarchical-select" && fieldDef.type.input === "select" ? (
-                        <HierarchicalSelect
-                          id={fieldDef.name}
-                          value={(field.value as string) ?? ""}
-                          options={fieldDef.options as TieredOptions}
-                          placeholder={`Select ${fieldDef.label.toLowerCase()}...`}
-                          onChange={field.onChange}
-                        />
-                      ) : fieldDef.type.input === "search-select-input" || fieldDef.type.input === "search-select" ? (
-                        (() => {
-                          const specificationKind = getSpecificationKind(fieldDef)
-                          const searchOptions = getSearchSelectOptions(fieldDef)
-                          const isCreatable = fieldDef.type.input === "search-select-input" && Boolean(specificationKind)
-                          const SearchComponent = fieldDef.type.input === "search-select-input" ? SearchSelectInput : SearchSelect
-
-                          if (fieldDef.type.data === "array<string>") {
-                            const values = toStringArray(field.value)
-                            const listValues = values.length > 0 ? values : [""]
-
-                            const updateIndex = (index: number, nextValue: string) => {
-                              const next = [...listValues]
-                              next[index] = nextValue
-                              field.onChange(next.filter((entry) => entry.trim().length > 0))
-                            }
-
-                            const removeIndex = (index: number) => {
-                              const next = listValues.filter((_, itemIndex) => itemIndex !== index)
-                              field.onChange(next.filter((entry) => entry.trim().length > 0))
-                            }
-
-                            return (
-                              <div className="space-y-2">
-                                {listValues.map((entry, index) => (
-                                  <div key={`${fieldDef.name}-${index}`} className="flex items-start gap-2">
-                                    <div className="flex-1">
-                                      <SearchComponent
-                                        id={`${fieldDef.name}-${index}`}
-                                        value={entry}
-                                        options={searchOptions}
-                                        placeholder={`Search ${fieldDef.label.toLowerCase()}...`}
-                                        onChange={(nextValue) => updateIndex(index, nextValue)}
-                                        {...(fieldDef.type.input === "search-select-input" ? {
-                                          allowCreate: isCreatable,
-                                          onCreateOption: async (nextValue: string) => {
-                                            if (!specificationKind) return
-                                            await onAddSpecification?.(specificationKind, nextValue)
-                                          },
-                                        } : {})}
-                                      />
-                                    </div>
-                                    {listValues.length > 1 ? (
-                                      <Button type="button" variant="outline" size="icon-xs" onClick={() => removeIndex(index)}>
-                                        ×
-                                      </Button>
-                                    ) : null}
-                                  </div>
-                                ))}
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => field.onChange([...listValues, ""])}
-                                >
-                                  Add {fieldDef.label}
-                                </Button>
-                              </div>
-                            )
-                          }
-
-                          return (
-                            <SearchComponent
-                              id={fieldDef.name}
-                              value={(field.value as string) ?? ""}
-                              options={searchOptions}
-                              placeholder={`Search ${fieldDef.label.toLowerCase()}...`}
-                              onChange={field.onChange}
-                              {...(fieldDef.type.input === "search-select-input" ? {
-                                allowCreate: isCreatable,
-                                onCreateOption: async (nextValue: string) => {
-                                  if (!specificationKind) return
-                                  await onAddSpecification?.(specificationKind, nextValue)
-                                },
-                              } : {})}
-                            />
-                          )
-                        })()
-                      ) : fieldDef.type.input === "select" ? (
-                        (() => {
-                          const selectOptions = getSelectOptions(fieldDef)
-
-                          return (
-                            <Select
-                              value={(field.value as string) ?? ""}
-                              onValueChange={field.onChange}
-                            >
-                              <SelectTrigger id={fieldDef.name} aria-invalid={fieldState.invalid}>
-                                <SelectValue placeholder={`Select ${fieldDef.label.toLowerCase()}...`} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {selectOptions.map((option) => (
-                                  <SelectItem key={String(option)} value={String(option)}>
-                                    {String(option)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )
-                        })()
-                      ) : fieldDef.type.input === "text-multi" ? (
-                        (() => {
-                          const values = toStringArray(field.value)
-
-                          const updateIndex = (index: number, nextValue: string) => {
-                            const next = values.length > 0 ? [...values] : [""]
-                            next[index] = nextValue
-                            field.onChange(next)
-                          }
-
-                          const removeIndex = (index: number) => {
-                            const next = values.filter((_, itemIndex) => itemIndex !== index)
-                            field.onChange(next.length > 0 ? next : [""])
-                          }
-
-                          return (
-                            <div className="space-y-2">
-                              {(values.length > 0 ? values : [""]).map((entry, index) => (
-                                <div key={`${fieldDef.name}-${index}`} className="flex items-center gap-2">
-                                  <Input
-                                    id={`${fieldDef.name}-${index}`}
-                                    value={entry}
-                                    onChange={(event) => updateIndex(index, event.target.value)}
-                                    placeholder={`${fieldDef.label} ${index + 1}`}
-                                    aria-invalid={fieldState.invalid}
-                                  />
-                                  {index > 0 ? (
-                                    <Button type="button" variant="outline" size="icon-xs" onClick={() => removeIndex(index)}>
-                                      ×
-                                    </Button>
-                                  ) : null}
-                                </div>
-                              ))}
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => field.onChange([...(values.length > 0 ? values : [""]), ""])}
-                              >
-                                Add {fieldDef.label}
-                              </Button>
-                            </div>
-                          )
-                        })()
-                      ) : fieldDef.type.input === "subtype-form-select" ? (
-                        <SubtypeFormSelect
-                          fieldName={fieldDef.name}
-                          fieldLabel={fieldDef.label}
-                          subtypeFields={subtypeFields || {}}
-                          currentValues={watchedValues}
-                          onValuesChange={(fieldName, values) => {
-                            if (fieldName === fieldDef.name) {
-                              field.onChange((values as any)[fieldName]);
-                            } else {
-                              field.onChange(values);
-                            }
-                          }}
-                        />
-                      ) : fieldDef.type.input === "embedded-form-list" ? (() => {
-                        const linkToSchemaId = (fieldDef as any).linkTo;
-                        const childSchema = linkToSchemaId && schemas ? schemas[linkToSchemaId] : undefined;
-
-                        if (childSchema) {
-                          const rawLinkedDocuments = Array.isArray(field.value) ? (field.value as unknown[]) : [];
-                          const fieldLinkedDocuments = rawLinkedDocuments
-                            .filter((doc): doc is Record<string, unknown> => typeof doc === "object" && doc !== null)
-                            .map((doc) => ({
-                              id: typeof doc.id === "string" ? doc.id : (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
-                              title: typeof doc.title === "string" ? doc.title : "",
-                              data: typeof doc.data === "object" && doc.data !== null ? (doc.data as Record<string, any>) : {},
-                              schemaId: typeof doc.schemaId === "string" ? doc.schemaId : childSchema.id,
-                            }));
-
-                          const existingLinkedDocuments = getExistingLinkedDocuments?.({
-                            parentDocumentId: activeDocumentId,
-                            schemaId: childSchema.id,
-                          }) ?? [];
-
-                          const mergedLinkedDocuments = new Map<string, {
-                            id: string
-                            title: string
-                            data: Record<string, any>
-                            schemaId: string
-                          }>();
-
-                          existingLinkedDocuments.forEach((doc) => {
-                            mergedLinkedDocuments.set(doc.id, {
-                              id: doc.id,
-                              title: doc.title,
-                              data: doc.data ?? {},
-                              schemaId: doc.schemaId || childSchema.id,
-                            });
-                          });
-
-                          fieldLinkedDocuments.forEach((doc) => {
-                            mergedLinkedDocuments.set(doc.id, {
-                              id: doc.id,
-                              title: doc.title,
-                              data: doc.data ?? {},
-                              schemaId: doc.schemaId || childSchema.id,
-                            });
-                          });
-
-                          const linkedDocuments = Array.from(mergedLinkedDocuments.values());
-
-                          return (
-                            <EmbeddedFormList
-                              fieldLabel={fieldDef.label}
-                              iconName={fieldDef.icon}
-                              childSchema={childSchema}
-                              linkedDocuments={linkedDocuments}
-                              onCreateDocument={(title, data) => {
-                                const seedData = Object.keys(data ?? {}).length > 0 ? data : buildDefaultValues(childSchema.fields);
-                                const created = onCreateLinkedDocument?.({
-                                  schemaId: childSchema.id,
-                                  title,
-                                  parentDocumentId: activeDocumentId,
-                                  seedData,
-                                });
-
-                                const nextDocument = created ?? {
-                                  id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                                  title,
-                                  data: seedData,
-                                  schemaId: childSchema.id,
-                                };
-
-                                field.onChange([...linkedDocuments, nextDocument]);
-                              }}
-                              onDeleteDocument={(documentId) => {
-                                field.onChange(linkedDocuments.filter((doc) => doc.id !== documentId));
-                                onDeleteLinkedDocument?.(documentId);
-                              }}
-                              onNavigateToDocument={(documentId, schemaId) => {
-                                const nextSchemaId = schemaId || childSchema.id;
-                                onNavigateToLinkedDocument?.(documentId, nextSchemaId);
-                              }}
-                            />
-                          );
-                        } else if (linkToSchemaId) {
-                          return (
-                            <div className="rounded-lg border border-border/50 bg-destructive/10 p-4 text-sm text-destructive">
-                              Error: Schema "{linkToSchemaId}" not found for field "{fieldDef.label}"
-                            </div>
-                          );
-                        } else {
-                          return (
-                            <div className="rounded-lg border border-border/50 bg-destructive/10 p-4 text-sm text-destructive">
-                              Error: Field "{fieldDef.label}" is missing linkTo configuration
-                            </div>
-                          );
-                        }
-                      })() : null}
-
-                      {fieldDef.description && (
-                        <FieldDescription>{fieldDef.description}</FieldDescription>
-                      )}
-                      {fieldDef.generator && !fieldDef.description ? (
-                        <FieldDescription>
-                          This value is generated from the schema rule and can be regenerated.
-                        </FieldDescription>
-                      ) : null}
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </>
-                  )}
-
-                </Field>
-              )}
-            />
-          );
-        })}
+        {fields.map((fieldDef) => renderField(fieldDef))}
       </FieldGroup>
       <Button type="submit" className="w-full">Capture</Button>
     </form>

@@ -141,7 +141,7 @@ const ENTITY_CONFIG: Record<WorkspaceEntityKey, { schemaId: string; folderName: 
             "url",
             "date",
             "author_identity_status",
-            "author",
+            "byline",
             "wire_service",
             "language",
             "type_of_source",
@@ -222,7 +222,7 @@ const SPREADSHEET_SPECIAL_FIELDS = [
 
 const ARRAY_FIELDS: Record<WorkspaceEntityKey, Set<string>> = {
     event: new Set(["report", "type_of_murder"]),
-    article: new Set(["author"]),
+    article: new Set(["byline"]),
     participant: new Set(["aliases", "type_of_murder", "relationship_to_victim"]),
 }
 

@@ -113,7 +113,7 @@ const DATA_TYPE_GUIDANCE: Partial<Record<FieldDataType, string>> = {
     "array<string>": "Use this for multi-value entries. Pick an input that supports repeated values.",
     "hierarchical-select": "Expect nested options JSON with levels (for example Province -> Town).",
     "date-range": "Stores a start and end value; make sure downstream filters handle ranges.",
-    "markdown": "Best for longer rich text notes that can include formatting.",
+    markdown: "Best for longer rich text notes that can include formatting.",
     form: "Use form inputs when this field controls a composite UI (for example subtype or embedded records).",
 }
 
@@ -165,9 +165,16 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
     const [expandedFieldIndex, setExpandedFieldIndex] = useState<number | null>(0)
     const [draggedFieldIndex, setDraggedFieldIndex] = useState<number | null>(null)
     const [groupDraft, setGroupDraft] = useState({ id: "", name: "", description: "" })
-    const [schemaDraft, setSchemaDraft] = useState<Omit<DocumentSchema, "fields"> & { fields: EditableField[]; subtypeFieldsText: string }>({
+    const [schemaDraft, setSchemaDraft] = useState<
+        Omit<DocumentSchema, "fields" | "titleField"> & {
+            titleField?: string | undefined
+            fields: EditableField[]
+            subtypeFieldsText: string
+        }
+    >({
         id: "",
         name: "",
+        titleField: undefined,
         description: "",
         metadata: {
             archivable: false,
@@ -210,6 +217,7 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
             setSchemaDraft({
                 id: selectedSchema.id,
                 name: selectedSchema.name,
+                titleField: selectedSchema.titleField,
                 description: selectedSchema.description ?? "",
                 metadata: {
                     archivable: Boolean(selectedSchema.metadata?.archivable),
@@ -250,6 +258,7 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
         setSchemaDraft({
             id: crypto.randomUUID(),
             name: "",
+            titleField: undefined,
             description: "",
             metadata: {
                 archivable: false,
@@ -312,9 +321,13 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
         if (!schemaDraft.name.trim() || !schemaDraft.groupId) return
 
         const group = groups.find((item) => item.id === schemaDraft.groupId)
+        const titleFieldTrimmed = schemaDraft.titleField?.trim()
+
         const schema: DocumentSchema = {
             id: schemaDraft.id || crypto.randomUUID(),
             name: schemaDraft.name.trim(),
+            // Falls back to a standard field key (e.g. "title") if unselected
+            titleField: titleFieldTrimmed || "title",
             description: (schemaDraft.description ?? "").trim() || undefined,
             metadata: {
                 archivable: Boolean(schemaDraft.metadata?.archivable),
@@ -363,6 +376,34 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
             <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Schema name</label>
                 <Input value={schemaDraft.name} onChange={(event) => setSchemaDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Schema name" />
+            </div>
+            <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Title Field Key</label>
+                <Select
+                    value={schemaDraft.titleField ?? "__fallback__"}
+                    onValueChange={(value) =>
+                        setSchemaDraft((current) => ({
+                            ...current,
+                            titleField: !value || value === "__fallback__" ? undefined : value,
+                        }))
+                    }
+                >
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select Title Field" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="__fallback__">
+                            Fallback Standard (e.g. {schemaDraft.name || "Document"} 1)
+                        </SelectItem>
+                        {schemaDraft.fields
+                            .filter((f) => f.name.trim())
+                            .map((field) => (
+                                <SelectItem key={field.name} value={field.name}>
+                                    {field.label || field.name} ({field.name})
+                                </SelectItem>
+                            ))}
+                    </SelectContent>
+                </Select>
             </div>
             <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Group assignment</label>

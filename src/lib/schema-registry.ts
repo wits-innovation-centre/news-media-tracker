@@ -7,234 +7,39 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
         description: "Annotate reports of homicide.",
         documents: [
             {
-                id: "event",
-                name: "event",
-                description: "Add notes to annotate reports of homicides.",
-                icon: "map-pin",
-                fields: [
-                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "evt-{date}-{rand:6}" }, description: "Auto-generated event identifier." },
-                    { name: "name", label: "Event Title", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "Event {date} {rand:4}" }, description: "Generated working title; you can rename this after details are known." },
-                    { name: "date", label: "Incident Date", type: { data: "date", input: "date" } },
-                    {
-                        name: "location_of_homicide",
-                        label: "Location",
-                        type: { data: "hierarchical-select", input: "select" },
-                        options: {
-                            $schema: {
-                                $label: { "Province": "Town" },
-                                $name: { "province": "town" }
-                            } as TieredOptionsSchema,
-                            "Eastern Cape": [
-                                "Port Elizabeth",
-                                "East London",
-                                "Uitenhage",
-                                "Queenstown",
-                                "King William's Town",
-                                "Mdantsane",
-                                "Bisho",
-                                "Grahamstown",
-                                "Fort Beaufort",
-                                "Alice",
-                                "Cradock",
-                                "Graaff-Reinet",
-                                "Port Alfred",
-                                "Somerset East",
-                                "Stutterheim",
-                                "Other",
-                                "Unknown"
-                            ],
-                            "Free State": [
-                                "Bloemfontein",
-                                "Welkom",
-                                "Kroonstad",
-                                "Bethlehem",
-                                "Sasolburg",
-                                "Phuthaditjhaba",
-                                "Virginia",
-                                "Odendaalsrus",
-                                "Parys",
-                                "Harrismith",
-                                "Ficksburg",
-                                "Heilbron",
-                                "Hoopstad",
-                                "Ladybrand",
-                                "Other",
-                                "Unknown"
-                            ],
-                            "Gauteng": [
-                                "Johannesburg",
-                                "Pretoria",
-                                "Soweto",
-                                "Benoni",
-                                "Tembisa",
-                                "Germiston",
-                                "Boksburg",
-                                "Krugersdorp",
-                                "Roodepoort",
-                                "Randburg",
-                                "Sandton",
-                                "Alexandra",
-                                "Midrand",
-                                "Centurion",
-                                "Vanderbijlpark",
-                                "Vereeniging",
-                                "Springs",
-                                "Alberton",
-                                "Kempton Park",
-                                "Other",
-                                "Unknown"
-                            ],
-                            "KwaZulu-Natal": [
-                                "Durban",
-                                "Pietermaritzburg",
-                                "Pinetown",
-                                "Chatsworth",
-                                "Umlazi",
-                                "Port Shepstone",
-                                "Newcastle",
-                                "Dundee",
-                                "Ladysmith",
-                                "Richards Bay",
-                                "Empangeni",
-                                "Vryheid",
-                                "Estcourt",
-                                "Maritzburg",
-                                "Kokstad",
-                                "Other",
-                                "Unknown"
-                            ],
-                            "Limpopo": [
-                                "Polokwane",
-                                "Thohoyandou",
-                                "Lebowakgomo",
-                                "Musina",
-                                "Giyani",
-                                "Tzaneen",
-                                "Phalaborwa",
-                                "Mokopane",
-                                "Bochum",
-                                "Louis Trichardt",
-                                "Other",
-                                "Unknown"
-                            ],
-                            "Mpumalanga": [
-                                "Nelspruit",
-                                "Witbank",
-                                "Middelburg",
-                                "Secunda",
-                                "Ermelo",
-                                "Bethal",
-                                "Standerton",
-                                "Barberton",
-                                "White River",
-                                "Hazyview",
-                                "Sabie",
-                                "Other",
-                                "Unknown"
-                            ],
-                            "Northern Cape": [
-                                "Kimberley",
-                                "Upington",
-                                "Springbok",
-                                "De Aar",
-                                "Kuruman",
-                                "Port Nolloth",
-                                "Calvinia",
-                                "Prieska",
-                                "Carnarvon",
-                                "Other",
-                                "Unknown"
-                            ],
-                            "North West": [
-                                "Rustenburg",
-                                "Klerksdorp",
-                                "Potchefstroom",
-                                "Mafikeng",
-                                "Brits",
-                                "Orkney",
-                                "Stilfontein",
-                                "Hartbeespoort",
-                                "Zeerust",
-                                "Other",
-                                "Unknown"
-                            ],
-                            "Western Cape": [
-                                "Cape Town",
-                                "Bellville",
-                                "Mitchell's Plain",
-                                "Khayelitsha",
-                                "Athlone",
-                                "Paarl",
-                                "Stellenbosch",
-                                "Worcester",
-                                "George",
-                                "Oudtshoorn",
-                                "Mossel Bay",
-                                "Hermanus",
-                                "Knysna",
-                                "Plettenberg Bay",
-                                "Swellendam",
-                                "Other",
-                                "Unknown"
-                            ]
-                        }
-                    },
-                    {
-                        name: "location_of_homicide_specify",
-                        label: "Specify",
-                        type: { data: "string", input: "text" },
-                        visibility: {
-                            dependsOn: "location_of_homicide.province.town",
-                            operator: "eq",
-                            value: "Other"
-                        }
-                    },
-                    {
-                        name: "sexual_assault",
-                        label: "Sexual Assault",
-                        type: { data: "select", input: "select" },
-                        options: [
-                            "No",
-                            "Yes",
-                            "Unknown"
-                        ]
-                    },
-                    {
-                        name: "articles_link",
-                        label: "Documented in",
-                        type: { data: "form", input: "embedded-form-list" },
-                        linkTo: "article",
-                        icon: "newspaper"
-                    },
-                    {
-                        name: "type_of_murder",
-                        label: "Type of Murder",
-                        type: { data: "select", input: "select" },
-                        options: [
-                            '',
-                            'Domestic Violence',
-                            'Gang Related',
-                            'Robbery Related',
-                            'Sexual Violence',
-                            'Child Murder',
-                            'Hate Crime',
-                            'Drug Related',
-                            'Unknown/Other',
-                        ]
-                    },
-                    { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
-                ],
-            },
-            {
                 id: "article",
                 name: "article",
                 description: "Capture an article reporting a homicide.",
                 icon: "newspaper",
-                parentSchemaId: "event",
+                titleField: "headline",
                 fields: [
                     { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "rpt-{date}-{rand:6}" }, description: "Auto-generated report identifier." },
                     { name: "headline", label: "Headline", type: { data: "string", input: "text" }, required: true },
-                    { name: "url", label: "URL", type: { data: "string", input: "text" }, required: true },
+                    {
+                        name: "type_of_source",
+                        label: "Source Type",
+                        type: { data: "select", input: "search-select-input" },
+                        options: [
+                            'Newspaper',
+                            'Online',
+                            'Television',
+                            'Radio',
+                            'Magazine',
+                            'Blog',
+                            'Social Media',
+                            'Other'
+                        ]
+                    },
+                    { 
+                        name: "url", 
+                        label: "URL", 
+                        type: { data: "string", input: "text" }, 
+                        visibility: {
+                            dependsOn: "type_of_source",
+                            operator: "eq",
+                            value: "Online"
+                        }
+                    },
                     { name: "date", label: "Publication Date", type: { data: "date", input: "date" } },
                     {
                         name: "author_identity_status",
@@ -249,10 +54,11 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         default: "Known"
                     },
                     {
-                        name: "author",
-                        label: "Author(s)",
+                        name: "byline",
+                        label: "Byline",
                         type: { data: "array<string>", input: "search-select-input" },
-                        specification: "author",
+                        specification: "byline",
+                        options: [],
                         visibility: {
                             dependsOn: "author_identity_status",
                             operator: "eq",
@@ -289,25 +95,10 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         ]
                     },
                     {
-                        name: "type_of_source",
-                        label: "Source Type",
-                        type: { data: "select", input: "search-select-input" },
-                        specification: "report_platform",
-                        options: [
-                            'Newspaper',
-                            'Online',
-                            'Television',
-                            'Radio',
-                            'Magazine',
-                            'Blog',
-                            'Social Media',
-                            'Other'
-                        ]
-                    },
-                    {
                         name: "report_platform",
                         label: "Report Platform",
                         type: { data: "select", input: "search-select" },
+                        // specification: "report_platform",
                         options: [
                             '100punt6',
                             'AFRIKANER',
@@ -488,13 +279,241 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             'ZULULAND OBSERVER',
                         ]
                     },
+                    // {
+                    //     name: "incidents_link",
+                    //     label: "Report on",
+                    //     type: { data: "form", input: "embedded-form-list" },
+                    //     linkTo: "incident",
+                    //     icon: "map-pin"
+                    // },
+                    { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
+                ],
+            },
+            {
+                id: "incident",
+                name: "Incident",
+                description: "Add notes to annotate reports of homicides.",
+                icon: "map-pin",
+                parentSchemaId: "article",
+                titleField: "id",
+                fields: [
+                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "evt-{date}-{rand:6}" }, description: "Auto-generated event identifier." },
+                    // { name: "name", label: "Incident Title", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "Event {date} {rand:4}" }, description: "Generated working title; you can rename this after details are known." },
+                    { name: "date", label: "Incident Date", type: { data: "date", input: "date" } },
                     {
-                        name: "participants_link",
-                        label: "Mentions",
-                        type: { data: "form", input: "embedded-form-list" },
-                        linkTo: "participant",
-                        icon: "users"
+                        name: "location_of_homicide",
+                        label: "Location",
+                        type: { data: "hierarchical-select", input: "select" },
+                        options: {
+                            $schema: {
+                                $label: { "Province": "Town" },
+                                $name: { "province": "town" }
+                            } as TieredOptionsSchema,
+                            "Eastern Cape": [
+                                "Port Elizabeth",
+                                "East London",
+                                "Uitenhage",
+                                "Queenstown",
+                                "King William's Town",
+                                "Mdantsane",
+                                "Bisho",
+                                "Grahamstown",
+                                "Fort Beaufort",
+                                "Alice",
+                                "Cradock",
+                                "Graaff-Reinet",
+                                "Port Alfred",
+                                "Somerset East",
+                                "Stutterheim",
+                                "Other",
+                                "Unknown"
+                            ],
+                            "Free State": [
+                                "Bloemfontein",
+                                "Welkom",
+                                "Kroonstad",
+                                "Bethlehem",
+                                "Sasolburg",
+                                "Phuthaditjhaba",
+                                "Virginia",
+                                "Odendaalsrus",
+                                "Parys",
+                                "Harrismith",
+                                "Ficksburg",
+                                "Heilbron",
+                                "Hoopstad",
+                                "Ladybrand",
+                                "Other",
+                                "Unknown"
+                            ],
+                            "Gauteng": [
+                                "Johannesburg",
+                                "Pretoria",
+                                "Soweto",
+                                "Benoni",
+                                "Tembisa",
+                                "Germiston",
+                                "Boksburg",
+                                "Krugersdorp",
+                                "Roodepoort",
+                                "Randburg",
+                                "Sandton",
+                                "Alexandra",
+                                "Midrand",
+                                "Centurion",
+                                "Vanderbijlpark",
+                                "Vereeniging",
+                                "Springs",
+                                "Alberton",
+                                "Kempton Park",
+                                "Other",
+                                "Unknown"
+                            ],
+                            "KwaZulu-Natal": [
+                                "Durban",
+                                "Pietermaritzburg",
+                                "Pinetown",
+                                "Chatsworth",
+                                "Umlazi",
+                                "Port Shepstone",
+                                "Newcastle",
+                                "Dundee",
+                                "Ladysmith",
+                                "Richards Bay",
+                                "Empangeni",
+                                "Vryheid",
+                                "Estcourt",
+                                "Maritzburg",
+                                "Kokstad",
+                                "Other",
+                                "Unknown"
+                            ],
+                            "Limpopo": [
+                                "Polokwane",
+                                "Thohoyandou",
+                                "Lebowakgomo",
+                                "Musina",
+                                "Giyani",
+                                "Tzaneen",
+                                "Phalaborwa",
+                                "Mokopane",
+                                "Bochum",
+                                "Louis Trichardt",
+                                "Other",
+                                "Unknown"
+                            ],
+                            "Mpumalanga": [
+                                "Nelspruit",
+                                "Witbank",
+                                "Middelburg",
+                                "Secunda",
+                                "Ermelo",
+                                "Bethal",
+                                "Standerton",
+                                "Barberton",
+                                "White River",
+                                "Hazyview",
+                                "Sabie",
+                                "Other",
+                                "Unknown"
+                            ],
+                            "Northern Cape": [
+                                "Kimberley",
+                                "Upington",
+                                "Springbok",
+                                "De Aar",
+                                "Kuruman",
+                                "Port Nolloth",
+                                "Calvinia",
+                                "Prieska",
+                                "Carnarvon",
+                                "Other",
+                                "Unknown"
+                            ],
+                            "North West": [
+                                "Rustenburg",
+                                "Klerksdorp",
+                                "Potchefstroom",
+                                "Mafikeng",
+                                "Brits",
+                                "Orkney",
+                                "Stilfontein",
+                                "Hartbeespoort",
+                                "Zeerust",
+                                "Other",
+                                "Unknown"
+                            ],
+                            "Western Cape": [
+                                "Cape Town",
+                                "Bellville",
+                                "Mitchell's Plain",
+                                "Khayelitsha",
+                                "Athlone",
+                                "Paarl",
+                                "Stellenbosch",
+                                "Worcester",
+                                "George",
+                                "Oudtshoorn",
+                                "Mossel Bay",
+                                "Hermanus",
+                                "Knysna",
+                                "Plettenberg Bay",
+                                "Swellendam",
+                                "Other",
+                                "Unknown"
+                            ]
+                        }
                     },
+                    {
+                        name: "location_of_homicide_specify",
+                        label: "Specify",
+                        type: { data: "string", input: "text" },
+                        visibility: {
+                            dependsOn: "location_of_homicide.province.town",
+                            operator: "eq",
+                            value: "Other"
+                        }
+                    },
+                    {
+                        name: "type_of_murder",
+                        label: "Type of Murder",
+                        type: { data: "select", input: "select" },
+                        options: [
+                            '',
+                            'Domestic Violence',
+                            'Gang Related',
+                            'Robbery Related',
+                            'Sexual Violence',
+                            'Child Murder',
+                            'Hate Crime',
+                            'Drug Related',
+                            'Unknown/Other',
+                        ]
+                    },
+                    {
+                        name: "sexual_assault",
+                        label: "Sexual Assault",
+                        type: { data: "select", input: "select" },
+                        options: [
+                            "No",
+                            "Yes",
+                            "Unknown"
+                        ]
+                    },
+                    // {
+                    //     name: "participants_link",
+                    //     label: "Mentions",
+                    //     type: { data: "form", input: "embedded-form-list" },
+                    //     linkTo: "participant",
+                    //     icon: "users"
+                    // },
+                    // {
+                    //     name: "articles_link",
+                    //     label: "Documented in",
+                    //     type: { data: "form", input: "embedded-form-list" },
+                    //     linkTo: "article",
+                    //     icon: "newspaper"
+                    // },
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
                 ],
             },
@@ -503,7 +522,8 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 name: "participant",
                 description: "The people that participated in the reported event.",
                 icon: "users",
-                parentSchemaId: "event",
+                parentSchemaId: "incident",
+                titleField: "name",
                 fields: [
                     { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "act-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
                     { name: "name", label: "Name", type: { data: "string", input: "text" } },
@@ -535,13 +555,13 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     },
                     {
                         name: "is_age_known",
-                        label: "Age",
-                        type: { data: "select", input: "switch" },
-                        options: [
-                            "Known",
-                            "Unknown"
-                        ],
-                        default: "Known"
+                        label: "Was the age reported?",
+                        type: { data: "boolean", input: "switch" },
+                        // options: [
+                        //     "Known",
+                        //     "Unknown"
+                        // ],
+                        default: true
                     },
                     {
                         name: "age",
@@ -550,7 +570,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         visibility: {
                             dependsOn: "is_age_known",
                             operator: "eq",
-                            value: "Known"
+                            value: true
                         }
                     },
                     {
@@ -571,7 +591,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         visibility: {
                             dependsOn: "is_age_known",
                             operator: "eq",
-                            value: "Unknown"
+                            value: false
                         }
                     },
                     { name: "nationality", label: "Nationality", type: { data: "string", input: "text" } },
@@ -658,7 +678,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     "victim": [
                         {
                             name: "date_of_death_mode",
-                            label: "Date of Death",
+                            label: "Date of Death Known?",
                             type: { data: "select", input: "select" },
                             options: ["exact", "approximate", "unknown"],
                             default: "exact"
