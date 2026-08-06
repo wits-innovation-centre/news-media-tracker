@@ -30,10 +30,10 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             'Other'
                         ]
                     },
-                    { 
-                        name: "url", 
-                        label: "URL", 
-                        type: { data: "string", input: "text" }, 
+                    {
+                        name: "url",
+                        label: "URL",
+                        type: { data: "string", input: "text" },
                         visibility: {
                             dependsOn: "type_of_source",
                             operator: "eq",
