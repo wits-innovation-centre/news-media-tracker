@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS archival_records (
 
 CREATE TABLE IF NOT EXISTS schema_metadata (
   schema_id TEXT NOT NULL,
-  workspace_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL DEFAULT 'default',
   metadata TEXT NOT NULL,
   PRIMARY KEY (schema_id, workspace_id)
 );

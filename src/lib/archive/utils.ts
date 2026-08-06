@@ -140,6 +140,63 @@ export async function saveWaybackSnapshotUrl(sourceUrl: string, maxAttempts = 5)
     : new Error("Unable to archive the provided URL on the Wayback Machine.");
 }
 
+/**
+ * Persists or updates a Wayback Machine archival record in SQLite.
+ */
+export async function saveWaybackArchiveRequest(
+  articleId: string,
+  sourceUrl: string,
+  workspaceId: string = "default",
+  syncStatus: string = WAYBACK_SYNC_STATUS.pending,
+  snapshotUrl?: string | null,
+  lastVerifiedAt?: number | null
+) {
+  const seed = await buildWaybackArchiveSeed(articleId, sourceUrl, workspaceId);
+  const now = Date.now();
+
+  await dbClient.execute(
+    `INSERT INTO archival_records (
+       id, article_id, workspace_id, archive_type, sha256_hash,
+       uri_or_path, file_size_bytes, device_id, last_verified_at,
+       health_status, sync_status, blockchain_tx_hash, blockchain_network,
+       ots_proof_payload, anchored_at, created_at, updated_at, is_deleted, synced_at
+     ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, 0, NULL)
+     ON CONFLICT(id) DO UPDATE SET
+       article_id = excluded.article_id,
+       workspace_id = excluded.workspace_id,
+       archive_type = excluded.archive_type,
+       sha256_hash = excluded.sha256_hash,
+       uri_or_path = excluded.uri_or_path,
+       last_verified_at = excluded.last_verified_at,
+       health_status = excluded.health_status,
+       sync_status = excluded.sync_status,
+       updated_at = excluded.updated_at,
+       is_deleted = 0,
+       synced_at = NULL`,
+    [
+      seed.id,                         // 1: id
+      articleId,                       // 2: article_id
+      workspaceId,                     // 3: workspace_id
+      WAYBACK_ARCHIVE_TYPE,            // 4: archive_type
+      seed.sha256Hash,                 // 5: sha256_hash
+      snapshotUrl ?? seed.sourceUrl,   // 6: uri_or_path
+      getOrCreateDeviceId(),           // 7: device_id
+      lastVerifiedAt ?? null,          // 8: last_verified_at
+      "UNCHECKED",                     // 9: health_status
+      syncStatus,                      // 10: sync_status
+      seed.createdAt,                  // 11: created_at
+      now,                             // 12: updated_at
+    ]
+  );
+
+  return {
+    ...seed,
+    uriOrPath: snapshotUrl ?? seed.sourceUrl,
+    syncStatus,
+    lastVerifiedAt: lastVerifiedAt ?? null,
+  };
+}
+
 export async function ingestDocumentArchive(
   articleId: string,
   file: File,
@@ -157,7 +214,7 @@ export async function ingestDocumentArchive(
     fileBuffer: buffer,
     fileName: file.name,
     archiveType,
-    deviceId
+    deviceId,
   });
 
   const now = Date.now();
@@ -182,7 +239,7 @@ export async function ingestDocumentArchive(
       result.healthStatus,
       "PENDING_ANCHOR",
       now,
-      now
+      now,
     ]
   );
 
