@@ -32,7 +32,6 @@ function Sidebar({
   activePath,
   mergeQueueCount,
   activeWorkspaceId,
-  activeSchemaId,
   activeDocumentId,
   onNavigate,
   onSwitchWorkspace,
