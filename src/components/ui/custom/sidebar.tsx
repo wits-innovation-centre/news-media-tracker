@@ -83,7 +83,7 @@ function Sidebar({
     if (event?.currentTarget) {
       const rect = event.currentTarget.getBoundingClientRect();
       setMenuPosition({
-        top: rect.bottom + 4,
+        top: rect.bottom + 48, // Offset by 48px to reveal the phantom preview node underneath
         left: rect.left + rect.width / 2,
       });
     }
