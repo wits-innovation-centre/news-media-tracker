@@ -121,24 +121,24 @@ function Sidebar({
     return workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   }, [activeWorkspaceId, workspaces]);
 
-  const renderAddMenu = (anchorId: string, parentDocument?: DocumentNode) => {
+  const renderAddMenu = (anchorId: string, parentDocument?: DocumentNode, depth = 0) => {
     const options = getAvailableSchemasForAnchor(parentDocument);
     if (options.length === 0) return null;
 
     const isOpen = menuOpenAnchor === anchorId;
 
     return (
-      <div className="group relative my-1">
+      <div className="group relative my-0.5 flex justify-center" style={parentDocument ? { marginLeft: `${depth * 14}px` } : undefined}>
         {isOpen ? (
-          <div className="absolute left-0 z-20 mt-1 min-w-40 rounded-md border border-border bg-popover p-1 shadow-lg">
+          <div className="absolute left-1/2 top-full z-20 mt-1 min-w-40 -translate-x-1/2 rounded-md border border-border bg-popover p-1 shadow-lg">
             {options.map((schema) => (
               <button
                 type="button"
                 key={`${anchorId}-${schema.id}`}
                 className="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs text-popover-foreground hover:bg-accent"
                 onClick={() => {
-                  onCreateDocument(schema, parentDocument?.id)
-                  setMenuOpenAnchor(null)
+                  onCreateDocument(schema, parentDocument?.id);
+                  setMenuOpenAnchor(null);
                 }}
               >
                 <span className="capitalize">{schema.name}</span>
@@ -167,10 +167,9 @@ function Sidebar({
     const schema = schemaById.get(document.schemaId);
     const SchemaIcon = resolveIcon(schema?.icon);
     const children = getChildDocuments(document.id);
-    const childSchemaOptions = getChildSchemaOptions(document.schemaId);
     const canExpand = children.length > 0;
     const isCollapsed = !!collapsedNodes[document.id];
-    const isActive = activeDocumentId === document.id || activeSchemaId === document.schemaId;
+    const isActive = activeDocumentId === document.id;
 
     return (
       <Fragment key={document.id}>
@@ -181,10 +180,11 @@ function Sidebar({
               onSelectDocument(document.id, document.schemaId);
               onSelectSchema(document.schemaId);
             }}
-            className={`relative flex items-center justify-between rounded-md px-2 py-1.5 text-xs transition-all ${isActive
-              ? "bg-primary text-primary-foreground"
-              : "text-foreground hover:bg-accent hover:text-accent-foreground"
-              }`}
+            className={`relative flex items-center justify-between rounded-md px-2 py-1.5 text-xs transition-all ${
+              isActive
+                ? "bg-primary text-primary-foreground"
+                : "text-foreground hover:bg-accent hover:text-accent-foreground"
+            }`}
           >
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
               {canExpand ? (
@@ -217,23 +217,18 @@ function Sidebar({
               </button>
             </div>
           </div>
-          {renderAddMenu(`after-${document.id}`, document)}
         </div>
 
         {!isCollapsed && children.map((child) => renderDocumentNode(child, depth + 1))}
 
-        {!isCollapsed && childSchemaOptions.length > 0 && children.length === 0 ? (
-          <div style={{ marginLeft: `${(depth + 1) * 14}px` }} className="text-[11px] text-muted-foreground/80">
-            No child documents yet.
-          </div>
-        ) : null}
+        {!isCollapsed && renderAddMenu(`after-${document.id}`, document, depth + 1)}
       </Fragment>
     );
   };
 
   return (
     <BaseSidebar collapsible="icon">
-      <SidebarHeader className="px-4 py-3 border-b border-border space-y-3">
+      <SidebarHeader className="border-b border-border px-4 py-3 space-y-3">
         <div className={`flex items-center gap-2 ${isIconCollapsed ? "justify-center" : "justify-between"}`}>
           {!isIconCollapsed ? <p className="text-sm font-semibold text-foreground">Vault Explorer</p> : null}
           <SidebarTrigger className="h-7 w-7" title={isIconCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
@@ -250,7 +245,7 @@ function Sidebar({
               placeholder="Filter documents"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-7 py-1.5 text-xs bg-muted/50 border border-input rounded-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-foreground placeholder:text-muted-foreground"
+              className="w-full rounded-md border border-input bg-muted/50 py-1.5 pl-8 pr-7 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             {searchQuery && (
               <button
@@ -265,13 +260,15 @@ function Sidebar({
         ) : null}
       </SidebarHeader>
 
-      <SidebarContent className="pt-2">
-        <SidebarGroup>
-          <div className="px-1 pb-3">
+      <SidebarContent className="pt-1">
+        <SidebarGroup className="py-0">
+          <div className="px-1 pb-1">
             <div className={`gap-1 ${isIconCollapsed ? "grid grid-cols-1" : "grid grid-cols-2 rounded-full border border-border bg-muted/30 p-1"}`}>
               <button
                 type="button"
-                className={`flex w-full items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs transition-all ${activePath === "/" ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-accent hover:text-accent-foreground"}`}
+                className={`flex w-full items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs transition-all ${
+                  activePath === "/" ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                }`}
                 onClick={() => onNavigate("/")}
                 title="Document Tree"
               >
@@ -279,7 +276,9 @@ function Sidebar({
               </button>
               <button
                 type="button"
-                className={`flex w-full items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs transition-all ${activePath === "/merge-queue" ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-accent hover:text-accent-foreground"}`}
+                className={`flex w-full items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs transition-all ${
+                  activePath === "/merge-queue" ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                }`}
                 onClick={() => onNavigate("/merge-queue")}
                 title="Merge Queue"
               >
@@ -303,7 +302,7 @@ function Sidebar({
           </div>
         </SidebarGroup>
 
-        <SidebarGroup>
+        <SidebarGroup className="py-0">
           {isIconCollapsed ? (
             <div className="flex flex-col items-center gap-1 px-1">
               {rootDocuments.length === 0 ? (
@@ -322,7 +321,11 @@ function Sidebar({
                           onSelectSchema(document.schemaId);
                         }}
                         title={document.label}
-                        className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-semibold uppercase transition ${isActive ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground hover:bg-accent"}`}
+                        className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-semibold uppercase transition ${
+                          isActive
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-background text-foreground hover:bg-accent"
+                        }`}
                       >
                         {document.label.slice(0, 1) || "?"}
                       </button>
@@ -351,11 +354,13 @@ function Sidebar({
             </div>
           ) : (
             <>
-              {renderAddMenu("tree-start")}
               {rootDocuments.length === 0 ? (
-                <p className="px-2 py-4 text-xs text-muted-foreground">No matching documents.</p>
+                <p className="px-2 py-2 text-xs text-muted-foreground">No matching documents.</p>
               ) : (
-                <div className="space-y-1 px-1">{rootDocuments.map((doc) => renderDocumentNode(doc))}</div>
+                <div className="space-y-0.5 px-1">
+                  {rootDocuments.map((doc) => renderDocumentNode(doc))}
+                  {renderAddMenu("tree-root")}
+                </div>
               )}
             </>
           )}
@@ -379,7 +384,7 @@ function Sidebar({
               <SelectTrigger className="h-auto min-h-0 flex-1 border-0 bg-transparent px-0 py-0 text-left shadow-none hover:bg-transparent focus-visible:ring-0">
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Workspace</p>
-                  <span data-slot="select-value" className="flex flex-1 text-left truncate text-xs text-foreground">
+                  <span data-slot="select-value" className="flex flex-1 truncate text-left text-xs text-foreground">
                     {activeWorkspace?.name ?? "My Workspace"}
                   </span>
                 </div>

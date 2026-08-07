@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -202,6 +202,9 @@ function Capture({
   getExistingLinkedDocuments,
   onSubmit,
 }: CaptureProps) {
+  const prevInitialValuesRef = useRef(initialValues)
+  const prevFieldsRef = useRef(fields)
+
   const defaultValues = useMemo(() => {
     return { ...buildDefaultValues(fields), ...(initialValues ?? {}) }
   }, [fields, initialValues])
@@ -215,7 +218,14 @@ function Capture({
   })
 
   useEffect(() => {
-    form.reset({ ...buildDefaultValues(fields), ...(initialValues ?? {}) })
+    const initialValuesChanged = JSON.stringify(initialValues) !== JSON.stringify(prevInitialValuesRef.current)
+    const fieldsChanged = JSON.stringify(fields) !== JSON.stringify(prevFieldsRef.current)
+
+    if (initialValuesChanged || fieldsChanged) {
+      prevInitialValuesRef.current = initialValues
+      prevFieldsRef.current = fields
+      form.reset({ ...buildDefaultValues(fields), ...(initialValues ?? {}) })
+    }
   }, [fields, form, initialValues])
 
   useEffect(() => {
