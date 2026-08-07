@@ -55,7 +55,6 @@ interface ContextMenuState {
  * Clicking the button reveals the vertical stack of phantom creation nodes inline.
  */
 function InlineGap({
-  gapId,
   slots,
   isExpanded,
   onToggleExpand,
@@ -63,7 +62,6 @@ function InlineGap({
   isMobile,
   setOpenMobile,
 }: {
-  gapId: string;
   slots: InsertSlot[];
   isExpanded: boolean;
   onToggleExpand: () => void;
@@ -129,7 +127,7 @@ function InlineGap({
   return (
     <div className="group/gap relative my-0.5 flex h-3 cursor-pointer items-center justify-center">
       {/* Subtle line indicator on hover */}
-      <div className="absolute inset-x-2 h-[1px] bg-primary/0 transition-colors group-hover/gap:bg-primary/20" />
+      <div className="absolute inset-x-2 h-px bg-primary/0 transition-colors group-hover/gap:bg-primary/20" />
 
       {/* Discrete hover add trigger (does not shift document layout) */}
       <button
@@ -482,7 +480,6 @@ function Sidebar({
 
         {/* Fixed-Height Hover Trigger Gap / Click-Expanded Inline Menu */}
         <InlineGap
-          gapId={gapId}
           slots={gapSlots}
           isExpanded={expandedGapId === gapId}
           onToggleExpand={() => setExpandedGapId(expandedGapId === gapId ? null : gapId)}
@@ -670,7 +667,6 @@ function Sidebar({
                   {/* Inline gap at top of tree */}
                   {rootSchemas.length > 0 && (
                     <InlineGap
-                      gapId="gap-root-top"
                       slots={rootSchemas.map((s) => ({
                         key: `top:${s.id}`,
                         schema: s,
