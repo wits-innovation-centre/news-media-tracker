@@ -87,6 +87,13 @@ const dbWorkerAPI = {
           synced_at INTEGER
         );
 
+        CREATE TABLE IF NOT EXISTS schema_metadata (
+          schema_id TEXT NOT NULL,
+          workspace_id TEXT NOT NULL DEFAULT 'default',
+          metadata TEXT NOT NULL,
+          PRIMARY KEY (schema_id, workspace_id)
+        );
+
         CREATE TABLE IF NOT EXISTS schema_groups (
           id TEXT PRIMARY KEY,
           workspace_id TEXT NOT NULL DEFAULT 'default',
