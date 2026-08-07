@@ -24,6 +24,14 @@ interface SidebarProps {
   onDeleteDocument: (documentId: string) => void;
 }
 
+interface AddOption {
+  schema: DocumentSchema;
+  parentId?: string;
+  parentLabel?: string;
+  badgeLabel: string;
+  depth: number;
+}
+
 function Sidebar({
   footerContent,
   schemas,
@@ -57,20 +65,8 @@ function Sidebar({
 
   const rootSchemas = useMemo(() => schemas.filter((s) => !s.parentSchemaId), [schemas]);
 
-  const getChildSchemaOptions = (parentSchemaId: string) => {
-    return schemas.filter((schema) => schema.parentSchemaId === parentSchemaId);
-  };
-
   const toggleAddMenu = (anchorId: string) => {
     setMenuOpenAnchor((prev) => (prev === anchorId ? null : anchorId));
-  };
-
-  const getAvailableSchemasForAnchor = (parentDocument?: DocumentNode) => {
-    if (!parentDocument) {
-      return rootSchemas;
-    }
-
-    return getChildSchemaOptions(parentDocument.schemaId);
   };
 
   const documentsById = useMemo(() => {
@@ -120,29 +116,89 @@ function Sidebar({
     return workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   }, [activeWorkspaceId, workspaces]);
 
+  /**
+   * Generates hierarchical add options ordered top-down from Root to deepest descendant.
+   */
+  const getAddOptionsForNode = (targetDocument?: DocumentNode): AddOption[] => {
+    const options: AddOption[] = [];
+    const seenKeys = new Set<string>();
+
+    // Build ancestor chain from root down to targetDocument
+    const chain: DocumentNode[] = [];
+    let curr: DocumentNode | undefined = targetDocument;
+    while (curr) {
+      chain.unshift(curr);
+      curr = curr.parentId ? documentsById.get(curr.parentId) : undefined;
+    }
+
+    // Level 0: Root schemas
+    for (const schema of rootSchemas) {
+      const key = `${schema.id}:root`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        options.push({
+          schema,
+          depth: 0,
+          badgeLabel: "Root",
+        });
+      }
+    }
+
+    // Nested levels down through ancestor chain
+    chain.forEach((doc, idx) => {
+      const childSchemas = schemas.filter((s) => s.parentSchemaId === doc.schemaId);
+      const depth = idx + 1;
+
+      for (const schema of childSchemas) {
+        const key = `${schema.id}:${doc.id}`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          options.push({
+            schema,
+            parentId: doc.id,
+            parentLabel: doc.label,
+            badgeLabel: `under ${doc.label}`,
+            depth,
+          });
+        }
+      }
+    });
+
+    return options;
+  };
+
   const renderAddMenu = (anchorId: string, parentDocument?: DocumentNode, depth = 0) => {
-    const options = getAvailableSchemasForAnchor(parentDocument);
+    const options = getAddOptionsForNode(parentDocument);
     if (options.length === 0) return null;
 
     const isOpen = menuOpenAnchor === anchorId;
 
     return (
-      <div className="group relative my-0.5 flex justify-center" style={parentDocument ? { marginLeft: `${depth * 14}px` } : undefined}>
+      <div
+        className="relative my-0.5 flex justify-center"
+        style={parentDocument ? { marginLeft: `${depth * 14}px` } : undefined}
+      >
         {isOpen ? (
-          <div className="absolute left-1/2 top-full z-20 mt-1 min-w-40 -translate-x-1/2 rounded-md border border-border bg-popover p-1 shadow-lg">
-            {options.map((schema) => (
+          <div className="absolute left-1/2 top-full z-20 mt-1 min-w-52 -translate-x-1/2 rounded-md border border-border bg-popover p-1 shadow-lg">
+            {options.map((opt) => (
               <button
                 type="button"
-                key={`${anchorId}-${schema.id}`}
-                className="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs text-popover-foreground hover:bg-accent"
+                key={`${anchorId}-${opt.schema.id}-${opt.parentId ?? "root"}`}
+                style={{ paddingLeft: `${opt.depth * 10 + 8}px` }}
+                className="flex w-full items-center justify-between gap-2 rounded py-1 pr-2 text-left text-xs text-popover-foreground hover:bg-accent"
                 onClick={() => {
-                  onCreateDocument(schema, parentDocument?.id);
+                  onCreateDocument(opt.schema, opt.parentId);
                   setMenuOpenAnchor(null);
                 }}
               >
-                <span className="capitalize">{schema.name}</span>
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {parentDocument ? "child" : "root"}
+                <div className="flex min-w-0 items-center gap-1.5">
+                  {opt.depth > 0 && (
+                    <span className="select-none text-[10px] text-muted-foreground/60">└</span>
+                  )}
+                  <span className="truncate font-medium capitalize">{opt.schema.name}</span>
+                </div>
+                <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {opt.badgeLabel}
                 </span>
               </button>
             ))}
@@ -152,8 +208,10 @@ function Sidebar({
         <button
           type="button"
           onClick={() => toggleAddMenu(anchorId)}
-          className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-muted-foreground opacity-0 transition-opacity hover:border-primary hover:text-foreground group-hover:opacity-100"
-          title={parentDocument ? `Add document under ${parentDocument.label}` : "Add top-level document"}
+          className={`inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-muted-foreground transition-opacity hover:border-primary hover:text-foreground hover:opacity-100 ${
+            isOpen ? "opacity-100" : "opacity-0"
+          }`}
+          title="Add document"
         >
           <Plus className="h-3 w-3" />
           Add
@@ -169,6 +227,8 @@ function Sidebar({
     const canExpand = children.length > 0;
     const isCollapsed = !!collapsedNodes[document.id];
     const isActive = activeDocumentId === document.id;
+
+    const showChildren = canExpand && !isCollapsed;
 
     return (
       <Fragment key={document.id}>
@@ -218,9 +278,10 @@ function Sidebar({
           </div>
         </div>
 
-        {!isCollapsed && children.map((child) => renderDocumentNode(child, depth + 1))}
+        {showChildren && children.map((child) => renderDocumentNode(child, depth + 1))}
 
-        {!isCollapsed && renderAddMenu(`after-${document.id}`, document, depth + 1)}
+        {/* Render exactly one unified add menu per terminal slot */}
+        {!showChildren && renderAddMenu(`after-${document.id}`, document, depth)}
       </Fragment>
     );
   };
@@ -354,11 +415,13 @@ function Sidebar({
           ) : (
             <>
               {rootDocuments.length === 0 ? (
-                <p className="px-2 py-2 text-xs text-muted-foreground">No matching documents.</p>
+                <div className="space-y-1">
+                  <p className="px-2 py-2 text-xs text-muted-foreground">No matching documents.</p>
+                  {renderAddMenu("tree-root")}
+                </div>
               ) : (
                 <div className="space-y-0.5 px-1">
                   {rootDocuments.map((doc) => renderDocumentNode(doc))}
-                  {renderAddMenu("tree-root")}
                 </div>
               )}
             </>
