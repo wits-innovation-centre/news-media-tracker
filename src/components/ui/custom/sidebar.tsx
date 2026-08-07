@@ -31,6 +31,98 @@ interface InsertSlot {
   depth: number;
 }
 
+/**
+ * Interactive horizontal insertion bar that selects schema & depth based on mouse X position.
+ */
+function HorizontalInsertZone({
+  slots,
+  onCreateDocument,
+  isMobile,
+  setOpenMobile,
+}: {
+  slots: InsertSlot[];
+  onCreateDocument: (schema: DocumentSchema, parentId?: string) => void;
+  isMobile?: boolean;
+  setOpenMobile?: (open: boolean) => void;
+}) {
+  const [activeSlotIndex, setActiveSlotIndex] = useState<number>(0);
+  const zoneRef = useRef<HTMLDivElement>(null);
+
+  if (slots.length === 0) return null;
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!zoneRef.current) return;
+    const rect = zoneRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+
+    // Estimate indent depth based on horizontal cursor position (~20px per indent level)
+    const INDENT_STEP = 20;
+    const targetDepth = Math.max(0, Math.floor(mouseX / INDENT_STEP));
+
+    // Find the slot with depth closest to the cursor position
+    let closestIndex = 0;
+    let minDiff = Infinity;
+
+    slots.forEach((slot, index) => {
+      const diff = Math.abs(slot.depth - targetDepth);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIndex = index;
+      }
+    });
+
+    if (closestIndex !== activeSlotIndex) {
+      setActiveSlotIndex(closestIndex);
+    }
+  };
+
+  const activeSlot = slots[activeSlotIndex] || slots[0];
+  const SchemaIcon = resolveIcon(activeSlot.schema.icon);
+
+  return (
+    <div
+      ref={zoneRef}
+      onMouseMove={handleMouseMove}
+      className="group/insert relative my-0.5 h-7 cursor-pointer rounded transition-all"
+    >
+      {/* Subtle guide line across the insertion gap */}
+      <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 border-t border-dashed border-primary/25 opacity-0 group-hover/insert:opacity-100 pointer-events-none" />
+
+      {/* Active hierarchy guide indicator line */}
+      <div
+        className="absolute top-1 bottom-1 border-l-2 border-dashed border-primary/50 opacity-0 group-hover/insert:opacity-100 transition-all pointer-events-none"
+        style={{ left: `${activeSlot.depth * 16 + 8}px` }}
+      />
+
+      {/* Single dynamic phantom button that tracks cursor X position */}
+      <div className="relative h-full flex items-center opacity-0 group-hover/insert:opacity-100 transition-opacity duration-100">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCreateDocument(activeSlot.schema, activeSlot.parentId);
+            if (isMobile && setOpenMobile) {
+              setOpenMobile(false);
+            }
+          }}
+          style={{ marginLeft: `${activeSlot.depth * 16}px` }}
+          className="flex items-center gap-1.5 rounded-md border border-dashed border-primary bg-primary/10 hover:bg-primary/25 hover:border-primary px-2 py-1 text-xs font-medium text-primary shadow-xs transition-all duration-75 focus-visible:outline-none"
+          title={`Click to create new ${activeSlot.schema.name}`}
+        >
+          <Plus className="h-3 w-3 shrink-0" />
+          <SchemaIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
+          <span className="truncate text-[11px] font-medium">
+            New {activeSlot.schema.name}...
+          </span>
+          <span className="ml-1 rounded bg-primary/20 px-1 py-0.2 text-[9px] font-semibold uppercase tracking-wider text-primary">
+            {activeSlot.depth === 0 ? "Root" : `Lvl ${activeSlot.depth}`}
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Sidebar({
   footerContent,
   schemas,
@@ -161,55 +253,16 @@ function Sidebar({
     const slots: InsertSlot[] = [];
     const seenKeys = new Set<string>();
 
-    // 1. Child Slot (Level docDepth + 1)
-    const childSchemas = schemas.filter((s) => s.parentSchemaId === doc.schemaId);
-    for (const schema of childSchemas) {
-      const key = `child:${schema.id}:${doc.id}`;
+    // 1. Root Level Slots (Depth 0)
+    for (const schema of rootSchemas) {
+      const key = `root:${schema.id}`;
       if (!seenKeys.has(key)) {
         seenKeys.add(key);
-        slots.push({
-          key,
-          schema,
-          parentId: doc.id,
-          depth: docDepth + 1,
-        });
+        slots.push({ key, schema, parentId: undefined, depth: 0 });
       }
     }
 
-    // 2. Sibling Slot (Level docDepth)
-    if (doc.parentId) {
-      const parentDoc = documentsById.get(doc.parentId);
-      if (parentDoc) {
-        const siblingSchemas = schemas.filter((s) => s.parentSchemaId === parentDoc.schemaId);
-        for (const schema of siblingSchemas) {
-          const key = `sibling:${schema.id}:${doc.parentId}`;
-          if (!seenKeys.has(key)) {
-            seenKeys.add(key);
-            slots.push({
-              key,
-              schema,
-              parentId: doc.parentId,
-              depth: docDepth,
-            });
-          }
-        }
-      }
-    } else {
-      for (const schema of rootSchemas) {
-        const key = `root:${schema.id}`;
-        if (!seenKeys.has(key)) {
-          seenKeys.add(key);
-          slots.push({
-            key,
-            schema,
-            parentId: undefined,
-            depth: 0,
-          });
-        }
-      }
-    }
-
-    // 3. Ancestor / Root Slots (Level < docDepth)
+    // 2. Ancestor Slots (Depth < docDepth)
     let currParentId = doc.parentId;
     while (currParentId) {
       const currDoc = documentsById.get(currParentId);
@@ -226,26 +279,8 @@ function Sidebar({
             const key = `ancestor:${schema.id}:${ancestorParentId}`;
             if (!seenKeys.has(key)) {
               seenKeys.add(key);
-              slots.push({
-                key,
-                schema,
-                parentId: ancestorParentId,
-                depth: ancestorDepth,
-              });
+              slots.push({ key, schema, parentId: ancestorParentId, depth: ancestorDepth });
             }
-          }
-        }
-      } else {
-        for (const schema of rootSchemas) {
-          const key = `root-ancestor:${schema.id}`;
-          if (!seenKeys.has(key)) {
-            seenKeys.add(key);
-            slots.push({
-              key,
-              schema,
-              parentId: undefined,
-              depth: 0,
-            });
           }
         }
       }
@@ -253,48 +288,33 @@ function Sidebar({
       currParentId = currDoc.parentId;
     }
 
-    return slots.sort((a, b) => b.depth - a.depth);
-  };
+    // 3. Sibling Slot (Depth = docDepth)
+    if (doc.parentId) {
+      const parentDoc = documentsById.get(doc.parentId);
+      if (parentDoc) {
+        const siblingSchemas = schemas.filter((s) => s.parentSchemaId === parentDoc.schemaId);
+        for (const schema of siblingSchemas) {
+          const key = `sibling:${schema.id}:${doc.parentId}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            slots.push({ key, schema, parentId: doc.parentId, depth: docDepth });
+          }
+        }
+      }
+    }
 
-  const renderInsertZone = (doc: DocumentNode, docDepth: number) => {
-    const slots = getInsertSlotsForNode(doc, docDepth);
-    if (slots.length === 0) return null;
+    // 4. Child Slot (Depth = docDepth + 1)
+    const childSchemas = schemas.filter((s) => s.parentSchemaId === doc.schemaId);
+    for (const schema of childSchemas) {
+      const key = `child:${schema.id}:${doc.id}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        slots.push({ key, schema, parentId: doc.id, depth: docDepth + 1 });
+      }
+    }
 
-    return (
-      <div className="group/insert relative my-0.5 min-h-2 py-0.5 transition-all">
-        <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 border-t border-dashed border-primary/20 opacity-0 transition-opacity group-hover/insert:opacity-100 pointer-events-none" />
-        <div className="relative flex flex-col gap-1 opacity-0 transition-all duration-150 group-hover/insert:opacity-100">
-          {slots.map((slot) => {
-            const SchemaIcon = resolveIcon(slot.schema.icon);
-            return (
-              <button
-                key={slot.key}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCreateDocument(slot.schema, slot.parentId);
-                  if (isMobile) setOpenMobile(false);
-                }}
-                style={{ marginLeft: `${slot.depth * 14}px` }}
-                className="group/slot flex items-center gap-1.5 rounded-md border border-dashed border-primary/60 bg-primary/5 px-2 py-1 text-xs text-primary transition-all hover:border-primary hover:bg-primary/15 hover:shadow-xs focus-visible:outline-none"
-                title={`Create new ${slot.schema.name}`}
-              >
-                <Plus className="h-3 w-3 shrink-0 opacity-70 group-hover/slot:opacity-100" />
-                <SchemaIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
-                <span className="truncate text-[11px] font-medium">
-                  New {slot.schema.name}...
-                </span>
-                {slot.depth === 0 && (
-                  <span className="ml-auto text-[9px] uppercase tracking-wider text-primary/60">
-                    Root
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
+    // Sort left to right by depth (Depth 0 -> Depth N)
+    return slots.sort((a, b) => a.depth - b.depth);
   };
 
   const renderDocumentNode = (document: DocumentNode, depth = 0) => {
@@ -306,10 +326,11 @@ function Sidebar({
     const isActive = activeDocumentId === document.id;
 
     const showChildren = canExpand && !isCollapsed;
+    const insertSlots = getInsertSlotsForNode(document, depth);
 
     return (
       <Fragment key={document.id}>
-        <div className="group my-1" style={{ marginLeft: `${depth * 14}px` }}>
+        <div className="group my-1" style={{ marginLeft: `${depth * 16}px` }}>
           <div
             onClick={() => handleDocumentClick(document.id, document.schemaId)}
             className={`relative flex items-center justify-between rounded-md px-2 py-1.5 text-xs transition-all ${
@@ -351,7 +372,14 @@ function Sidebar({
           </div>
         </div>
 
-        {renderInsertZone(document, depth)}
+        {/* Horizontal Cursor Insertion Zone directly below row */}
+        <HorizontalInsertZone
+          slots={insertSlots}
+          onCreateDocument={onCreateDocument}
+          isMobile={isMobile}
+          setOpenMobile={setOpenMobile}
+        />
+
         {showChildren && children.map((child) => renderDocumentNode(child, depth + 1))}
       </Fragment>
     );
