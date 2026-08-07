@@ -53,6 +53,7 @@ function Sidebar({
   const [searchQuery, setSearchQuery] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
   const [menuOpenAnchor, setMenuOpenAnchor] = useState<string | null>(null);
+  const [highlightedDocId, setHighlightedDocId] = useState<string | null>(null);
 
   const toggleCollapse = (id: string, e: MouseEvent) => {
     e.stopPropagation();
@@ -66,7 +67,13 @@ function Sidebar({
   const rootSchemas = useMemo(() => schemas.filter((s) => !s.parentSchemaId), [schemas]);
 
   const toggleAddMenu = (anchorId: string) => {
-    setMenuOpenAnchor((prev) => (prev === anchorId ? null : anchorId));
+    setMenuOpenAnchor((prev) => {
+      if (prev === anchorId) {
+        setHighlightedDocId(null);
+        return null;
+      }
+      return anchorId;
+    });
   };
 
   const documentsById = useMemo(() => {
@@ -147,6 +154,8 @@ function Sidebar({
     // Nested levels down through ancestor chain
     chain.forEach((doc, idx) => {
       const childSchemas = schemas.filter((s) => s.parentSchemaId === doc.schemaId);
+      const parentSchema = schemaById.get(doc.schemaId);
+      const parentTemplateName = parentSchema?.name ?? "Template";
       const depth = idx + 1;
 
       for (const schema of childSchemas) {
@@ -157,7 +166,7 @@ function Sidebar({
             schema,
             parentId: doc.id,
             parentLabel: doc.label,
-            badgeLabel: `under ${doc.label}`,
+            badgeLabel: `under ${parentTemplateName}`,
             depth,
           });
         }
@@ -175,20 +184,23 @@ function Sidebar({
 
     return (
       <div
-        className="relative my-0.5 flex justify-center"
+        className="group/add relative z-10 -my-1 flex h-2 items-center justify-center"
         style={parentDocument ? { marginLeft: `${depth * 14}px` } : undefined}
       >
         {isOpen ? (
-          <div className="absolute left-1/2 top-full z-20 mt-1 min-w-52 -translate-x-1/2 rounded-md border border-border bg-popover p-1 shadow-lg">
+          <div className="absolute left-1/2 top-full z-30 mt-1 min-w-52 -translate-x-1/2 rounded-md border border-border bg-popover p-1 shadow-lg">
             {options.map((opt) => (
               <button
                 type="button"
                 key={`${anchorId}-${opt.schema.id}-${opt.parentId ?? "root"}`}
                 style={{ paddingLeft: `${opt.depth * 10 + 8}px` }}
                 className="flex w-full items-center justify-between gap-2 rounded py-1 pr-2 text-left text-xs text-popover-foreground hover:bg-accent"
+                onMouseEnter={() => setHighlightedDocId(opt.parentId ?? null)}
+                onMouseLeave={() => setHighlightedDocId(null)}
                 onClick={() => {
                   onCreateDocument(opt.schema, opt.parentId);
                   setMenuOpenAnchor(null);
+                  setHighlightedDocId(null);
                 }}
               >
                 <div className="flex min-w-0 items-center gap-1.5">
@@ -208,12 +220,14 @@ function Sidebar({
         <button
           type="button"
           onClick={() => toggleAddMenu(anchorId)}
-          className={`inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-muted-foreground transition-opacity hover:border-primary hover:text-foreground hover:opacity-100 ${
-            isOpen ? "opacity-100" : "opacity-0"
+          className={`inline-flex items-center gap-0.5 rounded-full border border-border bg-background px-1.5 py-0 text-[10px] font-medium text-muted-foreground shadow-xs transition-all hover:border-primary hover:text-foreground ${
+            isOpen
+              ? "opacity-100 scale-100"
+              : "opacity-0 group-hover/add:opacity-100 scale-95 hover:scale-100"
           }`}
           title="Add document"
         >
-          <Plus className="h-3 w-3" />
+          <Plus className="h-2.5 w-2.5" />
           Add
         </button>
       </div>
@@ -227,12 +241,13 @@ function Sidebar({
     const canExpand = children.length > 0;
     const isCollapsed = !!collapsedNodes[document.id];
     const isActive = activeDocumentId === document.id;
+    const isHighlighted = highlightedDocId === document.id;
 
     const showChildren = canExpand && !isCollapsed;
 
     return (
       <Fragment key={document.id}>
-        <div className="group" style={{ marginLeft: `${depth * 14}px` }}>
+        <div className="group my-1" style={{ marginLeft: `${depth * 14}px` }}>
           <div
             onClick={() => {
               onNavigate("/");
@@ -243,6 +258,10 @@ function Sidebar({
               isActive
                 ? "bg-primary text-primary-foreground"
                 : "text-foreground hover:bg-accent hover:text-accent-foreground"
+            } ${
+              isHighlighted
+                ? "ring-2 ring-primary ring-offset-1 ring-offset-background z-10"
+                : ""
             }`}
           >
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -278,10 +297,10 @@ function Sidebar({
           </div>
         </div>
 
-        {showChildren && children.map((child) => renderDocumentNode(child, depth + 1))}
+        {/* Render add menu handle between every single document node */}
+        {renderAddMenu(`after-${document.id}`, document, depth)}
 
-        {/* Render exactly one unified add menu per terminal slot */}
-        {!showChildren && renderAddMenu(`after-${document.id}`, document, depth)}
+        {showChildren && children.map((child) => renderDocumentNode(child, depth + 1))}
       </Fragment>
     );
   };
@@ -420,7 +439,7 @@ function Sidebar({
                   {renderAddMenu("tree-root")}
                 </div>
               ) : (
-                <div className="space-y-0.5 px-1">
+                <div className="px-1">
                   {rootDocuments.map((doc) => renderDocumentNode(doc))}
                 </div>
               )}
