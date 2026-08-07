@@ -1,5 +1,4 @@
-import { Fragment, useMemo, useState, type MouseEvent, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { Fragment, useMemo, useState, useRef, type MouseEvent, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, FolderTree, GitMerge, PanelLeftClose, PanelLeftOpen, Plus, Search, X } from "lucide-react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
@@ -25,11 +24,10 @@ interface SidebarProps {
   onDeleteDocument: (documentId: string) => void;
 }
 
-interface AddOption {
+interface InsertSlot {
+  key: string;
   schema: DocumentSchema;
   parentId?: string;
-  parentLabel?: string;
-  badgeLabel: string;
   depth: number;
 }
 
@@ -49,13 +47,47 @@ function Sidebar({
   onCreateDocument,
   onDeleteDocument,
 }: SidebarProps) {
-  const { state } = useSidebar();
+  const { state, setOpenMobile, isMobile } = useSidebar();
   const isIconCollapsed = state === "collapsed";
   const [searchQuery, setSearchQuery] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
-  const [menuOpenAnchor, setMenuOpenAnchor] = useState<string | null>(null);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
-  const [hoveredAddOption, setHoveredAddOption] = useState<AddOption | null>(null);
+
+  // Resizable sidebar width handling
+  const [sidebarWidth, setSidebarWidth] = useState<number>(260);
+  const isResizingRef = useRef(false);
+
+  const handleStartResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const handleMouseMove = (moveEvent: globalThis.MouseEvent) => {
+      if (!isResizingRef.current) return;
+      const newWidth = Math.min(Math.max(moveEvent.clientX, 180), 480);
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      isResizingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const handleDocumentClick = (docId: string, schemaId: string) => {
+    onNavigate("/");
+    onSelectDocument(docId, schemaId);
+    onSelectSchema(schemaId);
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   const toggleCollapse = (id: string, e: MouseEvent) => {
     e.stopPropagation();
@@ -67,29 +99,6 @@ function Sidebar({
   }, [schemas]);
 
   const rootSchemas = useMemo(() => schemas.filter((s) => !s.parentSchemaId), [schemas]);
-
-  const closeAddMenu = () => {
-    setMenuOpenAnchor(null);
-    setMenuPosition(null);
-    setHoveredAddOption(null);
-  };
-
-  const toggleAddMenu = (anchorId: string, event?: React.MouseEvent<HTMLButtonElement>) => {
-    if (menuOpenAnchor === anchorId) {
-      closeAddMenu();
-      return;
-    }
-
-    if (event?.currentTarget) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      setMenuPosition({
-        top: rect.bottom + 48, // Offset by 48px to reveal the phantom preview node underneath
-        left: rect.left + rect.width / 2,
-      });
-    }
-
-    setMenuOpenAnchor(anchorId);
-  };
 
   const documentsById = useMemo(() => {
     return new Map(documents.map((doc) => [doc.id, doc]));
@@ -138,143 +147,152 @@ function Sidebar({
     return workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   }, [activeWorkspaceId, workspaces]);
 
-  /**
-   * Generates hierarchical add options ordered top-down from Root to deepest descendant.
-   */
-  const getAddOptionsForNode = (targetDocument?: DocumentNode): AddOption[] => {
-    const options: AddOption[] = [];
+  const getDocDepth = (docId: string): number => {
+    let depth = 0;
+    let curr = documentsById.get(docId);
+    while (curr?.parentId) {
+      depth++;
+      curr = documentsById.get(curr.parentId);
+    }
+    return depth;
+  };
+
+  const getInsertSlotsForNode = (doc: DocumentNode, docDepth: number): InsertSlot[] => {
+    const slots: InsertSlot[] = [];
     const seenKeys = new Set<string>();
 
-    // Build ancestor chain from root down to targetDocument
-    const chain: DocumentNode[] = [];
-    let curr: DocumentNode | undefined = targetDocument;
-    while (curr) {
-      chain.unshift(curr);
-      curr = curr.parentId ? documentsById.get(curr.parentId) : undefined;
-    }
-
-    // Level 0: Root schemas
-    for (const schema of rootSchemas) {
-      const key = `${schema.id}:root`;
+    // 1. Child Slot (Level docDepth + 1)
+    const childSchemas = schemas.filter((s) => s.parentSchemaId === doc.schemaId);
+    for (const schema of childSchemas) {
+      const key = `child:${schema.id}:${doc.id}`;
       if (!seenKeys.has(key)) {
         seenKeys.add(key);
-        options.push({
+        slots.push({
+          key,
           schema,
-          depth: 0,
-          badgeLabel: "Root",
+          parentId: doc.id,
+          depth: docDepth + 1,
         });
       }
     }
 
-    // Nested levels down through ancestor chain
-    chain.forEach((doc, idx) => {
-      const childSchemas = schemas.filter((s) => s.parentSchemaId === doc.schemaId);
-      const parentSchema = schemaById.get(doc.schemaId);
-      const parentTemplateName = parentSchema?.name ?? "Template";
-      const depth = idx + 1;
-
-      for (const schema of childSchemas) {
-        const key = `${schema.id}:${doc.id}`;
+    // 2. Sibling Slot (Level docDepth)
+    if (doc.parentId) {
+      const parentDoc = documentsById.get(doc.parentId);
+      if (parentDoc) {
+        const siblingSchemas = schemas.filter((s) => s.parentSchemaId === parentDoc.schemaId);
+        for (const schema of siblingSchemas) {
+          const key = `sibling:${schema.id}:${doc.parentId}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            slots.push({
+              key,
+              schema,
+              parentId: doc.parentId,
+              depth: docDepth,
+            });
+          }
+        }
+      }
+    } else {
+      for (const schema of rootSchemas) {
+        const key = `root:${schema.id}`;
         if (!seenKeys.has(key)) {
           seenKeys.add(key);
-          options.push({
+          slots.push({
+            key,
             schema,
-            parentId: doc.id,
-            parentLabel: doc.label,
-            badgeLabel: `under ${parentTemplateName}`,
-            depth,
+            parentId: undefined,
+            depth: 0,
           });
         }
       }
-    });
+    }
 
-    return options;
+    // 3. Ancestor / Root Slots (Level < docDepth)
+    let currParentId = doc.parentId;
+    while (currParentId) {
+      const currDoc = documentsById.get(currParentId);
+      if (!currDoc) break;
+
+      const ancestorParentId = currDoc.parentId;
+      const ancestorDepth = ancestorParentId ? getDocDepth(ancestorParentId) + 1 : 0;
+
+      if (ancestorParentId) {
+        const ancestorParentDoc = documentsById.get(ancestorParentId);
+        if (ancestorParentDoc) {
+          const ancestorSchemas = schemas.filter((s) => s.parentSchemaId === ancestorParentDoc.schemaId);
+          for (const schema of ancestorSchemas) {
+            const key = `ancestor:${schema.id}:${ancestorParentId}`;
+            if (!seenKeys.has(key)) {
+              seenKeys.add(key);
+              slots.push({
+                key,
+                schema,
+                parentId: ancestorParentId,
+                depth: ancestorDepth,
+              });
+            }
+          }
+        }
+      } else {
+        for (const schema of rootSchemas) {
+          const key = `root-ancestor:${schema.id}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            slots.push({
+              key,
+              schema,
+              parentId: undefined,
+              depth: 0,
+            });
+          }
+        }
+      }
+
+      currParentId = currDoc.parentId;
+    }
+
+    return slots.sort((a, b) => b.depth - a.depth);
   };
 
-  const renderPhantomNode = (schema: DocumentSchema, depth: number) => {
-    const SchemaIcon = resolveIcon(schema.icon);
+  const renderInsertZone = (doc: DocumentNode, docDepth: number) => {
+    const slots = getInsertSlotsForNode(doc, docDepth);
+    if (slots.length === 0) return null;
+
     return (
-      <div
-        key="phantom-preview-node"
-        className="my-1 animate-pulse"
-        style={{ marginLeft: `${depth * 14}px` }}
-      >
-        <div className="flex items-center gap-1.5 rounded-md border border-dashed border-primary/70 bg-primary/10 px-2 py-1.5 text-xs font-medium text-primary shadow-xs">
-          <div className="w-4" />
-          <SchemaIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
-          <span className="truncate">New {schema.name}...</span>
+      <div className="group/insert relative my-0.5 min-h-2 py-0.5 transition-all">
+        <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 border-t border-dashed border-primary/20 opacity-0 transition-opacity group-hover/insert:opacity-100 pointer-events-none" />
+        <div className="relative flex flex-col gap-1 opacity-0 transition-all duration-150 group-hover/insert:opacity-100">
+          {slots.map((slot) => {
+            const SchemaIcon = resolveIcon(slot.schema.icon);
+            return (
+              <button
+                key={slot.key}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCreateDocument(slot.schema, slot.parentId);
+                  if (isMobile) setOpenMobile(false);
+                }}
+                style={{ marginLeft: `${slot.depth * 14}px` }}
+                className="group/slot flex items-center gap-1.5 rounded-md border border-dashed border-primary/60 bg-primary/5 px-2 py-1 text-xs text-primary transition-all hover:border-primary hover:bg-primary/15 hover:shadow-xs focus-visible:outline-none"
+                title={`Create new ${slot.schema.name}`}
+              >
+                <Plus className="h-3 w-3 shrink-0 opacity-70 group-hover/slot:opacity-100" />
+                <SchemaIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                <span className="truncate text-[11px] font-medium">
+                  New {slot.schema.name}...
+                </span>
+                {slot.depth === 0 && (
+                  <span className="ml-auto text-[9px] uppercase tracking-wider text-primary/60">
+                    Root
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-      </div>
-    );
-  };
-
-  const renderAddMenu = (anchorId: string, parentDocument?: DocumentNode, depth = 0) => {
-    const options = getAddOptionsForNode(parentDocument);
-    if (options.length === 0) return null;
-
-    const isOpen = menuOpenAnchor === anchorId;
-
-    return (
-      <div
-        className="group/add relative z-10 -my-1 flex h-2 items-center justify-center"
-        style={parentDocument ? { marginLeft: `${depth * 14}px` } : undefined}
-      >
-        {isOpen && menuPosition
-          ? createPortal(
-              <>
-                <div
-                  className="fixed inset-0 z-40 bg-transparent"
-                  onClick={closeAddMenu}
-                />
-                <div
-                  className="fixed z-50 min-w-52 -translate-x-1/2 rounded-md border border-border bg-popover p-1 shadow-lg"
-                  style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
-                >
-                  {options.map((opt) => (
-                    <button
-                      type="button"
-                      key={`${anchorId}-${opt.schema.id}-${opt.parentId ?? "root"}`}
-                      style={{ paddingLeft: `${opt.depth * 10 + 8}px` }}
-                      className="flex w-full items-center justify-between gap-2 rounded py-1 pr-2 text-left text-xs text-popover-foreground hover:bg-accent hover:text-accent-foreground"
-                      onMouseEnter={() => setHoveredAddOption(opt)}
-                      onMouseLeave={() => setHoveredAddOption(null)}
-                      onClick={() => {
-                        onCreateDocument(opt.schema, opt.parentId);
-                        closeAddMenu();
-                      }}
-                    >
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        {opt.depth > 0 && (
-                          <span className="select-none text-[10px] text-muted-foreground/60">└</span>
-                        )}
-                        <span className="truncate font-medium capitalize">{opt.schema.name}</span>
-                      </div>
-                      <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {opt.badgeLabel}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </>,
-              document.body
-            )
-          : null}
-
-        <button
-          type="button"
-          onClick={(e) => toggleAddMenu(anchorId, e)}
-          className={`inline-flex items-center gap-0.5 rounded-full border border-border bg-background px-1.5 py-0 text-[10px] font-medium text-muted-foreground shadow-xs transition-all hover:border-primary hover:text-foreground ${
-            isOpen
-              ? "opacity-100 scale-100"
-              : menuOpenAnchor !== null
-              ? "opacity-0 pointer-events-none"
-              : "opacity-0 group-hover/add:opacity-100 scale-95 hover:scale-100"
-          }`}
-          title="Add document"
-        >
-          <Plus className="h-2.5 w-2.5" />
-          Add
-        </button>
       </div>
     );
   };
@@ -288,17 +306,12 @@ function Sidebar({
     const isActive = activeDocumentId === document.id;
 
     const showChildren = canExpand && !isCollapsed;
-    const isPhantomParent = hoveredAddOption?.parentId === document.id;
 
     return (
       <Fragment key={document.id}>
         <div className="group my-1" style={{ marginLeft: `${depth * 14}px` }}>
           <div
-            onClick={() => {
-              onNavigate("/");
-              onSelectDocument(document.id, document.schemaId);
-              onSelectSchema(document.schemaId);
-            }}
+            onClick={() => handleDocumentClick(document.id, document.schemaId)}
             className={`relative flex items-center justify-between rounded-md px-2 py-1.5 text-xs transition-all ${
               isActive
                 ? "bg-primary text-primary-foreground"
@@ -338,19 +351,17 @@ function Sidebar({
           </div>
         </div>
 
-        {/* Phantom child preview rendered directly under parent when hovering in add menu */}
-        {isPhantomParent && renderPhantomNode(hoveredAddOption.schema, depth + 1)}
-
-        {/* Add menu handle between document rows */}
-        {renderAddMenu(`after-${document.id}`, document, depth)}
-
+        {renderInsertZone(document, depth)}
         {showChildren && children.map((child) => renderDocumentNode(child, depth + 1))}
       </Fragment>
     );
   };
 
   return (
-    <BaseSidebar collapsible="icon">
+    <BaseSidebar
+      collapsible="icon"
+      style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
+    >
       <SidebarHeader className="border-b border-border px-4 py-3 space-y-3">
         <div className={`flex items-center gap-2 ${isIconCollapsed ? "justify-center" : "justify-between"}`}>
           {!isIconCollapsed ? <p className="text-sm font-semibold text-foreground">Vault Explorer</p> : null}
@@ -392,7 +403,10 @@ function Sidebar({
                 className={`flex w-full items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs transition-all ${
                   activePath === "/" ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-accent hover:text-accent-foreground"
                 }`}
-                onClick={() => onNavigate("/")}
+                onClick={() => {
+                  onNavigate("/");
+                  if (isMobile) setOpenMobile(false);
+                }}
                 title="Document Tree"
               >
                 {isIconCollapsed ? <FolderTree className="h-4 w-4" /> : <span>Document Tree</span>}
@@ -402,7 +416,10 @@ function Sidebar({
                 className={`flex w-full items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs transition-all ${
                   activePath === "/merge-queue" ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-accent hover:text-accent-foreground"
                 }`}
-                onClick={() => onNavigate("/merge-queue")}
+                onClick={() => {
+                  onNavigate("/merge-queue");
+                  if (isMobile) setOpenMobile(false);
+                }}
                 title="Merge Queue"
               >
                 {isIconCollapsed ? (
@@ -438,11 +455,7 @@ function Sidebar({
                       <button
                         key={document.id}
                         type="button"
-                        onClick={() => {
-                          onNavigate("/");
-                          onSelectDocument(document.id, document.schemaId);
-                          onSelectSchema(document.schemaId);
-                        }}
+                        onClick={() => handleDocumentClick(document.id, document.schemaId)}
                         title={document.label}
                         className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-semibold uppercase transition ${
                           isActive
@@ -467,6 +480,7 @@ function Sidebar({
                   if (!defaultSchema) return;
                   onCreateDocument(defaultSchema);
                   onNavigate("/");
+                  if (isMobile) setOpenMobile(false);
                 }}
                 disabled={rootSchemas.length === 0}
                 title={rootSchemas[0] ? `Add ${rootSchemas[0].name}` : "No root schema available"}
@@ -478,14 +492,29 @@ function Sidebar({
           ) : (
             <>
               {rootDocuments.length === 0 ? (
-                <div className="space-y-1">
-                  <p className="px-2 py-2 text-xs text-muted-foreground">No matching documents.</p>
-                  {renderAddMenu("tree-root")}
+                <div className="space-y-1 p-2">
+                  <p className="text-xs text-muted-foreground">No matching documents.</p>
+                  {rootSchemas.map((schema) => {
+                    const SchemaIcon = resolveIcon(schema.icon);
+                    return (
+                      <button
+                        key={schema.id}
+                        type="button"
+                        onClick={() => {
+                          onCreateDocument(schema);
+                          if (isMobile) setOpenMobile(false);
+                        }}
+                        className="flex w-full items-center gap-1.5 rounded-md border border-dashed border-primary/60 bg-primary/5 px-2 py-1.5 text-xs text-primary transition hover:bg-primary/15"
+                      >
+                        <Plus className="h-3 w-3 shrink-0" />
+                        <SchemaIcon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="font-medium">New {schema.name}...</span>
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="px-1">
-                  {/* Phantom entry at Root level when hovering a Root template option */}
-                  {hoveredAddOption && !hoveredAddOption.parentId && renderPhantomNode(hoveredAddOption.schema, 0)}
                   {rootDocuments.map((doc) => renderDocumentNode(doc))}
                 </div>
               )}
@@ -529,7 +558,11 @@ function Sidebar({
         )}
       </SidebarFooter>
 
-      <SidebarRail />
+      {/* Interactive Resizing Handle */}
+      <SidebarRail
+        onMouseDown={handleStartResizing}
+        className="hover:bg-primary/30 transition-colors cursor-col-resize active:bg-primary"
+      />
     </BaseSidebar>
   );
 }

@@ -1,6 +1,8 @@
-import { SidebarProvider } from "@/components/ui/sidebar";
+import React from "react";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Sidebar } from "./sidebar";
 import type { DocumentNode, DocumentSchema, WorkspaceRecord } from "@/lib/types";
+import { Menu } from "lucide-react";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -21,6 +23,38 @@ interface LayoutProps {
   onDeleteDocument: (documentId: string) => void;
 }
 
+function MainContent({
+  children,
+  activeDocument,
+}: {
+  children: React.ReactNode;
+  activeDocument?: DocumentNode;
+}) {
+  return (
+    <div className="flex flex-1 flex-col min-w-0 h-full">
+      {/* Mobile-Friendly Top Navigation Header */}
+      <header className="flex md:hidden items-center justify-between border-b border-border bg-background px-3 py-2 text-xs">
+        <div className="flex items-center gap-2 min-w-0">
+          <SidebarTrigger className="h-8 w-8 shrink-0">
+            <Menu className="h-4 w-4" />
+          </SidebarTrigger>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-semibold text-foreground">Vault Explorer</span>
+            {activeDocument && (
+              <span className="text-muted-foreground truncate font-medium">
+                / {activeDocument.label}
+              </span>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Main View Area */}
+      <main className="flex-1 overflow-auto">{children}</main>
+    </div>
+  );
+}
+
 export default function Layout({
   children,
   footerContent,
@@ -39,6 +73,8 @@ export default function Layout({
   onCreateDocument,
   onDeleteDocument,
 }: LayoutProps) {
+  const activeDocument = documents.find((doc) => doc.id === activeDocumentId);
+
   return (
     <SidebarProvider>
       <Sidebar
@@ -58,7 +94,7 @@ export default function Layout({
         onCreateDocument={onCreateDocument}
         onDeleteDocument={onDeleteDocument}
       />
-      <div className="flex-1">{children}</div>
+      <MainContent activeDocument={activeDocument}>{children}</MainContent>
     </SidebarProvider>
   );
 }
