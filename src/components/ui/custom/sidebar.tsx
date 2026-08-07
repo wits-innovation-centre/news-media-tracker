@@ -41,6 +41,7 @@ interface InsertSlot {
   schema: DocumentSchema;
   parentId?: string;
   depth: number;
+  typeLabel: "Child" | "Sibling" | "Ancestor" | "Root";
 }
 
 interface ContextMenuState {
@@ -50,9 +51,10 @@ interface ContextMenuState {
 }
 
 /**
- * Hoverable gap component that expands on hover to display a phantom node button.
+ * Expandable gap that stays minimal until hovered, then reveals a vertical stack
+ * of phantom nodes (Child -> Sibling -> Ancestors).
  */
-function ExpandableGap({
+function ExpandableVerticalGap({
   slots,
   onCreateDocument,
   isMobile,
@@ -63,77 +65,44 @@ function ExpandableGap({
   isMobile?: boolean;
   setOpenMobile?: (open: boolean) => void;
 }) {
-  const [activeSlotIndex, setActiveSlotIndex] = useState<number>(0);
-  const gapRef = useRef<HTMLDivElement>(null);
-
   if (slots.length === 0) return null;
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (slots.length <= 1 || !gapRef.current) return;
-    const rect = gapRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-
-    // Estimate indent depth based on cursor position (~18px per indent level)
-    const targetDepth = Math.max(0, Math.floor(mouseX / 18));
-
-    let closestIndex = 0;
-    let minDiff = Infinity;
-
-    slots.forEach((slot, index) => {
-      const diff = Math.abs(slot.depth - targetDepth);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestIndex = index;
-      }
-    });
-
-    if (closestIndex !== activeSlotIndex) {
-      setActiveSlotIndex(closestIndex);
-    }
-  };
-
-  const activeSlot = slots[activeSlotIndex] || slots[0];
-  const SchemaIcon = resolveIcon(activeSlot.schema.icon);
-
   return (
-    <div
-      ref={gapRef}
-      onMouseMove={handleMouseMove}
-      className="group/gap relative my-0.5 h-1 hover:h-8 transition-[height] duration-200 ease-out flex items-center overflow-hidden cursor-pointer rounded"
-    >
-      {/* Dashed visual insertion line */}
-      <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 border-t border-dashed border-primary/30 opacity-0 group-hover/gap:opacity-100 transition-opacity pointer-events-none" />
+    <div className="group/gap relative my-0.5 cursor-pointer">
+      {/* Minimal default gap line */}
+      <div className="h-1 w-full transition-all group-hover/gap:hidden" />
 
-      {/* Expandable Phantom Button */}
-      <div className="relative w-full flex items-center opacity-0 group-hover/gap:opacity-100 transition-opacity duration-150 px-1">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onCreateDocument(activeSlot.schema, activeSlot.parentId);
-            if (isMobile && setOpenMobile) {
-              setOpenMobile(false);
-            }
-          }}
-          style={{ marginLeft: `${activeSlot.depth * 16}px` }}
-          className="flex items-center gap-1.5 rounded-md border border-dashed border-primary bg-primary/10 hover:bg-primary/20 hover:border-primary px-2 py-1 text-xs font-medium text-primary shadow-xs transition-all focus-visible:outline-none"
-          title={`Click to create new ${activeSlot.schema.name}`}
-        >
-          <Plus className="h-3 w-3 shrink-0" />
-          <SchemaIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
-          <span className="truncate text-[11px] font-medium">
-            New {activeSlot.schema.name}...
-          </span>
-          {activeSlot.depth === 0 ? (
-            <span className="ml-1 rounded bg-primary/20 px-1 py-0.2 text-[9px] font-semibold uppercase tracking-wider text-primary">
-              Root
-            </span>
-          ) : (
-            <span className="ml-1 rounded bg-primary/20 px-1 py-0.2 text-[9px] font-semibold uppercase tracking-wider text-primary">
-              Lvl {activeSlot.depth}
-            </span>
-          )}
-        </button>
+      {/* Expanded Vertical Stack on Hover */}
+      <div className="hidden group-hover/gap:flex flex-col gap-1 py-1 px-1 rounded-md bg-accent/20 border border-dashed border-primary/30 transition-all duration-150 animate-in fade-in-50">
+        {slots.map((slot) => {
+          const SchemaIcon = resolveIcon(slot.schema.icon);
+          return (
+            <div key={slot.key} className="flex items-center">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCreateDocument(slot.schema, slot.parentId);
+                  if (isMobile && setOpenMobile) {
+                    setOpenMobile(false);
+                  }
+                }}
+                style={{ marginLeft: `${slot.depth * 16}px` }}
+                className="flex items-center gap-1.5 rounded-md border border-dashed border-primary/70 bg-primary/10 hover:bg-primary/25 hover:border-primary px-2 py-1 text-xs font-medium text-primary shadow-xs transition-all focus-visible:outline-none"
+                title={`Add ${slot.typeLabel}: ${slot.schema.name}`}
+              >
+                <Plus className="h-3 w-3 shrink-0" />
+                <SchemaIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                <span className="truncate text-[11px] font-medium">
+                  New {slot.schema.name}...
+                </span>
+                <span className="ml-1 rounded bg-primary/20 px-1 py-0.2 text-[9px] font-semibold uppercase tracking-wider text-primary">
+                  {slot.typeLabel}
+                </span>
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -165,7 +134,7 @@ function Sidebar({
   const [sidebarWidth, setSidebarWidth] = useState<number>(260);
   const isResizingRef = useRef(false);
 
-  // Close context menu on global click or escape
+  // Close context menu on click or keypress
   useEffect(() => {
     const handleClose = () => setContextMenu(null);
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -283,123 +252,119 @@ function Sidebar({
   };
 
   /**
-   * Calculates phantom insertion slots for the gap directly below `document`.
+   * Generates vertically stacked insertion options for the gap directly below `document`:
+   * 1. Top of stack: Child options for `document` (Depth + 1)
+   * 2. Middle of stack: Sibling options for `document` (Depth)
+   * 3. Bottom of stack: Ancestor / Root options (if `document` is at the end of a list)
    */
   const getGapSlots = (
     doc: DocumentNode,
     depth: number,
-    isLastInSubtree: boolean,
-    hasChildrenExpanded: boolean
+    isLastInSubtree: boolean
   ): InsertSlot[] => {
     const slots: InsertSlot[] = [];
+    const seenKeys = new Set<string>();
 
-    // 1. If document is expanded and has children, insertion directly below it is a Child
-    if (hasChildrenExpanded) {
-      const childSchemas = schemas.filter((s) => s.parentSchemaId === doc.schemaId);
-      for (const schema of childSchemas) {
+    // 1. ALWAYS offer Child option at top of stack (Depth + 1)
+    const childSchemas = schemas.filter((s) => s.parentSchemaId === doc.schemaId);
+    for (const schema of childSchemas) {
+      const key = `child:${schema.id}:${doc.id}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
         slots.push({
-          key: `child:${schema.id}:${doc.id}`,
+          key,
           schema,
           parentId: doc.id,
           depth: depth + 1,
+          typeLabel: "Child",
         });
       }
-      return slots;
     }
 
-    // 2. If not at the bottom of the subtree, insertion is a Sibling of `doc`
-    if (!isLastInSubtree) {
-      if (doc.parentId) {
-        const parentDoc = documentsById.get(doc.parentId);
-        if (parentDoc) {
-          const siblingSchemas = schemas.filter((s) => s.parentSchemaId === parentDoc.schemaId);
-          for (const schema of siblingSchemas) {
-            slots.push({
-              key: `sibling:${schema.id}:${doc.parentId}`,
-              schema,
-              parentId: doc.parentId,
-              depth,
-            });
-          }
-        }
-      } else {
-        for (const schema of rootSchemas) {
-          slots.push({
-            key: `root:${schema.id}`,
-            schema,
-            parentId: undefined,
-            depth: 0,
-          });
-        }
-      }
-      return slots;
-    }
-
-    // 3. At the bottom of the list / subtree: allow stepping up from child depth down to root
-    // Sibling level
+    // 2. Offer Sibling option (Depth)
     if (doc.parentId) {
       const parentDoc = documentsById.get(doc.parentId);
       if (parentDoc) {
         const siblingSchemas = schemas.filter((s) => s.parentSchemaId === parentDoc.schemaId);
         for (const schema of siblingSchemas) {
-          slots.push({
-            key: `sibling:${schema.id}:${doc.parentId}`,
-            schema,
-            parentId: doc.parentId,
-            depth,
-          });
-        }
-      }
-    }
-
-    // Ancestor / Root levels
-    let currParentId = doc.parentId;
-    while (currParentId) {
-      const currDoc = documentsById.get(currParentId);
-      if (!currDoc) break;
-
-      const ancestorParentId = currDoc.parentId;
-      const ancestorDepth = ancestorParentId ? getDocDepth(ancestorParentId) + 1 : 0;
-
-      if (ancestorParentId) {
-        const ancestorParentDoc = documentsById.get(ancestorParentId);
-        if (ancestorParentDoc) {
-          const ancestorSchemas = schemas.filter((s) => s.parentSchemaId === ancestorParentDoc.schemaId);
-          for (const schema of ancestorSchemas) {
+          const key = `sibling:${schema.id}:${doc.parentId}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
             slots.push({
-              key: `ancestor:${schema.id}:${ancestorParentId}`,
+              key,
               schema,
-              parentId: ancestorParentId,
-              depth: ancestorDepth,
+              parentId: doc.parentId,
+              depth,
+              typeLabel: "Sibling",
             });
           }
         }
-      } else {
-        for (const schema of rootSchemas) {
+      }
+    } else {
+      for (const schema of rootSchemas) {
+        const key = `root-sibling:${schema.id}`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
           slots.push({
-            key: `root-ancestor:${schema.id}`,
+            key,
             schema,
             parentId: undefined,
             depth: 0,
+            typeLabel: "Sibling",
           });
         }
       }
-
-      currParentId = currDoc.parentId;
     }
 
-    if (slots.length === 0) {
-      for (const schema of rootSchemas) {
-        slots.push({
-          key: `root:${schema.id}`,
-          schema,
-          parentId: undefined,
-          depth: 0,
-        });
+    // 3. If at the bottom of a list/subtree, offer Ancestor & Root options (Depth < doc)
+    if (isLastInSubtree) {
+      let currParentId = doc.parentId;
+      while (currParentId) {
+        const currDoc = documentsById.get(currParentId);
+        if (!currDoc) break;
+
+        const ancestorParentId = currDoc.parentId;
+        const ancestorDepth = ancestorParentId ? getDocDepth(ancestorParentId) + 1 : 0;
+
+        if (ancestorParentId) {
+          const ancestorParentDoc = documentsById.get(ancestorParentId);
+          if (ancestorParentDoc) {
+            const ancestorSchemas = schemas.filter((s) => s.parentSchemaId === ancestorParentDoc.schemaId);
+            for (const schema of ancestorSchemas) {
+              const key = `ancestor:${schema.id}:${ancestorParentId}`;
+              if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                slots.push({
+                  key,
+                  schema,
+                  parentId: ancestorParentId,
+                  depth: ancestorDepth,
+                  typeLabel: "Ancestor",
+                });
+              }
+            }
+          }
+        } else {
+          for (const schema of rootSchemas) {
+            const key = `root-ancestor:${schema.id}`;
+            if (!seenKeys.has(key)) {
+              seenKeys.add(key);
+              slots.push({
+                key,
+                schema,
+                parentId: undefined,
+                depth: 0,
+                typeLabel: "Root",
+              });
+            }
+          }
+        }
+
+        currParentId = currDoc.parentId;
       }
     }
 
-    return slots.sort((a, b) => b.depth - a.depth);
+    return slots;
   };
 
   const renderDocumentNode = (
@@ -418,7 +383,7 @@ function Sidebar({
     const showChildren = canExpand && !isCollapsed;
     const isLastInSubtree = isLastSibling && (!showChildren || children.length === 0) && parentIsLast;
 
-    const gapSlots = getGapSlots(document, depth, isLastInSubtree, showChildren);
+    const gapSlots = getGapSlots(document, depth, isLastInSubtree);
 
     return (
       <Fragment key={document.id}>
@@ -473,8 +438,8 @@ function Sidebar({
           </div>
         </div>
 
-        {/* Expandable Gap Below Document */}
-        <ExpandableGap
+        {/* Vertically Stacked Reveal Gap Below Document */}
+        <ExpandableVerticalGap
           slots={gapSlots}
           onCreateDocument={onCreateDocument}
           isMobile={isMobile}
@@ -494,7 +459,6 @@ function Sidebar({
     );
   };
 
-  // Valid child schemas for right-clicked context menu document
   const contextMenuChildSchemas = useMemo(() => {
     if (!contextMenu) return [];
     return schemas.filter((s) => s.parentSchemaId === contextMenu.doc.schemaId);
@@ -660,12 +624,13 @@ function Sidebar({
                 <div className="px-1">
                   {/* Top Gap above first root document */}
                   {rootSchemas.length > 0 && (
-                    <ExpandableGap
+                    <ExpandableVerticalGap
                       slots={rootSchemas.map((s) => ({
                         key: `top:${s.id}`,
                         schema: s,
                         parentId: undefined,
                         depth: 0,
+                        typeLabel: "Root",
                       }))}
                       onCreateDocument={onCreateDocument}
                       isMobile={isMobile}
@@ -718,17 +683,17 @@ function Sidebar({
         )}
       </SidebarFooter>
 
-      {/* Interactive Resizing Handle */}
+      {/* Resizing Handle */}
       <SidebarRail
         onMouseDown={handleStartResizing}
         className="hover:bg-primary/30 transition-colors cursor-col-resize active:bg-primary"
       />
 
-      {/* Right-Click Context Menu overlay */}
+      {/* Right-Click Context Menu */}
       {contextMenu && (
         <div
           style={{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }}
-          className="fixed z-50 min-w-[160px] rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md text-xs animate-in fade-in-80"
+          className="fixed z-50 min-w-40 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md text-xs animate-in fade-in-80"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground border-b border-border mb-1 truncate">
