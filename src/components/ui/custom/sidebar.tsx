@@ -51,59 +51,99 @@ interface ContextMenuState {
 }
 
 /**
- * Expandable gap that stays minimal until hovered, then reveals a vertical stack
- * of phantom nodes (Child -> Sibling -> Ancestors).
+ * Compact gap between documents that displays a discrete "+" button on hover without shifting layout.
+ * Clicking the button reveals the vertical stack of phantom creation nodes inline.
  */
-function ExpandableVerticalGap({
+function InlineGap({
+  gapId,
   slots,
+  isExpanded,
+  onToggleExpand,
   onCreateDocument,
   isMobile,
   setOpenMobile,
 }: {
+  gapId: string;
   slots: InsertSlot[];
+  isExpanded: boolean;
+  onToggleExpand: () => void;
   onCreateDocument: (schema: DocumentSchema, parentId?: string) => void;
   isMobile?: boolean;
   setOpenMobile?: (open: boolean) => void;
 }) {
   if (slots.length === 0) return null;
 
-  return (
-    <div className="group/gap relative my-0.5 cursor-pointer">
-      {/* Minimal default gap line */}
-      <div className="h-1 w-full transition-all group-hover/gap:hidden" />
-
-      {/* Expanded Vertical Stack on Hover */}
-      <div className="hidden group-hover/gap:flex flex-col gap-1 py-1 px-1 rounded-md bg-accent/20 border border-dashed border-primary/30 transition-all duration-150 animate-in fade-in-50">
-        {slots.map((slot) => {
-          const SchemaIcon = resolveIcon(slot.schema.icon);
-          return (
-            <div key={slot.key} className="flex items-center">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCreateDocument(slot.schema, slot.parentId);
-                  if (isMobile && setOpenMobile) {
-                    setOpenMobile(false);
-                  }
-                }}
-                style={{ marginLeft: `${slot.depth * 16}px` }}
-                className="flex items-center gap-1.5 rounded-md border border-dashed border-primary/70 bg-primary/10 hover:bg-primary/25 hover:border-primary px-2 py-1 text-xs font-medium text-primary shadow-xs transition-all focus-visible:outline-none"
-                title={`Add ${slot.typeLabel}: ${slot.schema.name}`}
-              >
-                <Plus className="h-3 w-3 shrink-0" />
-                <SchemaIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
-                <span className="truncate text-[11px] font-medium">
-                  New {slot.schema.name}...
-                </span>
-                <span className="ml-1 rounded bg-primary/20 px-1 py-0.2 text-[9px] font-semibold uppercase tracking-wider text-primary">
-                  {slot.typeLabel}
-                </span>
-              </button>
-            </div>
-          );
-        })}
+  if (isExpanded) {
+    return (
+      <div className="relative my-1.5 rounded-md border border-dashed border-primary/40 bg-accent/20 p-1.5 transition-all animate-in fade-in-50">
+        <div className="mb-1 flex items-center justify-between px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span>Insert Options</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand();
+            }}
+            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            title="Close menu"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+        <div className="flex flex-col gap-1">
+          {slots.map((slot) => {
+            const SchemaIcon = resolveIcon(slot.schema.icon);
+            return (
+              <div key={slot.key} className="flex items-center">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCreateDocument(slot.schema, slot.parentId);
+                    onToggleExpand();
+                    if (isMobile && setOpenMobile) {
+                      setOpenMobile(false);
+                    }
+                  }}
+                  style={{ marginLeft: `${slot.depth * 16}px` }}
+                  className="flex items-center gap-1.5 rounded-md border border-dashed border-primary/70 bg-primary/10 px-2 py-1 text-xs font-medium text-primary shadow-xs transition-all hover:border-primary hover:bg-primary/25 focus-visible:outline-none"
+                  title={`Add ${slot.typeLabel}: ${slot.schema.name}`}
+                >
+                  <Plus className="h-3 w-3 shrink-0" />
+                  <SchemaIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                  <span className="truncate text-[11px] font-medium">
+                    New {slot.schema.name}...
+                  </span>
+                  <span className="ml-1 rounded bg-primary/20 px-1 py-0.2 text-[9px] font-semibold uppercase tracking-wider text-primary">
+                    {slot.typeLabel}
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="group/gap relative my-0.5 flex h-3 cursor-pointer items-center justify-center">
+      {/* Subtle line indicator on hover */}
+      <div className="absolute inset-x-2 h-[1px] bg-primary/0 transition-colors group-hover/gap:bg-primary/20" />
+
+      {/* Discrete hover add trigger (does not shift document layout) */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleExpand();
+        }}
+        className="z-10 flex items-center gap-1 rounded-full border border-primary/40 bg-background px-2 py-0.5 text-[10px] font-medium text-primary shadow-xs opacity-0 transition-all hover:bg-primary/10 group-hover/gap:opacity-100"
+        title="Add document here"
+      >
+        <Plus className="h-3 w-3" />
+        <span>Add</span>
+      </button>
     </div>
   );
 }
@@ -129,6 +169,7 @@ function Sidebar({
   const [searchQuery, setSearchQuery] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [expandedGapId, setExpandedGapId] = useState<string | null>(null);
 
   // Resizable sidebar width handling
   const [sidebarWidth, setSidebarWidth] = useState<number>(260);
@@ -252,10 +293,10 @@ function Sidebar({
   };
 
   /**
-   * Generates vertically stacked insertion options for the gap directly below `document`:
-   * 1. Top of stack: Child options for `document` (Depth + 1)
-   * 2. Middle of stack: Sibling options for `document` (Depth)
-   * 3. Bottom of stack: Ancestor / Root options (if `document` is at the end of a list)
+   * Generates insertion options for the gap directly below `document`:
+   * 1. Child options for `document` (Depth + 1)
+   * 2. Sibling options for `document` (Depth)
+   * 3. Ancestor / Root options (if `document` is at the end of a subtree)
    */
   const getGapSlots = (
     doc: DocumentNode,
@@ -265,7 +306,7 @@ function Sidebar({
     const slots: InsertSlot[] = [];
     const seenKeys = new Set<string>();
 
-    // 1. ALWAYS offer Child option at top of stack (Depth + 1)
+    // 1. ALWAYS offer Child options at depth + 1
     const childSchemas = schemas.filter((s) => s.parentSchemaId === doc.schemaId);
     for (const schema of childSchemas) {
       const key = `child:${schema.id}:${doc.id}`;
@@ -281,7 +322,7 @@ function Sidebar({
       }
     }
 
-    // 2. Offer Sibling option (Depth)
+    // 2. Offer Sibling options
     if (doc.parentId) {
       const parentDoc = documentsById.get(doc.parentId);
       if (parentDoc) {
@@ -316,7 +357,7 @@ function Sidebar({
       }
     }
 
-    // 3. If at the bottom of a list/subtree, offer Ancestor & Root options (Depth < doc)
+    // 3. If at the bottom of a subtree, offer Ancestor & Root options
     if (isLastInSubtree) {
       let currParentId = doc.parentId;
       while (currParentId) {
@@ -384,6 +425,7 @@ function Sidebar({
     const isLastInSubtree = isLastSibling && (!showChildren || children.length === 0) && parentIsLast;
 
     const gapSlots = getGapSlots(document, depth, isLastInSubtree);
+    const gapId = `gap-${document.id}`;
 
     return (
       <Fragment key={document.id}>
@@ -438,9 +480,12 @@ function Sidebar({
           </div>
         </div>
 
-        {/* Vertically Stacked Reveal Gap Below Document */}
-        <ExpandableVerticalGap
+        {/* Fixed-Height Hover Trigger Gap / Click-Expanded Inline Menu */}
+        <InlineGap
+          gapId={gapId}
           slots={gapSlots}
+          isExpanded={expandedGapId === gapId}
+          onToggleExpand={() => setExpandedGapId(expandedGapId === gapId ? null : gapId)}
           onCreateDocument={onCreateDocument}
           isMobile={isMobile}
           setOpenMobile={setOpenMobile}
@@ -622,9 +667,10 @@ function Sidebar({
                 </div>
               ) : (
                 <div className="px-1">
-                  {/* Top Gap above first root document */}
+                  {/* Inline gap at top of tree */}
                   {rootSchemas.length > 0 && (
-                    <ExpandableVerticalGap
+                    <InlineGap
+                      gapId="gap-root-top"
                       slots={rootSchemas.map((s) => ({
                         key: `top:${s.id}`,
                         schema: s,
@@ -632,6 +678,10 @@ function Sidebar({
                         depth: 0,
                         typeLabel: "Root",
                       }))}
+                      isExpanded={expandedGapId === "gap-root-top"}
+                      onToggleExpand={() =>
+                        setExpandedGapId(expandedGapId === "gap-root-top" ? null : "gap-root-top")
+                      }
                       onCreateDocument={onCreateDocument}
                       isMobile={isMobile}
                       setOpenMobile={setOpenMobile}
