@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight, FolderTree, GitMerge, PanelLeftClose, PanelLeftOpen, Plus, Search, X } from "lucide-react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
@@ -74,21 +75,20 @@ function Sidebar({
   };
 
   const toggleAddMenu = (anchorId: string, event?: React.MouseEvent<HTMLButtonElement>) => {
-    setMenuOpenAnchor((prev) => {
-      if (prev === anchorId) {
-        setHoveredAddOption(null);
-        setMenuPosition(null);
-        return null;
-      }
-      if (event) {
-        const rect = event.currentTarget.getBoundingClientRect();
-        setMenuPosition({
-          top: rect.bottom + 4,
-          left: rect.left + rect.width / 2,
-        });
-      }
-      return anchorId;
-    });
+    if (menuOpenAnchor === anchorId) {
+      closeAddMenu();
+      return;
+    }
+
+    if (event?.currentTarget) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setMenuPosition({
+        top: rect.bottom + 4,
+        left: rect.left + rect.width / 2,
+      });
+    }
+
+    setMenuOpenAnchor(anchorId);
   };
 
   const documentsById = useMemo(() => {
@@ -216,46 +216,49 @@ function Sidebar({
 
     return (
       <div
-        className="group/add relative z-20 -my-1 flex h-2 items-center justify-center"
+        className="group/add relative z-10 -my-1 flex h-2 items-center justify-center"
         style={parentDocument ? { marginLeft: `${depth * 14}px` } : undefined}
       >
-        {isOpen && menuPosition ? (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={closeAddMenu}
-            />
-            <div
-              className="fixed z-50 min-w-52 -translate-x-1/2 rounded-md border border-border bg-popover p-1 shadow-lg"
-              style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
-            >
-              {options.map((opt) => (
-                <button
-                  type="button"
-                  key={`${anchorId}-${opt.schema.id}-${opt.parentId ?? "root"}`}
-                  style={{ paddingLeft: `${opt.depth * 10 + 8}px` }}
-                  className="flex w-full items-center justify-between gap-2 rounded py-1 pr-2 text-left text-xs text-popover-foreground hover:bg-accent"
-                  onMouseEnter={() => setHoveredAddOption(opt)}
-                  onMouseLeave={() => setHoveredAddOption(null)}
-                  onClick={() => {
-                    onCreateDocument(opt.schema, opt.parentId);
-                    closeAddMenu();
-                  }}
+        {isOpen && menuPosition
+          ? createPortal(
+              <>
+                <div
+                  className="fixed inset-0 z-40 bg-transparent"
+                  onClick={closeAddMenu}
+                />
+                <div
+                  className="fixed z-50 min-w-52 -translate-x-1/2 rounded-md border border-border bg-popover p-1 shadow-lg"
+                  style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
                 >
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    {opt.depth > 0 && (
-                      <span className="select-none text-[10px] text-muted-foreground/60">└</span>
-                    )}
-                    <span className="truncate font-medium capitalize">{opt.schema.name}</span>
-                  </div>
-                  <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {opt.badgeLabel}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </>
-        ) : null}
+                  {options.map((opt) => (
+                    <button
+                      type="button"
+                      key={`${anchorId}-${opt.schema.id}-${opt.parentId ?? "root"}`}
+                      style={{ paddingLeft: `${opt.depth * 10 + 8}px` }}
+                      className="flex w-full items-center justify-between gap-2 rounded py-1 pr-2 text-left text-xs text-popover-foreground hover:bg-accent hover:text-accent-foreground"
+                      onMouseEnter={() => setHoveredAddOption(opt)}
+                      onMouseLeave={() => setHoveredAddOption(null)}
+                      onClick={() => {
+                        onCreateDocument(opt.schema, opt.parentId);
+                        closeAddMenu();
+                      }}
+                    >
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        {opt.depth > 0 && (
+                          <span className="select-none text-[10px] text-muted-foreground/60">└</span>
+                        )}
+                        <span className="truncate font-medium capitalize">{opt.schema.name}</span>
+                      </div>
+                      <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {opt.badgeLabel}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>,
+              document.body
+            )
+          : null}
 
         <button
           type="button"
@@ -263,6 +266,8 @@ function Sidebar({
           className={`inline-flex items-center gap-0.5 rounded-full border border-border bg-background px-1.5 py-0 text-[10px] font-medium text-muted-foreground shadow-xs transition-all hover:border-primary hover:text-foreground ${
             isOpen
               ? "opacity-100 scale-100"
+              : menuOpenAnchor !== null
+              ? "opacity-0 pointer-events-none"
               : "opacity-0 group-hover/add:opacity-100 scale-95 hover:scale-100"
           }`}
           title="Add document"
