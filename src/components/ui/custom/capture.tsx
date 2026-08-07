@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Check, Save } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -205,6 +205,9 @@ function Capture({
   const prevInitialValuesRef = useRef(initialValues)
   const prevFieldsRef = useRef(fields)
 
+  const [isCaptured, setIsCaptured] = useState(false)
+  const [lastDraftSaved, setLastDraftSaved] = useState<string | null>(null)
+
   const defaultValues = useMemo(() => {
     return { ...buildDefaultValues(fields), ...(initialValues ?? {}) }
   }, [fields, initialValues])
@@ -225,12 +228,14 @@ function Capture({
       prevInitialValuesRef.current = initialValues
       prevFieldsRef.current = fields
       form.reset({ ...buildDefaultValues(fields), ...(initialValues ?? {}) })
+      setLastDraftSaved(null)
     }
   }, [fields, form, initialValues])
 
   useEffect(() => {
     const subscription = form.watch((values) => {
       onValuesChange?.(values as Record<string, any>)
+      setLastDraftSaved(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))
     })
 
     return () => subscription.unsubscribe()
@@ -310,6 +315,11 @@ function Capture({
 
     onSubmit(frontmatter, markdownBody)
     form.reset(values)
+
+    setIsCaptured(true)
+    setTimeout(() => {
+      setIsCaptured(false)
+    }, 3000)
   }
 
   const handleRegenerateField = (fieldDef: FieldDefinition) => {
@@ -736,7 +746,33 @@ function Capture({
       <FieldGroup>
         {fields.map((fieldDef) => renderField(fieldDef))}
       </FieldGroup>
-      <Button type="submit" className="w-full">Capture</Button>
+      <div className="flex items-center justify-between gap-4 pt-2">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-h-5">
+          {lastDraftSaved && (
+            <>
+              <Save className="h-3.5 w-3.5 text-muted-foreground/70" />
+              <span>Draft saved at {lastDraftSaved}</span>
+            </>
+          )}
+        </div>
+        <Button
+          type="submit"
+          className={
+            isCaptured
+              ? "bg-emerald-600 hover:bg-emerald-700 text-white transition-all duration-200 min-w-35"
+              : "min-w-35"
+          }
+        >
+          {isCaptured ? (
+            <span className="flex items-center gap-1.5">
+              <Check className="h-4 w-4" />
+              Captured!
+            </span>
+          ) : (
+            "Capture"
+          )}
+        </Button>
+      </div>
     </form>
   );
 };

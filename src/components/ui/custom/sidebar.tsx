@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useState, useRef, useEffect, type MouseEvent, type ReactNode } from "react";
 import {
+  ArrowUpDown,
   ChevronDown,
   ChevronRight,
   FolderTree,
@@ -35,6 +36,8 @@ interface SidebarProps {
   onCreateDocument: (schema: DocumentSchema, parentId?: string) => void;
   onDeleteDocument: (documentId: string) => void;
 }
+
+type SortMode = "temporal" | "alphabetical";
 
 interface InsertSlot {
   key: string;
@@ -165,12 +168,13 @@ function Sidebar({
   const { state, setOpenMobile, isMobile } = useSidebar();
   const isIconCollapsed = state === "collapsed";
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortMode, setSortMode] = useState<SortMode>("temporal");
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [expandedGapId, setExpandedGapId] = useState<string | null>(null);
 
-  // Resizable sidebar width handling
-  const [sidebarWidth, setSidebarWidth] = useState<number>(260);
+  // Default width increased to 300px so "Merge Queue" does not wrap
+  const [sidebarWidth, setSidebarWidth] = useState<number>(300);
   const isResizingRef = useRef(false);
 
   // Close context menu on click or keypress
@@ -197,7 +201,7 @@ function Sidebar({
 
     const handleMouseMove = (moveEvent: globalThis.MouseEvent) => {
       if (!isResizingRef.current) return;
-      const newWidth = Math.min(Math.max(moveEvent.clientX, 180), 480);
+      const newWidth = Math.min(Math.max(moveEvent.clientX, 220), 480);
       setSidebarWidth(newWidth);
     };
 
@@ -268,13 +272,22 @@ function Sidebar({
     return documents.filter((doc) => visibleDocumentIds.has(doc.id));
   }, [documents, visibleDocumentIds]);
 
+  const sortDocuments = (docs: DocumentNode[]): DocumentNode[] => {
+    if (sortMode === "alphabetical") {
+      return [...docs].sort((a, b) => a.label.localeCompare(b.label));
+    }
+    return docs;
+  };
+
   const getChildDocuments = (parentId: string) => {
-    return visibleDocuments.filter((doc) => doc.parentId === parentId);
+    const children = visibleDocuments.filter((doc) => doc.parentId === parentId);
+    return sortDocuments(children);
   };
 
   const rootDocuments = useMemo(() => {
-    return visibleDocuments.filter((doc) => !doc.parentId);
-  }, [visibleDocuments]);
+    const roots = visibleDocuments.filter((doc) => !doc.parentId);
+    return sortDocuments(roots);
+  }, [visibleDocuments, sortMode]);
 
   const activeWorkspace = useMemo(() => {
     return workspaces.find((workspace) => workspace.id === activeWorkspaceId);
@@ -511,7 +524,7 @@ function Sidebar({
       collapsible="icon"
       style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
     >
-      <SidebarHeader className="border-b border-border px-4 py-3 space-y-3">
+      <SidebarHeader className="border-b border-border px-3 py-3 space-y-2.5">
         <div className={`flex items-center gap-2 ${isIconCollapsed ? "justify-center" : "justify-between"}`}>
           {!isIconCollapsed ? <p className="text-sm font-semibold text-foreground">Vault Explorer</p> : null}
           <SidebarTrigger className="h-7 w-7" title={isIconCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
@@ -521,36 +534,15 @@ function Sidebar({
         </div>
 
         {!isIconCollapsed ? (
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Filter documents"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-md border border-input bg-muted/50 py-1.5 pl-8 pr-7 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
-                aria-label="Clear search"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-        ) : null}
-      </SidebarHeader>
-
-      <SidebarContent className="pt-1">
-        <SidebarGroup className="py-0">
-          <div className="px-1 pb-1">
-            <div className={`gap-1 ${isIconCollapsed ? "grid grid-cols-1" : "grid grid-cols-2 rounded-full border border-border bg-muted/30 p-1"}`}>
+          <>
+            {/* Header Tabs: Document Tree & Merge Queue */}
+            <div className="grid grid-cols-2 gap-1 rounded-full border border-border bg-muted/30 p-1">
               <button
                 type="button"
-                className={`flex w-full items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs transition-all ${
-                  activePath === "/" ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                className={`flex w-full items-center justify-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium transition-all ${
+                  activePath === "/"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
                 onClick={() => {
                   onNavigate("/");
@@ -558,12 +550,15 @@ function Sidebar({
                 }}
                 title="Document Tree"
               >
-                {isIconCollapsed ? <FolderTree className="h-4 w-4" /> : <span>Document Tree</span>}
+                <FolderTree className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Document Tree</span>
               </button>
               <button
                 type="button"
-                className={`flex w-full items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs transition-all ${
-                  activePath === "/merge-queue" ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                className={`flex w-full items-center justify-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium transition-all ${
+                  activePath === "/merge-queue"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
                 onClick={() => {
                   onNavigate("/merge-queue");
@@ -571,29 +566,92 @@ function Sidebar({
                 }}
                 title="Merge Queue"
               >
-                {isIconCollapsed ? (
-                  <span className="relative inline-flex h-4 w-4 items-center justify-center">
-                    <GitMerge className="h-4 w-4" />
-                    {mergeQueueCount > 0 ? (
-                      <span className="absolute -right-2 -top-2 rounded-full border border-background bg-primary px-1 text-[9px] leading-none text-primary-foreground">
-                        {mergeQueueCount}
-                      </span>
-                    ) : null}
-                  </span>
-                ) : (
-                  <>
-                    <span>Merge Queue</span>
-                    <span className="rounded border border-current/30 px-1 py-0.5 text-[10px]">{mergeQueueCount}</span>
-                  </>
-                )}
+                <GitMerge className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Merge Queue</span>
+                <span className="ml-0.5 rounded-full border border-current/30 px-1.5 py-0.2 text-[10px] font-semibold leading-none">
+                  {mergeQueueCount}
+                </span>
               </button>
             </div>
-          </div>
-        </SidebarGroup>
 
+            {/* Search Input + Sort Option Dropdown */}
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Filter documents..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full rounded-md border border-input bg-muted/50 py-1.5 pl-8 pr-7 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+
+              <Select value={sortMode} onValueChange={(val) => setSortMode(val as SortMode)}>
+                <SelectTrigger
+                  className="h-8 w-8 px-0 flex items-center justify-center shrink-0 border border-input bg-muted/50 hover:bg-accent rounded-md [&>svg:last-child]:hidden"
+                  title="Sort documents"
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectItem value="temporal">Temporal</SelectItem>
+                  <SelectItem value="alphabetical">Alphabetical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        ) : null}
+      </SidebarHeader>
+
+      <SidebarContent className="pt-1">
         <SidebarGroup className="py-0">
           {isIconCollapsed ? (
-            <div className="flex flex-col items-center gap-1 px-1">
+            <div className="flex flex-col items-center gap-2 px-1 py-1">
+              <button
+                type="button"
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${
+                  activePath === "/" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
+                }`}
+                onClick={() => {
+                  onNavigate("/");
+                  if (isMobile) setOpenMobile(false);
+                }}
+                title="Document Tree"
+              >
+                <FolderTree className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                className={`relative flex h-8 w-8 items-center justify-center rounded-full transition-all ${
+                  activePath === "/merge-queue" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
+                }`}
+                onClick={() => {
+                  onNavigate("/merge-queue");
+                  if (isMobile) setOpenMobile(false);
+                }}
+                title="Merge Queue"
+              >
+                <GitMerge className="h-4 w-4" />
+                {mergeQueueCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 rounded-full border border-background bg-primary px-1 text-[9px] font-bold leading-none text-primary-foreground">
+                    {mergeQueueCount}
+                  </span>
+                ) : null}
+              </button>
+
+              <div className="my-1 w-full border-t border-border" />
+
               {rootDocuments.length === 0 ? (
                 <p className="px-1 py-2 text-center text-[10px] text-muted-foreground">No docs</p>
               ) : (
