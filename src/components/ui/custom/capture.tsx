@@ -309,7 +309,7 @@ function Capture({
     })
 
     onSubmit(frontmatter, markdownBody)
-    form.reset(buildDefaultValues(fields))
+    form.reset(values)
   }
 
   const handleRegenerateField = (fieldDef: FieldDefinition) => {
