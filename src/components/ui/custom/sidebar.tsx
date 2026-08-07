@@ -53,6 +53,7 @@ function Sidebar({
   const [searchQuery, setSearchQuery] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
   const [menuOpenAnchor, setMenuOpenAnchor] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [hoveredAddOption, setHoveredAddOption] = useState<AddOption | null>(null);
 
   const toggleCollapse = (id: string, e: MouseEvent) => {
@@ -66,11 +67,25 @@ function Sidebar({
 
   const rootSchemas = useMemo(() => schemas.filter((s) => !s.parentSchemaId), [schemas]);
 
-  const toggleAddMenu = (anchorId: string) => {
+  const closeAddMenu = () => {
+    setMenuOpenAnchor(null);
+    setMenuPosition(null);
+    setHoveredAddOption(null);
+  };
+
+  const toggleAddMenu = (anchorId: string, event?: React.MouseEvent<HTMLButtonElement>) => {
     setMenuOpenAnchor((prev) => {
       if (prev === anchorId) {
         setHoveredAddOption(null);
+        setMenuPosition(null);
         return null;
+      }
+      if (event) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        setMenuPosition({
+          top: rect.bottom + 4,
+          left: rect.left + rect.width / 2,
+        });
       }
       return anchorId;
     });
@@ -204,39 +219,47 @@ function Sidebar({
         className="group/add relative z-20 -my-1 flex h-2 items-center justify-center"
         style={parentDocument ? { marginLeft: `${depth * 14}px` } : undefined}
       >
-        {isOpen ? (
-          <div className="absolute left-1/2 top-full z-30 mt-1 min-w-52 -translate-x-1/2 rounded-md border border-border bg-popover p-1 shadow-lg">
-            {options.map((opt) => (
-              <button
-                type="button"
-                key={`${anchorId}-${opt.schema.id}-${opt.parentId ?? "root"}`}
-                style={{ paddingLeft: `${opt.depth * 10 + 8}px` }}
-                className="flex w-full items-center justify-between gap-2 rounded py-1 pr-2 text-left text-xs text-popover-foreground hover:bg-accent"
-                onMouseEnter={() => setHoveredAddOption(opt)}
-                onMouseLeave={() => setHoveredAddOption(null)}
-                onClick={() => {
-                  onCreateDocument(opt.schema, opt.parentId);
-                  setMenuOpenAnchor(null);
-                  setHoveredAddOption(null);
-                }}
-              >
-                <div className="flex min-w-0 items-center gap-1.5">
-                  {opt.depth > 0 && (
-                    <span className="select-none text-[10px] text-muted-foreground/60">└</span>
-                  )}
-                  <span className="truncate font-medium capitalize">{opt.schema.name}</span>
-                </div>
-                <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {opt.badgeLabel}
-                </span>
-              </button>
-            ))}
-          </div>
+        {isOpen && menuPosition ? (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={closeAddMenu}
+            />
+            <div
+              className="fixed z-50 min-w-52 -translate-x-1/2 rounded-md border border-border bg-popover p-1 shadow-lg"
+              style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
+            >
+              {options.map((opt) => (
+                <button
+                  type="button"
+                  key={`${anchorId}-${opt.schema.id}-${opt.parentId ?? "root"}`}
+                  style={{ paddingLeft: `${opt.depth * 10 + 8}px` }}
+                  className="flex w-full items-center justify-between gap-2 rounded py-1 pr-2 text-left text-xs text-popover-foreground hover:bg-accent"
+                  onMouseEnter={() => setHoveredAddOption(opt)}
+                  onMouseLeave={() => setHoveredAddOption(null)}
+                  onClick={() => {
+                    onCreateDocument(opt.schema, opt.parentId);
+                    closeAddMenu();
+                  }}
+                >
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    {opt.depth > 0 && (
+                      <span className="select-none text-[10px] text-muted-foreground/60">└</span>
+                    )}
+                    <span className="truncate font-medium capitalize">{opt.schema.name}</span>
+                  </div>
+                  <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {opt.badgeLabel}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
         ) : null}
 
         <button
           type="button"
-          onClick={() => toggleAddMenu(anchorId)}
+          onClick={(e) => toggleAddMenu(anchorId, e)}
           className={`inline-flex items-center gap-0.5 rounded-full border border-border bg-background px-1.5 py-0 text-[10px] font-medium text-muted-foreground shadow-xs transition-all hover:border-primary hover:text-foreground ${
             isOpen
               ? "opacity-100 scale-100"
