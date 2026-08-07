@@ -53,7 +53,7 @@ function Sidebar({
   const [searchQuery, setSearchQuery] = useState("");
   const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
   const [menuOpenAnchor, setMenuOpenAnchor] = useState<string | null>(null);
-  const [highlightedDocId, setHighlightedDocId] = useState<string | null>(null);
+  const [hoveredAddOption, setHoveredAddOption] = useState<AddOption | null>(null);
 
   const toggleCollapse = (id: string, e: MouseEvent) => {
     e.stopPropagation();
@@ -69,7 +69,7 @@ function Sidebar({
   const toggleAddMenu = (anchorId: string) => {
     setMenuOpenAnchor((prev) => {
       if (prev === anchorId) {
-        setHighlightedDocId(null);
+        setHoveredAddOption(null);
         return null;
       }
       return anchorId;
@@ -176,6 +176,23 @@ function Sidebar({
     return options;
   };
 
+  const renderPhantomNode = (schema: DocumentSchema, depth: number) => {
+    const SchemaIcon = resolveIcon(schema.icon);
+    return (
+      <div
+        key="phantom-preview-node"
+        className="my-1 animate-pulse"
+        style={{ marginLeft: `${depth * 14}px` }}
+      >
+        <div className="flex items-center gap-1.5 rounded-md border border-dashed border-primary/70 bg-primary/10 px-2 py-1.5 text-xs font-medium text-primary shadow-xs">
+          <div className="w-4" />
+          <SchemaIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
+          <span className="truncate">New {schema.name}...</span>
+        </div>
+      </div>
+    );
+  };
+
   const renderAddMenu = (anchorId: string, parentDocument?: DocumentNode, depth = 0) => {
     const options = getAddOptionsForNode(parentDocument);
     if (options.length === 0) return null;
@@ -184,7 +201,7 @@ function Sidebar({
 
     return (
       <div
-        className="group/add relative z-10 -my-1 flex h-2 items-center justify-center"
+        className="group/add relative z-20 -my-1 flex h-2 items-center justify-center"
         style={parentDocument ? { marginLeft: `${depth * 14}px` } : undefined}
       >
         {isOpen ? (
@@ -195,12 +212,12 @@ function Sidebar({
                 key={`${anchorId}-${opt.schema.id}-${opt.parentId ?? "root"}`}
                 style={{ paddingLeft: `${opt.depth * 10 + 8}px` }}
                 className="flex w-full items-center justify-between gap-2 rounded py-1 pr-2 text-left text-xs text-popover-foreground hover:bg-accent"
-                onMouseEnter={() => setHighlightedDocId(opt.parentId ?? null)}
-                onMouseLeave={() => setHighlightedDocId(null)}
+                onMouseEnter={() => setHoveredAddOption(opt)}
+                onMouseLeave={() => setHoveredAddOption(null)}
                 onClick={() => {
                   onCreateDocument(opt.schema, opt.parentId);
                   setMenuOpenAnchor(null);
-                  setHighlightedDocId(null);
+                  setHoveredAddOption(null);
                 }}
               >
                 <div className="flex min-w-0 items-center gap-1.5">
@@ -241,9 +258,9 @@ function Sidebar({
     const canExpand = children.length > 0;
     const isCollapsed = !!collapsedNodes[document.id];
     const isActive = activeDocumentId === document.id;
-    const isHighlighted = highlightedDocId === document.id;
 
     const showChildren = canExpand && !isCollapsed;
+    const isPhantomParent = hoveredAddOption?.parentId === document.id;
 
     return (
       <Fragment key={document.id}>
@@ -258,10 +275,6 @@ function Sidebar({
               isActive
                 ? "bg-primary text-primary-foreground"
                 : "text-foreground hover:bg-accent hover:text-accent-foreground"
-            } ${
-              isHighlighted
-                ? "ring-2 ring-primary ring-offset-1 ring-offset-background z-10"
-                : ""
             }`}
           >
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -297,7 +310,10 @@ function Sidebar({
           </div>
         </div>
 
-        {/* Render add menu handle between every single document node */}
+        {/* Phantom child preview rendered directly under parent when hovering in add menu */}
+        {isPhantomParent && renderPhantomNode(hoveredAddOption.schema, depth + 1)}
+
+        {/* Add menu handle between document rows */}
         {renderAddMenu(`after-${document.id}`, document, depth)}
 
         {showChildren && children.map((child) => renderDocumentNode(child, depth + 1))}
@@ -440,6 +456,8 @@ function Sidebar({
                 </div>
               ) : (
                 <div className="px-1">
+                  {/* Phantom entry at Root level when hovering a Root template option */}
+                  {hoveredAddOption && !hoveredAddOption.parentId && renderPhantomNode(hoveredAddOption.schema, 0)}
                   {rootDocuments.map((doc) => renderDocumentNode(doc))}
                 </div>
               )}
