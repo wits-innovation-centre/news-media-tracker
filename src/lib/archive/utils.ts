@@ -154,25 +154,26 @@ export async function saveWaybackArchiveRequest(
   const seed = await buildWaybackArchiveSeed(articleId, sourceUrl, workspaceId);
   const now = Date.now();
 
+  // Corrected array binding for saveWaybackArchiveRequest in File 18:
   await dbClient.execute(
     `INSERT INTO archival_records (
-       id, article_id, workspace_id, archive_type, sha256_hash,
-       uri_or_path, file_size_bytes, device_id, last_verified_at,
-       health_status, sync_status, blockchain_tx_hash, blockchain_network,
-       ots_proof_payload, anchored_at, created_at, updated_at, is_deleted, synced_at
-     ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, 0, NULL)
-     ON CONFLICT(id) DO UPDATE SET
-       article_id = excluded.article_id,
-       workspace_id = excluded.workspace_id,
-       archive_type = excluded.archive_type,
-       sha256_hash = excluded.sha256_hash,
-       uri_or_path = excluded.uri_or_path,
-       last_verified_at = excluded.last_verified_at,
-       health_status = excluded.health_status,
-       sync_status = excluded.sync_status,
-       updated_at = excluded.updated_at,
-       is_deleted = 0,
-       synced_at = NULL`,
+     id, article_id, workspace_id, archive_type, sha256_hash,
+     uri_or_path, file_size_bytes, device_id, last_verified_at,
+     health_status, sync_status, blockchain_tx_hash, blockchain_network,
+     ots_proof_payload, anchored_at, created_at, updated_at, is_deleted, synced_at
+   ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, 0, NULL)
+   ON CONFLICT(id) DO UPDATE SET
+     article_id = excluded.article_id,
+     workspace_id = excluded.workspace_id,
+     archive_type = excluded.archive_type,
+     sha256_hash = excluded.sha256_hash,
+     uri_or_path = excluded.uri_or_path,
+     last_verified_at = excluded.last_verified_at,
+     health_status = excluded.health_status,
+     sync_status = excluded.sync_status,
+     updated_at = excluded.updated_at,
+     is_deleted = 0,
+     synced_at = NULL`,
     [
       seed.id,                         // 1: id
       articleId,                       // 2: article_id

@@ -1,10 +1,7 @@
 import { dbClient } from "@/lib/db/client"
-import { getOrCreateDeviceId } from "@/lib/archive/client"
 import { getMutationActor } from "@/lib/provenance"
 import {
-  WAYBACK_ARCHIVE_TYPE,
-  WAYBACK_SYNC_STATUS,
-  buildWaybackArchiveSeed,
+  saveWaybackArchiveRequest
 } from "@/lib/archive/utils"
 import type {
   ArchivalLedgerRecord,
@@ -63,7 +60,7 @@ const mapMergeProposalRecord = (row: Record<string, any>): MergeProposal => ({
   synced_at: typeof row.synced_at === "number" ? row.synced_at : null,
 })
 
-export async function ensureDefaultWorkspace(): Promise<WorkspaceRecord> {
+async function ensureDefaultWorkspace(): Promise<WorkspaceRecord> {
   const now = Date.now()
   await dbClient.execute(
     `INSERT OR IGNORE INTO workspaces (id, name, description, template_group_id, created_at, last_accessed_at)
@@ -97,7 +94,7 @@ export async function ensureDefaultWorkspace(): Promise<WorkspaceRecord> {
   }
 }
 
-export async function listWorkspaces(): Promise<WorkspaceRecord[]> {
+async function listWorkspaces(): Promise<WorkspaceRecord[]> {
   await ensureDefaultWorkspace()
   const rows = await dbClient.query(
     `SELECT id, name, description, template_group_id, created_at, last_accessed_at
@@ -115,7 +112,7 @@ export async function listWorkspaces(): Promise<WorkspaceRecord[]> {
   }))
 }
 
-export async function createWorkspace(name: string, description?: string): Promise<WorkspaceRecord> {
+async function createWorkspace(name: string, description?: string): Promise<WorkspaceRecord> {
   const now = Date.now()
   const trimmedName = name.trim()
   if (!trimmedName) {
@@ -139,7 +136,7 @@ export async function createWorkspace(name: string, description?: string): Promi
   }
 }
 
-export async function renameWorkspace(workspaceId: string, name: string, description?: string): Promise<void> {
+async function renameWorkspace(workspaceId: string, name: string, description?: string): Promise<void> {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const trimmedName = name.trim()
   if (!trimmedName) {
@@ -154,7 +151,7 @@ export async function renameWorkspace(workspaceId: string, name: string, descrip
   )
 }
 
-export async function setWorkspaceTemplateGroup(workspaceId: string, templateGroupId?: string): Promise<void> {
+async function setWorkspaceTemplateGroup(workspaceId: string, templateGroupId?: string): Promise<void> {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   await dbClient.execute(
     `UPDATE workspaces
@@ -164,7 +161,7 @@ export async function setWorkspaceTemplateGroup(workspaceId: string, templateGro
   )
 }
 
-export async function touchWorkspace(workspaceId: string): Promise<void> {
+async function touchWorkspace(workspaceId: string): Promise<void> {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   await dbClient.execute(
     `UPDATE workspaces
@@ -174,7 +171,7 @@ export async function touchWorkspace(workspaceId: string): Promise<void> {
   )
 }
 
-export async function deleteWorkspace(workspaceId: string): Promise<void> {
+async function deleteWorkspace(workspaceId: string): Promise<void> {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   if (scopedWorkspaceId === DEFAULT_WORKSPACE_ID) {
     throw new Error("Default workspace cannot be deleted.")
@@ -191,11 +188,21 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
   await dbClient.execute("DELETE FROM workspaces WHERE id = ?", [scopedWorkspaceId])
 }
 
+export {
+  ensureDefaultWorkspace,
+  listWorkspaces,
+  createWorkspace,
+  renameWorkspace,
+  setWorkspaceTemplateGroup,
+  touchWorkspace,
+  deleteWorkspace
+}
+
 // ==========================================
 // SCHEMAS & GROUPS
 // ==========================================
 
-export async function loadSchemaGroups(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function loadSchemaGroups(workspaceId: string = DEFAULT_WORKSPACE_ID) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const records = await dbClient.query(
     "SELECT * FROM schema_groups WHERE workspace_id = ? AND is_deleted = 0 ORDER BY name",
@@ -209,7 +216,7 @@ export async function loadSchemaGroups(workspaceId: string = DEFAULT_WORKSPACE_I
   })) as DocumentSchemaGroup[]
 }
 
-export async function loadActiveSchemas(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function loadActiveSchemas(workspaceId: string = DEFAULT_WORKSPACE_ID) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const records = await dbClient.query(
     "SELECT * FROM schemas WHERE workspace_id = ? AND is_deleted = 0",
@@ -239,7 +246,7 @@ export async function loadActiveSchemas(workspaceId: string = DEFAULT_WORKSPACE_
   })) as DocumentSchema[]
 }
 
-export async function saveSchemaWorkspace(groups: DocumentSchemaGroup[], workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function saveSchemaWorkspace(groups: DocumentSchemaGroup[], workspaceId: string = DEFAULT_WORKSPACE_ID) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   await dbClient.execute("DELETE FROM schemas WHERE workspace_id = ?", [scopedWorkspaceId])
   await dbClient.execute("DELETE FROM schema_metadata WHERE workspace_id = ?", [scopedWorkspaceId])
@@ -277,7 +284,7 @@ export async function saveSchemaWorkspace(groups: DocumentSchemaGroup[], workspa
   }
 }
 
-export async function updateCapturedNoteSchema(noteId: string, schemaId: string, workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function updateCapturedNoteSchema(noteId: string, schemaId: string, workspaceId: string = DEFAULT_WORKSPACE_ID) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   await dbClient.execute(
     "UPDATE notes SET schema_id = ? WHERE workspace_id = ? AND id = ?",
@@ -285,7 +292,7 @@ export async function updateCapturedNoteSchema(noteId: string, schemaId: string,
   )
 }
 
-export async function loadSpecifications(workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<SpecificationStore> {
+async function loadSpecifications(workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<SpecificationStore> {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const rows = await dbClient.query(
     "SELECT kind, value FROM specifications WHERE workspace_id = ? ORDER BY kind, value",
@@ -304,7 +311,7 @@ export async function loadSpecifications(workspaceId: string = DEFAULT_WORKSPACE
   return byId
 }
 
-export async function loadSpecificationRegistry(workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<SpecificationDefinition[]> {
+async function loadSpecificationRegistry(workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<SpecificationDefinition[]> {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const rows = await dbClient.query(
     "SELECT id, name, description FROM specification_registry WHERE workspace_id = ? ORDER BY name",
@@ -323,7 +330,7 @@ export async function loadSpecificationRegistry(workspaceId: string = DEFAULT_WO
   return [...byId.values()]
 }
 
-export async function saveSpecificationRegistry(registry: SpecificationDefinition[], workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function saveSpecificationRegistry(registry: SpecificationDefinition[], workspaceId: string = DEFAULT_WORKSPACE_ID) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   await dbClient.execute("DELETE FROM specification_registry WHERE workspace_id = ?", [scopedWorkspaceId])
 
@@ -346,7 +353,7 @@ export async function saveSpecificationRegistry(registry: SpecificationDefinitio
   }
 }
 
-export async function saveSpecificationValues(specificationId: string, values: string[], workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function saveSpecificationValues(specificationId: string, values: string[], workspaceId: string = DEFAULT_WORKSPACE_ID) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const normalized = [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort((left, right) => left.localeCompare(right))
   await dbClient.execute("DELETE FROM specifications WHERE workspace_id = ? AND kind = ?", [scopedWorkspaceId, specificationId])
@@ -359,7 +366,7 @@ export async function saveSpecificationValues(specificationId: string, values: s
   }
 }
 
-export async function saveSpecificationsStore(store: SpecificationStore, workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function saveSpecificationsStore(store: SpecificationStore, workspaceId: string = DEFAULT_WORKSPACE_ID) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   await dbClient.execute("DELETE FROM specifications WHERE workspace_id = ?", [scopedWorkspaceId])
 
@@ -375,11 +382,23 @@ export async function saveSpecificationsStore(store: SpecificationStore, workspa
   }
 }
 
+export {
+  loadSchemaGroups,
+  loadActiveSchemas,
+  saveSchemaWorkspace,
+  updateCapturedNoteSchema,
+  loadSpecifications,
+  loadSpecificationRegistry,
+  saveSpecificationRegistry,
+  saveSpecificationValues,
+  saveSpecificationsStore
+}
+
 // ==========================================
 // NOTES & CAPTURED DOCUMENTS
 // ==========================================
 
-export async function saveCapturedNote(
+async function saveCapturedNote(
   id: string,
   schemaId: string,
   title: string,
@@ -420,60 +439,7 @@ export async function saveCapturedNote(
   return id
 }
 
-export async function saveWaybackArchiveRequest(
-  articleId: string,
-  sourceUrl: string,
-  workspaceId: string = "default",
-  syncStatus: string = WAYBACK_SYNC_STATUS.pending,
-  snapshotUrl?: string | null,
-  lastVerifiedAt?: number | null
-) {
-  const seed = await buildWaybackArchiveSeed(articleId, sourceUrl, workspaceId)
-  const now = Date.now()
-
-  await dbClient.execute(
-    `INSERT INTO archival_records (
-       id, article_id, workspace_id, archive_type, sha256_hash,
-       uri_or_path, file_size_bytes, device_id, last_verified_at,
-       health_status, sync_status, blockchain_tx_hash, blockchain_network,
-       ots_proof_payload, anchored_at, created_at, updated_at, is_deleted, synced_at
-     ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, 0, NULL)
-     ON CONFLICT(id) DO UPDATE SET
-       article_id = excluded.article_id,
-       workspace_id = excluded.workspace_id,
-       archive_type = excluded.archive_type,
-       sha256_hash = excluded.sha256_hash,
-       uri_or_path = excluded.uri_or_path,
-       last_verified_at = excluded.last_verified_at,
-       health_status = excluded.health_status,
-       sync_status = excluded.sync_status,
-       updated_at = excluded.updated_at,
-       is_deleted = 0,
-       synced_at = NULL`,
-    [
-      seed.id,
-      articleId,
-      workspaceId,
-      WAYBACK_ARCHIVE_TYPE,
-      seed.sha256Hash,
-      snapshotUrl ?? seed.sourceUrl,
-      getOrCreateDeviceId(),
-      lastVerifiedAt ?? null,
-      syncStatus,
-      seed.createdAt,
-      now,
-    ]
-  )
-
-  return {
-    ...seed,
-    uriOrPath: snapshotUrl ?? seed.sourceUrl,
-    syncStatus,
-    lastVerifiedAt: lastVerifiedAt ?? null,
-  }
-}
-
-export async function loadWaybackArchiveRecordByArticleId(
+async function loadWaybackArchiveRecordByArticleId(
   articleId: string,
   workspaceId: string = DEFAULT_WORKSPACE_ID
 ): Promise<ArchivalLedgerRecord | null> {
@@ -533,7 +499,7 @@ export async function loadWaybackArchiveRecordByArticleId(
   }
 }
 
-export async function softDeleteCapturedNote(
+async function softDeleteCapturedNote(
   id: string,
   userId?: string,
   workspaceId: string = DEFAULT_WORKSPACE_ID,
@@ -550,7 +516,7 @@ export async function softDeleteCapturedNote(
   )
 }
 
-export async function loadCapturedDocuments(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function loadCapturedDocuments(workspaceId: string = DEFAULT_WORKSPACE_ID) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const records = await dbClient.query(
     `SELECT id, workspace_id, schema_id, parent_id, title, frontmatter, body, created_at, created_by, updated_by, user_id, device_id, updated_at 
@@ -577,7 +543,7 @@ export async function loadCapturedDocuments(workspaceId: string = DEFAULT_WORKSP
   })) as StoredDocument[]
 }
 
-export async function loadDeletedDocumentsForReview(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function loadDeletedDocumentsForReview(workspaceId: string = DEFAULT_WORKSPACE_ID) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   return await dbClient.query(
     `SELECT id, schema_id, title, created_by, deleted_by, updated_at 
@@ -588,7 +554,7 @@ export async function loadDeletedDocumentsForReview(workspaceId: string = DEFAUL
   )
 }
 
-export async function restoreDeletedNote(
+async function restoreDeletedNote(
   id: string,
   userId?: string,
   workspaceId: string = DEFAULT_WORKSPACE_ID,
@@ -605,7 +571,7 @@ export async function restoreDeletedNote(
   )
 }
 
-export async function getNotesForWorkspaceExport(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function getNotesForWorkspaceExport(workspaceId: string = DEFAULT_WORKSPACE_ID) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   return await dbClient.query(
     "SELECT title, frontmatter, body FROM notes WHERE workspace_id = ? AND is_deleted = 0",
@@ -613,7 +579,7 @@ export async function getNotesForWorkspaceExport(workspaceId: string = DEFAULT_W
   )
 }
 
-export async function loadLedgerRecordByArticleId(
+async function loadLedgerRecordByArticleId(
   articleId: string,
   workspaceId: string = DEFAULT_WORKSPACE_ID
 ): Promise<ArchivalLedgerRecord | null> {
@@ -674,18 +640,31 @@ export async function loadLedgerRecordByArticleId(
   }
 }
 
-export async function loadLedgerRecordByNoteId(
+async function loadLedgerRecordByNoteId(
   noteId: string,
   workspaceId: string = DEFAULT_WORKSPACE_ID
 ): Promise<ArchivalLedgerRecord | null> {
   return loadLedgerRecordByArticleId(noteId, workspaceId)
 }
 
+export {
+  saveCapturedNote,
+  saveWaybackArchiveRequest,
+  loadWaybackArchiveRecordByArticleId,
+  softDeleteCapturedNote,
+  loadCapturedDocuments,
+  loadDeletedDocumentsForReview,
+  restoreDeletedNote,
+  getNotesForWorkspaceExport,
+  loadLedgerRecordByArticleId,
+  loadLedgerRecordByNoteId
+}
+
 // ==========================================
 // MERGE QUEUE & PROPOSALS
 // ==========================================
 
-export async function submitNoteProposal(
+async function submitNoteProposal(
   documentId: string,
   schemaId: string,
   proposedTitle: string,
@@ -726,7 +705,7 @@ export async function submitNoteProposal(
   return proposalId
 }
 
-export async function loadPendingProposals(workspaceId: string = "default") {
+async function loadPendingProposals(workspaceId: string = "default") {
   const records = await dbClient.query(
     `SELECT * FROM merge_queue WHERE workspace_id = ? AND status = 'pending' ORDER BY created_at ASC`,
     [workspaceId]
@@ -734,7 +713,7 @@ export async function loadPendingProposals(workspaceId: string = "default") {
   return records.map((row) => mapMergeProposalRecord(row as Record<string, any>))
 }
 
-export async function approveMergeProposal(
+async function approveMergeProposal(
   proposalId: string,
   reviewerId?: string,
   workspaceId: string = DEFAULT_WORKSPACE_ID,
@@ -849,7 +828,7 @@ export async function approveMergeProposal(
   )
 }
 
-export async function rejectMergeProposal(
+async function rejectMergeProposal(
   proposalId: string,
   reviewerId: string,
   comment: string,
@@ -867,7 +846,7 @@ export async function rejectMergeProposal(
   )
 }
 
-export async function proposeDuplicateMerge(
+async function proposeDuplicateMerge(
   primaryDoc: StoredDocument,
   duplicateDoc: StoredDocument,
   mergedTitle: string,
@@ -918,3 +897,11 @@ export async function proposeDuplicateMerge(
 
   return proposalId
 }
+
+export {
+  submitNoteProposal,
+  loadPendingProposals,
+  approveMergeProposal,
+  rejectMergeProposal,
+  proposeDuplicateMerge
+};
