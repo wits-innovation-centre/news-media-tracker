@@ -1,9 +1,9 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import JSZip from "jszip"
-import type { FieldDefinition, TieredOptions, DocumentSchema, StoredDocument } from "@/lib/types";
+import type { FieldDefinition, TieredOptions, DocumentSchema, StoredDocument } from "@/lib/types"
 
-function cn(...inputs: ClassValue[]) {
+export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
@@ -11,7 +11,7 @@ interface GetDocumentTitleOptions {
     schema?: DocumentSchema
     document?: Partial<StoredDocument> | Record<string, any>
     fallbackIndex?: number
-};
+}
 
 interface SQLiteNoteRecord {
   title: string
@@ -19,18 +19,18 @@ interface SQLiteNoteRecord {
   body: string
 }
 
-function convertToYamlFrontmatter(data: Record<string, any>): string {
+export function convertToYamlFrontmatter(data: Record<string, any>): string {
   const entries = Object.entries(data)
   if (entries.length === 0) return ""
   const yamlLines = entries.map(([key, value]) => `${key}: ${typeof value === "string" && (value.includes(":") || value.includes("#")) ? `"${value.replace(/"/g, '\\"')}"` : value}`)
   return `---\n${yamlLines.join("\n")}\n---\n\n`
 }
 
-async function exportSqliteToObsidianWorkspace(notes: SQLiteNoteRecord[]) {
+export async function exportSqliteToObsidianWorkspace(notes: SQLiteNoteRecord[]) {
   const getSafeName = (title: string) => `${title.replace(/[/\\?%*:|"<>\s]/g, "_")}.md`
 
   if ("showDirectoryPicker" in window && typeof window.showDirectoryPicker === "function") {
-    const directoryHandle = await window.showDirectoryPicker({ mode: "readwrite" })
+    const directoryHandle = await (window as any).showDirectoryPicker({ mode: "readwrite" })
 
     for (const note of notes) {
       const fileContents = `${convertToYamlFrontmatter(JSON.parse(note.frontmatter))}${note.body}`
@@ -59,33 +59,31 @@ async function exportSqliteToObsidianWorkspace(notes: SQLiteNoteRecord[]) {
   downloadLink.click()
   document.body.removeChild(downloadLink)
   URL.revokeObjectURL(downloadLink.href)
-};
+}
 
-function isValidPathInRecord(path: string[], record: TieredOptions): boolean {
-  if (path.length === 0) return false;
+export function isValidPathInRecord(path: string[], record: TieredOptions): boolean {
+  if (path.length === 0) return false
 
-  const [currentSegment, ...remainingSegments] = path;
+  const [currentSegment, ...remainingSegments] = path
+  if (currentSegment.startsWith("$")) return false
 
-  if (currentSegment.startsWith("$")) return false;
-
-  const nextTarget = record[currentSegment];
-  if (!nextTarget) return false;
+  const nextTarget = record[currentSegment]
+  if (!nextTarget) return false
 
   if (remainingSegments.length === 0) {
-    return Array.isArray(nextTarget) || typeof nextTarget === "object";
+    return Array.isArray(nextTarget) || typeof nextTarget === "object"
   }
 
   if (Array.isArray(nextTarget)) {
-    return remainingSegments.length === 1 && nextTarget.includes(remainingSegments[0]);
+    return remainingSegments.length === 1 && nextTarget.includes(remainingSegments[0])
   }
 
-  return isValidPathInRecord(remainingSegments, nextTarget as TieredOptions);
-};
+  return isValidPathInRecord(remainingSegments, nextTarget as TieredOptions)
+}
 
-function flattenTieredOptions(record: TieredOptions, prefix: string[] = []): string[] {
+export function flattenTieredOptions(record: TieredOptions, prefix: string[] = []): string[] {
   return Object.entries(record).flatMap(([key, value]) => {
     if (key.startsWith("$")) return []
-
     const nextPath = [...prefix, key]
 
     if (Array.isArray(value)) {
@@ -96,7 +94,7 @@ function flattenTieredOptions(record: TieredOptions, prefix: string[] = []): str
   })
 }
 
-function getVisibilityTargetValue(formValues: Record<string, any>, dependsOn: string): any {
+export function getVisibilityTargetValue(formValues: Record<string, any>, dependsOn: string): any {
   if (dependsOn in formValues) return formValues[dependsOn]
 
   const segments = dependsOn.split(".")
@@ -116,25 +114,22 @@ function getVisibilityTargetValue(formValues: Record<string, any>, dependsOn: st
   }, rootValue)
 }
 
-function evaluateVisibility(
-  condition: any,
-  formValues: Record<string, any>
-): boolean {
-  if (!condition) return true; 
+export function evaluateVisibility(condition: any, formValues: Record<string, any>): boolean {
+  if (!condition) return true
 
-  const targetValue = getVisibilityTargetValue(formValues, condition.dependsOn);
+  const targetValue = getVisibilityTargetValue(formValues, condition.dependsOn)
 
   switch (condition.operator) {
     case "eq":
-      return targetValue === condition.value;
+      return targetValue === condition.value
     case "neq":
-      return targetValue !== condition.value;
+      return targetValue !== condition.value
     case "includes":
-      return Array.isArray(targetValue) ? targetValue.includes(condition.value) : false;
+      return Array.isArray(targetValue) ? targetValue.includes(condition.value) : false
     case "notEmpty":
-      return targetValue !== undefined && targetValue !== null && targetValue !== "";
+      return targetValue !== undefined && targetValue !== null && targetValue !== ""
     default:
-      return true;
+      return true
   }
 }
 
@@ -152,10 +147,9 @@ function formatDateToken(): string {
   return `${year}${month}${day}`
 }
 
-function generateFieldValue(field: FieldDefinition, formValues: Record<string, any> = {}): any {
+export function generateFieldValue(field: FieldDefinition, formValues: Record<string, any> = {}): any {
   if (field.generator) {
     const { strategy, prefix = "", pattern, randomLength = 6, uppercase } = field.generator
-
     let generatedValue = ""
 
     switch (strategy) {
@@ -190,7 +184,6 @@ function generateFieldValue(field: FieldDefinition, formValues: Record<string, a
   }
 
   if (field.default !== undefined) return field.default
-
   if (field.type.data === "boolean") return false
   if (field.type.data === "number") return 0
   if (field.type.data === "array<string>") return []
@@ -198,7 +191,7 @@ function generateFieldValue(field: FieldDefinition, formValues: Record<string, a
   return ""
 }
 
-function getDocumentTitle({ schema, document, fallbackIndex }: GetDocumentTitleOptions): string {
+export function getDocumentTitle({ schema, document, fallbackIndex }: GetDocumentTitleOptions): string {
     const documentType = schema?.name || schema?.id || "Document"
     const countLabel = fallbackIndex !== undefined ? ` ${fallbackIndex}` : ""
 
@@ -206,7 +199,6 @@ function getDocumentTitle({ schema, document, fallbackIndex }: GetDocumentTitleO
         return `${documentType}${countLabel}`
     }
 
-    // Extract raw field values from either frontmatter or direct object
     const values = "frontmatter" in document && document.frontmatter ? document.frontmatter : document
 
     if (schema.titleField && values[schema.titleField]) {
@@ -216,16 +208,5 @@ function getDocumentTitle({ schema, document, fallbackIndex }: GetDocumentTitleO
         }
     }
 
-    // Fallback if titleField is missing, empty, or undefined
     return `${documentType}${countLabel}`
-}
-
-export {
-  cn,
-  exportSqliteToObsidianWorkspace,
-  isValidPathInRecord,
-  flattenTieredOptions,
-  evaluateVisibility,
-  generateFieldValue,
-  getDocumentTitle
 }

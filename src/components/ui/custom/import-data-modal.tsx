@@ -278,7 +278,7 @@ function ImportDataModal({ children, workspaceId = "default", onImportCompleted 
                                     <Select
                                         value={selectedEntityKey}
                                         onValueChange={(value) => {
-                                            const nextEntityKey = value as WorkspaceEntityKey
+                                            const nextEntityKey = (value ?? "event") as WorkspaceEntityKey
                                             setSelectedEntityKey(nextEntityKey)
                                             if (!selectedSheet) return
                                             setColumnMapping(buildColumnMapping(selectedSheet.headers, nextEntityKey))
@@ -312,7 +312,15 @@ function ImportDataModal({ children, workspaceId = "default", onImportCompleted 
                                                 <div className="rounded-lg border px-3 py-2 text-sm">
                                                     <div className="font-medium">{header}</div>
                                                 </div>
-                                                <Select value={columnMapping[header] ?? ""} onValueChange={(value) => setColumnMapping((current) => ({ ...current, [header]: value }))}>
+                                                <Select
+                                                    value={columnMapping[header] ?? ""}
+                                                    onValueChange={(value) =>
+                                                        setColumnMapping((current: SpreadsheetImportMapping) => ({
+                                                            ...current,
+                                                            [header]: value ?? "",
+                                                        }))
+                                                    }
+                                                >
                                                     <SelectTrigger>
                                                         <SelectValue placeholder="Ignore column" />
                                                     </SelectTrigger>
