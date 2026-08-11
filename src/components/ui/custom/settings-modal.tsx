@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Download, FileDown, FileUp, Settings } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -68,6 +68,34 @@ function SettingsModal({
 
     const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
     const [selectedTemplateGroupId, setSelectedTemplateGroupId] = useState<string>(() => activeWorkspace?.template_group_id ?? "__none")
+
+    const activeSchemaGroup = useMemo<DocumentSchemaGroup>(() => {
+        const selectedGroup = groups.find((group) => group.id === selectedTemplateGroupId)
+            ?? groups.find((group) => group.id === activeWorkspace?.template_group_id)
+
+        if (selectedGroup) {
+            return selectedGroup
+        }
+
+        return {
+            id: "workspace-schemas",
+            name: "Workspace Schemas",
+            documents: groups.flatMap((group) => group.documents),
+        }
+    }, [groups, selectedTemplateGroupId, activeWorkspace])
+
+    const importSchemaGroup = useMemo(() => {
+        return {
+            ...activeSchemaGroup,
+            documents: activeSchemaGroup.documents.map((doc) => ({
+                ...doc,
+                fields: doc.fields.map((field) => ({
+                    ...field,
+                    type: typeof field.type === "string" ? field.type : field.type.data,
+                })),
+            })),
+        }
+    }, [activeSchemaGroup])
 
     const handleExport = async () => {
         setIsExporting(true)
@@ -253,7 +281,11 @@ function SettingsModal({
                                     <FileDown className="h-4 w-4" />
                                     {isXlsxExporting ? "Exporting XLSX..." : "Export XLSX Workbook"}
                                 </Button>
-                                <ImportDataModal workspaceId={workspaceId} onImportCompleted={onImportCompleted}>
+                                <ImportDataModal
+                                    workspaceId={workspaceId}
+                                    schemaGroup={importSchemaGroup}
+                                    onImportCompleted={onImportCompleted}
+                                >
                                     <Button variant="secondary" className="w-full justify-start gap-2">
                                         <FileUp className="h-4 w-4" />
                                         Import Files
@@ -305,6 +337,4 @@ function SettingsModal({
     )
 }
 
-export {
-    SettingsModal
-}
+export { SettingsModal }
