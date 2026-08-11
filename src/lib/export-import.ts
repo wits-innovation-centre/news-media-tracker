@@ -29,26 +29,14 @@ export const SYSTEM_FIELDS = [
     "is_deleted",
 ] as const
 
-export type WorkspaceEntityKey = "event" | "article" | "participant"
+export const SPREADSHEET_SPECIAL_FIELDS = [
+    "id",
+    "title",
+    "parent_id",
+    "body",
+] as const
 
 export type SpreadsheetImportMapping = Record<string, string>
-
-export const SPREADSHEET_SPECIAL_FIELDS = ["parent_id", "notes"] as const
-
-export const ENTITY_CONFIG: Record<WorkspaceEntityKey, { sheetName: string; columns: string[] }> = {
-    event: {
-        sheetName: "Events",
-        columns: ["title", "date", "location", "notes", "parent_id"],
-    },
-    article: {
-        sheetName: "Articles",
-        columns: ["title", "author", "publication", "notes", "parent_id"],
-    },
-    participant: {
-        sheetName: "Participants",
-        columns: ["title", "role", "organization", "email", "notes", "parent_id"],
-    },
-}
 
 export interface ParsedSpreadsheetSheet {
     name: string
@@ -116,10 +104,11 @@ export interface SpreadsheetImportSummary {
 }
 
 export interface ImportSpreadsheetSheetOptions {
-    entityKey: WorkspaceEntityKey
+    schemaId: string
     sheet: ParsedSpreadsheetSheet
     mapping: SpreadsheetImportMapping
     workspaceId?: string
+    titleField?: string
 }
 
 // ==========================================
@@ -183,12 +172,28 @@ export const extractWikiLinkTargets = (value: unknown): string[] => {
 
 export const buildWikiLink = (value: string) => `[[${value.replace(/\]\]/g, "").trim()}]]`
 
-export function inferEntityKeyFromSheetName(sheetName: string): WorkspaceEntityKey | null {
-    const normalized = sheetName.toLowerCase().trim()
-    if (normalized.includes("event")) return "event"
-    if (normalized.includes("article")) return "article"
-    if (normalized.includes("participant")) return "participant"
-    return null
+/**
+ * Builds lookup maps for title resolutions and calculates full document hierarchy paths.
+ */
+function buildDocumentLookupMaps(documents: StoredDocument[]) {
+    const docMap = new Map<string, StoredDocument>()
+    documents.forEach((doc) => docMap.set(doc.id, doc))
+
+    const getPath = (doc: StoredDocument): string => {
+        const chain: string[] = [doc.title || doc.id]
+        let current = doc
+        const visited = new Set<string>([doc.id])
+
+        while (current.parent_id && docMap.has(current.parent_id)) {
+            if (visited.has(current.parent_id)) break
+            visited.add(current.parent_id)
+            current = docMap.get(current.parent_id)!
+            chain.unshift(current.title || current.id)
+        }
+        return chain.join(" > ")
+    }
+
+    return { docMap, getPath }
 }
 
 const triggerBlobDownload = (blob: Blob, fileName: string) => {
@@ -213,6 +218,7 @@ export async function exportWorkspaceToExcel(
 ) {
     const workbook = XLSX.utils.book_new()
     const { schemaGroup, specifications = {} } = options
+    const { docMap, getPath } = buildDocumentLookupMaps(documents)
 
     const docsBySchema = new Map<string, StoredDocument[]>()
     documents.forEach((doc) => {
@@ -262,7 +268,10 @@ export async function exportWorkspaceToExcel(
         const mainColumns = [...SYSTEM_FIELDS, ...fieldNames]
 
         const mainRows: Record<string, unknown>[] = []
-        const subtypeRowStore: Record<string, Array<{ subtypeId: string; mainId: string; fields: Record<string, unknown> }>> = {}
+        const subtypeRowStore: Record<
+            string,
+            Array<{ subtypeId: string; mainId: string; fields: Record<string, unknown> }>
+        > = {}
 
         if (schema.subtypeFields) {
             Object.keys(schema.subtypeFields).forEach((st) => {
@@ -272,10 +281,14 @@ export async function exportWorkspaceToExcel(
 
         schemaDocs.forEach((doc) => {
             const frontmatter = doc.frontmatter ?? {}
+            const parentDoc = doc.parent_id ? docMap.get(doc.parent_id) : null
+
             const mainRow: Record<string, unknown> = {
                 id: doc.id,
                 title: doc.title,
                 parent_id: doc.parent_id ?? "",
+                parent_title: parentDoc ? parentDoc.title : "",
+                path: getPath(doc),
                 body: doc.body ?? "",
                 workspace_id: doc.workspace_id ?? options.workspaceId ?? "default",
                 created_by: doc.created_by ?? "",
@@ -293,7 +306,8 @@ export async function exportWorkspaceToExcel(
             mainRows.push(mainRow)
 
             if (schema.subtypeFields) {
-                const activeSubtype = frontmatter.subtype_form || frontmatter.subtype_key || frontmatter.subtype
+                const activeSubtype =
+                    frontmatter.subtype_form || frontmatter.subtype_key || frontmatter.subtype
                 if (typeof activeSubtype === "string" && schema.subtypeFields[activeSubtype]) {
                     const subtypeId = `${doc.id}_${activeSubtype}`
                     const subtypeFieldDefs = schema.subtypeFields[activeSubtype]
@@ -337,30 +351,36 @@ export async function exportWorkspaceToExcel(
 
         XLSX.utils.book_append_sheet(workbook, mainSheet, mainSheetName)
 
+        // Generate individual Subtype sheets without separate _Join sheets
         if (schema.subtypeFields) {
             Object.entries(schema.subtypeFields).forEach(([subtypeKey, subtypeFields]) => {
                 const records = subtypeRowStore[subtypeKey] ?? []
                 const subtypeSheetName = safeSheetName(`${schema.name}_${subtypeKey}`)
-                const joinSheetName = safeSheetName(`${schema.name}_${subtypeKey}_Join`)
 
-                const subtypeCols = ["subtype_id", ...subtypeFields.map((f) => f.name)]
+                const subtypeCols = [
+                    "main_record_id",
+                    "main_record_title",
+                    "path",
+                    "subtype_id",
+                    ...subtypeFields.map((f) => f.name),
+                ]
+
                 const subtypeAoa = [
                     subtypeCols,
-                    ...records.map((rec) => [
-                        rec.subtypeId,
-                        ...subtypeFields.map((f) => rec.fields[f.name] ?? ""),
-                    ]),
+                    ...records.map((rec) => {
+                        const mainDoc = docMap.get(rec.mainId)
+                        return [
+                            rec.mainId,
+                            mainDoc?.title ?? "",
+                            mainDoc ? getPath(mainDoc) : "",
+                            rec.subtypeId,
+                            ...subtypeFields.map((f) => rec.fields[f.name] ?? ""),
+                        ]
+                    }),
                 ]
+
                 const subtypeSheet = XLSX.utils.aoa_to_sheet(subtypeAoa)
                 XLSX.utils.book_append_sheet(workbook, subtypeSheet, subtypeSheetName)
-
-                const joinCols = ["main_record_id", "subtype_record_id", "subtype_key"]
-                const joinAoa = [
-                    joinCols,
-                    ...records.map((rec) => [rec.mainId, rec.subtypeId, subtypeKey]),
-                ]
-                const joinSheet = XLSX.utils.aoa_to_sheet(joinAoa)
-                XLSX.utils.book_append_sheet(workbook, joinSheet, joinSheetName)
             })
         }
     }
@@ -377,48 +397,53 @@ export async function exportWorkspaceAsSpreadsheetBundle(
     format: "csv" | "xlsx",
     options?: ExcelExportOptions
 ): Promise<void> {
-    // 1. Use schema-driven multi-sheet export if schemaGroup is explicitly provided
     if (options?.schemaGroup) {
-        await exportWorkspaceToExcel(documents, options);
-        return;
+        await exportWorkspaceToExcel(documents, options)
+        return
     }
 
-    // 2. Fallback: Group documents by schema_id into separate sheets
-    const workbook = XLSX.utils.book_new();
-    const docsBySchema = new Map<string, StoredDocument[]>();
+    const workbook = XLSX.utils.book_new()
+    const docsBySchema = new Map<string, StoredDocument[]>()
+    const { docMap, getPath } = buildDocumentLookupMaps(documents)
 
     documents.forEach((doc) => {
-        const schemaId = doc.schema_id || "general";
-        const list = docsBySchema.get(schemaId) ?? [];
-        list.push(doc);
-        docsBySchema.set(schemaId, list);
-    });
+        const schemaId = doc.schema_id || "general"
+        const list = docsBySchema.get(schemaId) ?? []
+        list.push(doc)
+        docsBySchema.set(schemaId, list)
+    })
 
     docsBySchema.forEach((docs, schemaId) => {
-        const rows = docs.map((doc) => ({
-            id: doc.id,
-            title: doc.title,
-            schema_id: doc.schema_id,
-            parent_id: doc.parent_id ?? "",
-            body: doc.body ?? "",
-            ...doc.frontmatter,
-        }));
+        const rows = docs.map((doc) => {
+            const parentDoc = doc.parent_id ? docMap.get(doc.parent_id) : null
+            return {
+                id: doc.id,
+                title: doc.title,
+                schema_id: doc.schema_id,
+                parent_id: doc.parent_id ?? "",
+                parent_title: parentDoc ? parentDoc.title : "",
+                path: getPath(doc),
+                body: doc.body ?? "",
+                ...doc.frontmatter,
+            }
+        })
 
-        const sheet = XLSX.utils.json_to_sheet(rows);
-        const sheetName = safeSheetName(schemaId);
-        XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
-    });
+        const sheet = XLSX.utils.json_to_sheet(rows)
+        const sheetName = safeSheetName(schemaId)
+        XLSX.utils.book_append_sheet(workbook, sheet, sheetName)
+    })
 
-    const bookType = format === "csv" ? "csv" : "xlsx";
-    const mimeType = format === "csv" 
-        ? "text/csv;charset=utf-8;" 
-        : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    const bookType = format === "csv" ? "csv" : "xlsx"
+    const mimeType =
+        format === "csv"
+            ? "text/csv;charset=utf-8;"
+            : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-    const buffer = XLSX.write(workbook, { bookType, type: "array" });
-    const blob = new Blob([buffer], { type: mimeType });
-    const fileName = `workspace_export_${Date.now()}.${format}`;
+    const buffer = XLSX.write(workbook, { bookType, type: "array" })
+    const blob = new Blob([buffer], { type: mimeType })
+    const fileName = `workspace_export_${Date.now()}.${format}`
 
-    triggerBlobDownload(blob, fileName);
+    triggerBlobDownload(blob, fileName)
 }
 
 export async function inspectSpreadsheetFile(file: File): Promise<SpreadsheetInspectionResult> {
@@ -524,7 +549,9 @@ export function detectWorkbookSchemaGroup(
                 const schemaFields = schema.fields.map((f) => canonicalize(f.name))
 
                 const missing = schema.fields.filter((f) => !uploadedHeaders.has(canonicalize(f.name))).map((f) => f.name)
-                const extra = matchedSheet.headers.filter((h) => !(SYSTEM_FIELDS as readonly string[]).includes(h) && !schemaFields.includes(canonicalize(h)))
+                const extra = matchedSheet.headers.filter(
+                    (h) => !(SYSTEM_FIELDS as readonly string[]).includes(h) && !schemaFields.includes(canonicalize(h))
+                )
 
                 if (missing.length) missingFields[schema.name] = missing
                 if (extra.length) extraHeaders[schema.name] = extra
@@ -592,39 +619,24 @@ export async function importExcelWorkbook(options: ExcelImportOptions): Promise<
         if (!mainSheet) continue
 
         const subtypeSheets: Record<string, ParsedSpreadsheetSheet> = {}
-        const joinSheets: Record<string, ParsedSpreadsheetSheet> = {}
 
         if (schema.subtypeFields) {
             Object.keys(schema.subtypeFields).forEach((st) => {
                 const subKey = canonicalize(`${schema.name}_${st}`)
-                const joinKey = canonicalize(`${schema.name}_${st}_Join`)
-
                 const subSheet = sheetMap.get(subKey)
-                const joinSheet = sheetMap.get(joinKey)
-
                 if (subSheet) subtypeSheets[st] = subSheet
-                if (joinSheet) joinSheets[st] = joinSheet
             })
         }
 
-        const subtypeLookup = new Map<string, Array<{ key: string; subtypeId: string }>>()
-        Object.entries(joinSheets).forEach(([stKey, jSheet]) => {
-            jSheet.rows.forEach((r) => {
-                const mainId = r.main_record_id
-                const subtypeId = r.subtype_record_id
-                if (mainId && subtypeId) {
+        // Map main_record_id directly from the embedded columns in individual subtype sheets
+        const subtypeLookup = new Map<string, Array<{ key: string; data: Record<string, string> }>>()
+        Object.entries(subtypeSheets).forEach(([stKey, sSheet]) => {
+            sSheet.rows.forEach((row) => {
+                const mainId = row.main_record_id?.trim() || row.mainId?.trim()
+                if (mainId) {
                     const existing = subtypeLookup.get(mainId) ?? []
-                    existing.push({ key: stKey, subtypeId })
+                    existing.push({ key: stKey, data: row })
                     subtypeLookup.set(mainId, existing)
-                }
-            })
-        })
-
-        const subtypeDataLookup = new Map<string, Record<string, string>>()
-        Object.values(subtypeSheets).forEach((sSheet) => {
-            sSheet.rows.forEach((r) => {
-                if (r.subtype_id) {
-                    subtypeDataLookup.set(r.subtype_id, r)
                 }
             })
         })
@@ -658,8 +670,7 @@ export async function importExcelWorkbook(options: ExcelImportOptions): Promise<
 
             const linkedSubtypes = subtypeLookup.get(id) ?? []
             if (linkedSubtypes.length > 0 && schema.subtypeFields) {
-                const { key: stKey, subtypeId } = linkedSubtypes[0]
-                const subData = subtypeDataLookup.get(subtypeId)
+                const { key: stKey, data: subData } = linkedSubtypes[0]
 
                 if (subData && schema.subtypeFields[stKey]) {
                     frontmatter.subtype_form = stKey
@@ -716,8 +727,10 @@ export async function importExcelWorkbook(options: ExcelImportOptions): Promise<
     return { rowsProcessed, recordsUpserted, specificationsImported }
 }
 
-export async function importSpreadsheetSheet(options: ImportSpreadsheetSheetOptions): Promise<{ recordsUpserted: number }> {
-    const { entityKey, sheet, mapping, workspaceId = "default" } = options
+export async function importSpreadsheetSheet(
+    options: ImportSpreadsheetSheetOptions
+): Promise<{ recordsUpserted: number }> {
+    const { schemaId, sheet, mapping, workspaceId = "default", titleField } = options
     let recordsUpserted = 0
 
     for (const row of sheet.rows) {
@@ -729,14 +742,18 @@ export async function importSpreadsheetSheet(options: ImportSpreadsheetSheetOpti
         }
 
         const id = mappedData.id || crypto.randomUUID()
-        const title = mappedData.title || mappedData.name || id
+        const title =
+            (titleField && mappedData[titleField]) ||
+            mappedData.title ||
+            mappedData.name ||
+            id
         const parentId = mappedData.parent_id || null
-        const body = mappedData.notes || mappedData.body || ""
+        const body = mappedData.body || mappedData.description || mappedData.notes || ""
 
         const frontmatter: Record<string, unknown> = {
             id,
             title,
-            schema_id: entityKey,
+            schema_id: schemaId,
             workspace_id: workspaceId,
             ...mappedData,
         }
@@ -759,7 +776,7 @@ export async function importSpreadsheetSheet(options: ImportSpreadsheetSheetOpti
             [
                 id,
                 workspaceId,
-                entityKey,
+                schemaId,
                 parentId,
                 title,
                 JSON.stringify(frontmatter),
@@ -823,7 +840,9 @@ export async function importVaultZip(file: File, workspaceId = "default"): Promi
     let filesProcessed = 0
     let recordsUpserted = 0
 
-    const markdownFiles = Object.keys(archive.files).filter((p) => p.toLowerCase().endsWith(".md") && !archive.files[p].dir)
+    const markdownFiles = Object.keys(archive.files).filter(
+        (p) => p.toLowerCase().endsWith(".md") && !archive.files[p].dir
+    )
 
     for (const fileName of markdownFiles) {
         const entry = archive.files[fileName]
@@ -832,7 +851,10 @@ export async function importVaultZip(file: File, workspaceId = "default"): Promi
 
         const id = typeof frontmatter.id === "string" ? frontmatter.id : crypto.randomUUID()
         const schemaId = typeof frontmatter.schema_id === "string" ? frontmatter.schema_id : "imported-note"
-        const title = typeof frontmatter.title === "string" ? frontmatter.title : fileName.split("/").pop()?.replace(/\.md$/i, "") || id
+        const title =
+            typeof frontmatter.title === "string"
+                ? frontmatter.title
+                : fileName.split("/").pop()?.replace(/\.md$/i, "") || id
 
         const now = Date.now()
         await dbClient.execute(

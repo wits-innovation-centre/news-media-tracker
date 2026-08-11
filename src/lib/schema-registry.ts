@@ -8,7 +8,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
         documents: [
             {
                 id: "article",
-                name: "article",
+                name: "Article",
                 description: "Capture an article reporting a homicide.",
                 icon: "newspaper",
                 titleField: "headline",
@@ -519,7 +519,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
             },
             {
                 id: "participant",
-                name: "participant",
+                name: "Participant",
                 description: "The people that participated in the reported event.",
                 icon: "users",
                 parentSchemaId: "incident",
@@ -675,7 +675,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
                 ],
                 subtypeFields: {
-                    "victim": [
+                    "Victim": [
                         {
                             name: "date_of_death_mode",
                             label: "Date of Death Known?",
@@ -705,7 +705,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         },
 
                     ],
-                    "perpetrator": [
+                    "Perpetrator": [
                         {
                             name: "relationship_to_victim",
                             label: "Relationship to Victim",

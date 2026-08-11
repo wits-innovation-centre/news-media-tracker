@@ -7,36 +7,54 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-    ENTITY_CONFIG,
     SPREADSHEET_SPECIAL_FIELDS,
-    inferEntityKeyFromSheetName,
     importSpreadsheetSheet,
     importVaultZip,
     inspectSpreadsheetFile,
     type ParsedSpreadsheetSheet,
     type SpreadsheetImportMapping,
-    type WorkspaceEntityKey,
 } from "@/lib/export-import"
 import { toast } from "sonner"
+
+export interface DocumentSchemaField {
+    name: string
+    label?: string
+    type?: string
+}
+
+export interface DocumentSchema {
+    id: string
+    name: string
+    titleField?: string
+    fields: DocumentSchemaField[]
+}
+
+export interface DocumentSchemaGroup {
+    id?: string
+    name?: string
+    documents: DocumentSchema[]
+}
 
 interface ImportDataModalProps {
     children: React.ReactElement
     workspaceId?: string
+    schemaGroup?: DocumentSchemaGroup
+    schemaId?: string
     onImportCompleted: (summary: string) => void
 }
 
-const SPECIAL_MAPPING_FIELDS = ["title", ...SPREADSHEET_SPECIAL_FIELDS]
+const SPECIAL_MAPPING_FIELDS = [...SPREADSHEET_SPECIAL_FIELDS]
 
 const canonicalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "")
 
-const guessTargetField = (header: string, entityKey: WorkspaceEntityKey) => {
+const guessTargetField = (header: string, availableFields: string[]) => {
     const normalized = canonicalize(header)
-    const entityColumns = new Set([...ENTITY_CONFIG[entityKey].columns, ...SPECIAL_MAPPING_FIELDS])
-
     if (normalized === "parentid" || normalized === "eventid" || normalized === "event") return "parent_id"
-    if (normalized === "body" || normalized === "markdown") return "notes"
+    if (normalized === "body" || normalized === "markdown" || normalized === "notes" || normalized === "description") return "body"
+    if (normalized === "id") return "id"
+    if (normalized === "title" || normalized === "name") return "title"
 
-    for (const field of entityColumns) {
+    for (const field of availableFields) {
         if (canonicalize(field) === normalized) {
             return field
         }
@@ -45,46 +63,68 @@ const guessTargetField = (header: string, entityKey: WorkspaceEntityKey) => {
     return ""
 }
 
-const getMappingOptions = (entityKey: WorkspaceEntityKey) => {
-    const options = [...new Set([...SPECIAL_MAPPING_FIELDS, ...ENTITY_CONFIG[entityKey].columns])]
-    return options.map((field) => ({ value: field, label: field }))
-}
-
-const buildColumnMapping = (headers: string[], entityKey: WorkspaceEntityKey) => {
-    const nextMapping: SpreadsheetImportMapping = {}
-    headers.forEach((header) => {
-        nextMapping[header] = guessTargetField(header, entityKey)
-    })
-    return nextMapping
-}
-
-function ImportDataModal({ children, workspaceId = "default", onImportCompleted }: ImportDataModalProps) {
+function ImportDataModal({ children, workspaceId = "default", schemaGroup, schemaId: initialSchemaId, onImportCompleted }: ImportDataModalProps) {
     const [open, setOpen] = useState(false)
     const [activeTab, setActiveTab] = useState<"vault" | "spreadsheet">("vault")
     const [vaultFile, setVaultFile] = useState<File | null>(null)
     const [spreadsheetFile, setSpreadsheetFile] = useState<File | null>(null)
     const [spreadsheetPreview, setSpreadsheetPreview] = useState<{ fileName: string; sheetNames: string[]; sheets: ParsedSpreadsheetSheet[] } | null>(null)
     const [selectedSheetName, setSelectedSheetName] = useState<string>("")
-    const [selectedEntityKey, setSelectedEntityKey] = useState<WorkspaceEntityKey>("event")
+    const [selectedSchemaId, setSelectedSchemaId] = useState<string>(initialSchemaId || schemaGroup?.documents[0]?.id || "general")
     const [columnMapping, setColumnMapping] = useState<SpreadsheetImportMapping>({})
     const [isImporting, setIsImporting] = useState(false)
 
     const vaultInputRef = useRef<HTMLInputElement | null>(null)
     const spreadsheetInputRef = useRef<HTMLInputElement | null>(null)
 
+    const availableSchemas = useMemo<DocumentSchema[]>(() => {
+        if (schemaGroup?.documents && schemaGroup.documents.length > 0) {
+            return schemaGroup.documents
+        }
+        return [{ id: selectedSchemaId, name: selectedSchemaId, titleField: "title", fields: [] }]
+    }, [schemaGroup, selectedSchemaId])
+
+    const currentSchema = useMemo<DocumentSchema>(() => {
+        return availableSchemas.find((s: DocumentSchema) => s.id === selectedSchemaId) ?? availableSchemas[0]
+    }, [availableSchemas, selectedSchemaId])
+
+    const availableFields = useMemo<string[]>(() => {
+        const schemaFields = currentSchema?.fields.map((f: DocumentSchemaField) => f.name) ?? []
+        return [...new Set([...SPECIAL_MAPPING_FIELDS, ...schemaFields])]
+    }, [currentSchema])
+
+    const mappingOptions = useMemo(() => {
+        return availableFields.map((field) => ({ value: field, label: field }))
+    }, [availableFields])
+
+    const buildColumnMapping = (headers: string[], fields: string[]) => {
+        const nextMapping: SpreadsheetImportMapping = {}
+        headers.forEach((header) => {
+            nextMapping[header] = guessTargetField(header, fields)
+        })
+        return nextMapping
+    }
+
+    const inferSchemaIdFromSheetName = (sheetName: string): string => {
+        if (!schemaGroup) return selectedSchemaId
+        const canonicalName = canonicalize(sheetName)
+        const match = schemaGroup.documents.find(
+            (doc: DocumentSchema) => canonicalize(doc.name) === canonicalName || canonicalize(doc.id) === canonicalName
+        )
+        return match?.id || selectedSchemaId
+    }
+
     const selectedSheet = useMemo(() => {
         if (!spreadsheetPreview) return null
         return spreadsheetPreview.sheets.find((sheet) => sheet.name === selectedSheetName) ?? spreadsheetPreview.sheets[0] ?? null
     }, [selectedSheetName, spreadsheetPreview])
-
-    const mappingOptions = useMemo(() => getMappingOptions(selectedEntityKey), [selectedEntityKey])
 
     const resetState = () => {
         setVaultFile(null)
         setSpreadsheetFile(null)
         setSpreadsheetPreview(null)
         setSelectedSheetName("")
-        setSelectedEntityKey("event")
+        setSelectedSchemaId(initialSchemaId || schemaGroup?.documents[0]?.id || "general")
         setColumnMapping({})
     }
 
@@ -132,7 +172,7 @@ function ImportDataModal({ children, workspaceId = "default", onImportCompleted 
         setIsImporting(true)
         try {
             const summary = await importSpreadsheetSheet({
-                entityKey: selectedEntityKey,
+                schemaId: selectedSchemaId,
                 sheet: selectedSheet,
                 mapping: columnMapping,
                 workspaceId,
@@ -147,7 +187,7 @@ function ImportDataModal({ children, workspaceId = "default", onImportCompleted 
         }
     }
 
-    const selectedEntityLabel = ENTITY_CONFIG[selectedEntityKey].sheetName
+    const selectedSchemaLabel = currentSchema?.name || selectedSchemaId
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -175,7 +215,7 @@ function ImportDataModal({ children, workspaceId = "default", onImportCompleted 
                                 </div>
                                 <div>
                                     <h3 className="text-base font-semibold">Obsidian vault archive</h3>
-                                    <p className="text-sm text-muted-foreground">Upload a zip archive containing Events, Articles, and Participants markdown files.</p>
+                                    <p className="text-sm text-muted-foreground">Upload a zip archive containing markdown files.</p>
                                 </div>
                             </div>
 
@@ -209,7 +249,7 @@ function ImportDataModal({ children, workspaceId = "default", onImportCompleted 
                                 </div>
                                 <div>
                                     <h3 className="text-base font-semibold">Spreadsheet import</h3>
-                                    <p className="text-sm text-muted-foreground">Upload a CSV or XLSX file, pick a sheet, and map the columns into {selectedEntityLabel} fields.</p>
+                                    <p className="text-sm text-muted-foreground">Upload a CSV or XLSX file, pick a sheet, and map the columns into {selectedSchemaLabel} fields.</p>
                                 </div>
                             </div>
 
@@ -229,12 +269,14 @@ function ImportDataModal({ children, workspaceId = "default", onImportCompleted 
                                     const preview = await inspectSpreadsheetFile(file)
                                     setSpreadsheetPreview(preview)
                                     const firstSheet = preview.sheets[0]
-                                    const nextEntityKey = firstSheet ? inferEntityKeyFromSheetName(firstSheet.name) ?? "event" : "event"
-                                    setSelectedEntityKey(nextEntityKey)
                                     const sheetName = preview.sheetNames[0] ?? ""
+                                    const nextSchemaId = firstSheet ? inferSchemaIdFromSheetName(firstSheet.name) : selectedSchemaId
+                                    setSelectedSchemaId(nextSchemaId)
                                     setSelectedSheetName(sheetName)
                                     if (firstSheet) {
-                                        setColumnMapping(buildColumnMapping(firstSheet.headers, nextEntityKey))
+                                        const schemaObj = availableSchemas.find((s: DocumentSchema) => s.id === nextSchemaId) ?? availableSchemas[0]
+                                        const fields = [...new Set([...SPECIAL_MAPPING_FIELDS, ...(schemaObj?.fields.map((f: DocumentSchemaField) => f.name) ?? [])])]
+                                        setColumnMapping(buildColumnMapping(firstSheet.headers, fields))
                                     }
                                 }}
                             />
@@ -256,9 +298,11 @@ function ImportDataModal({ children, workspaceId = "default", onImportCompleted 
                                             const nextSheetName = value ?? ""
                                             setSelectedSheetName(nextSheetName)
                                             const nextSheet = spreadsheetPreview?.sheets.find((sheet) => sheet.name === nextSheetName)
-                                            const nextEntityKey = inferEntityKeyFromSheetName(nextSheetName) ?? selectedEntityKey
-                                            setSelectedEntityKey(nextEntityKey)
-                                            setColumnMapping(buildColumnMapping(nextSheet?.headers ?? [], nextEntityKey))
+                                            const nextSchemaId = inferSchemaIdFromSheetName(nextSheetName)
+                                            setSelectedSchemaId(nextSchemaId)
+                                            const schemaObj = availableSchemas.find((s: DocumentSchema) => s.id === nextSchemaId) ?? availableSchemas[0]
+                                            const fields = [...new Set([...SPECIAL_MAPPING_FIELDS, ...(schemaObj?.fields.map((f: DocumentSchemaField) => f.name) ?? [])])]
+                                            setColumnMapping(buildColumnMapping(nextSheet?.headers ?? [], fields))
                                         }}
                                         disabled={!spreadsheetPreview}
                                     >
@@ -274,23 +318,27 @@ function ImportDataModal({ children, workspaceId = "default", onImportCompleted 
                                         </SelectContent>
                                     </Select>
 
-                                    <Label htmlFor="entity-select">Entity</Label>
+                                    <Label htmlFor="schema-select">Schema / Target Entity</Label>
                                     <Select
-                                        value={selectedEntityKey}
+                                        value={selectedSchemaId}
                                         onValueChange={(value) => {
-                                            const nextEntityKey = (value ?? "event") as WorkspaceEntityKey
-                                            setSelectedEntityKey(nextEntityKey)
+                                            const nextSchemaId = value ?? "general"
+                                            setSelectedSchemaId(nextSchemaId)
                                             if (!selectedSheet) return
-                                            setColumnMapping(buildColumnMapping(selectedSheet.headers, nextEntityKey))
+                                            const schemaObj = availableSchemas.find((s: DocumentSchema) => s.id === nextSchemaId) ?? availableSchemas[0]
+                                            const fields = [...new Set([...SPECIAL_MAPPING_FIELDS, ...(schemaObj?.fields.map((f: DocumentSchemaField) => f.name) ?? [])])]
+                                            setColumnMapping(buildColumnMapping(selectedSheet.headers, fields))
                                         }}
                                     >
-                                        <SelectTrigger id="entity-select">
+                                        <SelectTrigger id="schema-select">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="event">Events</SelectItem>
-                                            <SelectItem value="article">Articles</SelectItem>
-                                            <SelectItem value="participant">Participants</SelectItem>
+                                            {availableSchemas.map((schema: DocumentSchema) => (
+                                                <SelectItem key={schema.id} value={schema.id}>
+                                                    {schema.name || schema.id}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
