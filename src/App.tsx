@@ -366,6 +366,11 @@ function App() {
         });
     }, [documents, drafts, storedDocuments]);
 
+    const activeSchemaGroup = useMemo(
+        () => groupsWithSpecifications.find((group) => group.id === activeSchema?.groupId),
+        [activeSchema, groupsWithSpecifications]
+    );
+
     const isArchivableActiveSchema = activeSchema
         ? Boolean(activeSchema.metadata?.archivable)
         : false;
@@ -672,11 +677,19 @@ function App() {
     };
 
     const triggerCsvExport = async () => {
-        await exportWorkspaceAsSpreadsheetBundle(Object.values(storedDocuments), "csv");
+        await exportWorkspaceAsSpreadsheetBundle(
+            Object.values(storedDocuments),
+            "csv",
+            activeSchemaGroup ? { schemaGroup: activeSchemaGroup } : undefined
+        );
     };
 
     const triggerXlsxExport = async () => {
-        await exportWorkspaceAsSpreadsheetBundle(Object.values(storedDocuments), "xlsx");
+        await exportWorkspaceAsSpreadsheetBundle(
+            Object.values(storedDocuments),
+            "xlsx",
+            activeSchemaGroup ? { schemaGroup: activeSchemaGroup } : undefined
+        );
     };
 
     const handleImportCompleted = async (summary: string) => {

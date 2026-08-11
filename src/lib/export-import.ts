@@ -372,30 +372,42 @@ export async function exportWorkspaceToExcel(
     triggerBlobDownload(blob, fileName)
 }
 
-// Add to src/lib/export-import.ts
 export async function exportWorkspaceAsSpreadsheetBundle(
     documents: StoredDocument[],
     format: "csv" | "xlsx",
     options?: ExcelExportOptions
 ): Promise<void> {
+    // 1. Use schema-driven multi-sheet export if schemaGroup is explicitly provided
     if (options?.schemaGroup) {
         await exportWorkspaceToExcel(documents, options);
         return;
     }
 
-    // Fallback simple export when schemaGroup is not explicitly provided
+    // 2. Fallback: Group documents by schema_id into separate sheets
     const workbook = XLSX.utils.book_new();
-    const rows = documents.map((doc) => ({
-        id: doc.id,
-        title: doc.title,
-        schema_id: doc.schema_id,
-        parent_id: doc.parent_id ?? "",
-        body: doc.body ?? "",
-        ...doc.frontmatter,
-    }));
+    const docsBySchema = new Map<string, StoredDocument[]>();
 
-    const sheet = XLSX.utils.json_to_sheet(rows);
-    XLSX.utils.book_append_sheet(workbook, sheet, "Workspace Notes");
+    documents.forEach((doc) => {
+        const schemaId = doc.schema_id || "general";
+        const list = docsBySchema.get(schemaId) ?? [];
+        list.push(doc);
+        docsBySchema.set(schemaId, list);
+    });
+
+    docsBySchema.forEach((docs, schemaId) => {
+        const rows = docs.map((doc) => ({
+            id: doc.id,
+            title: doc.title,
+            schema_id: doc.schema_id,
+            parent_id: doc.parent_id ?? "",
+            body: doc.body ?? "",
+            ...doc.frontmatter,
+        }));
+
+        const sheet = XLSX.utils.json_to_sheet(rows);
+        const sheetName = safeSheetName(schemaId);
+        XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+    });
 
     const bookType = format === "csv" ? "csv" : "xlsx";
     const mimeType = format === "csv" 
@@ -404,16 +416,9 @@ export async function exportWorkspaceAsSpreadsheetBundle(
 
     const buffer = XLSX.write(workbook, { bookType, type: "array" });
     const blob = new Blob([buffer], { type: mimeType });
-    
     const fileName = `workspace_export_${Date.now()}.${format}`;
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = fileName;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+
+    triggerBlobDownload(blob, fileName);
 }
 
 export async function inspectSpreadsheetFile(file: File): Promise<SpreadsheetInspectionResult> {
