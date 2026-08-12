@@ -15,27 +15,9 @@ import {
     type ParsedSpreadsheetSheet,
     type SpreadsheetImportMapping,
 } from "@/lib/export-import"
+import type { DocumentSchema, DocumentSchemaGroup } from "@/lib/types"
+import { createSchemaFromSheet } from "@/lib/schema/utils"
 import { toast } from "sonner"
-
-export interface DocumentSchemaField {
-    name: string
-    label?: string
-    type?: string
-}
-
-export interface DocumentSchema {
-    id: string
-    name: string
-    titleField?: string
-    parentSchemaId?: string // Explicit parent dependency definition
-    fields: DocumentSchemaField[]
-}
-
-export interface DocumentSchemaGroup {
-    id?: string
-    name?: string
-    documents: DocumentSchema[]
-}
 
 interface SheetImportConfig {
     sheetName: string
@@ -50,6 +32,7 @@ interface ImportDataModalProps {
     schemaGroup?: DocumentSchemaGroup
     schemaId?: string
     onImportCompleted: (summary: string) => void
+    onCreateSchema?: (schema: DocumentSchema) => void
 }
 
 const SPECIAL_MAPPING_FIELDS = [...SPREADSHEET_SPECIAL_FIELDS]
@@ -71,7 +54,14 @@ const guessTargetField = (header: string, availableFields: string[]) => {
     return ""
 }
 
-function ImportDataModal({ children, workspaceId = "default", schemaGroup, schemaId: initialSchemaId, onImportCompleted }: ImportDataModalProps) {
+function ImportDataModal({
+    children,
+    workspaceId = "default",
+    schemaGroup, schemaId:
+    initialSchemaId,
+    onImportCompleted,
+    onCreateSchema
+}: ImportDataModalProps) {
     const [open, setOpen] = useState(false)
     const [activeTab, setActiveTab] = useState<"vault" | "spreadsheet">("vault")
     const [vaultFile, setVaultFile] = useState<File | null>(null)
@@ -106,7 +96,7 @@ function ImportDataModal({ children, workspaceId = "default", schemaGroup, schem
         const schemaObj = availableSchemas.find((s) => s.id === schemaId) ?? availableSchemas[0]
         const schemaFields = schemaObj?.fields.map((f) => f.name) ?? []
         const availableFields = [...new Set([...SPECIAL_MAPPING_FIELDS, ...schemaFields])]
-        
+
         const nextMapping: SpreadsheetImportMapping = {}
         headers.forEach((header) => {
             nextMapping[header] = guessTargetField(header, availableFields)
@@ -200,12 +190,22 @@ function ImportDataModal({ children, workspaceId = "default", schemaGroup, schem
         const sheet = spreadsheetPreview?.sheets.find((s) => s.name === sheetName)
         if (!sheet) return
 
+        let targetSchemaId = schemaId
+
+        if (schemaId === "__create_new__") {
+            const newSchema = createSchemaFromSheet(sheet, schemaGroup?.id, schemaGroup?.name)
+            if (onCreateSchema) {
+                onCreateSchema(newSchema)
+            }
+            targetSchemaId = newSchema.id
+        }
+
         setSheetConfigs((prev) => ({
             ...prev,
             [sheetName]: {
                 ...prev[sheetName],
-                schemaId,
-                mapping: buildColumnMapping(sheet.headers, schemaId),
+                schemaId: targetSchemaId,
+                mapping: buildColumnMapping(sheet.headers, targetSchemaId),
             },
         }))
     }

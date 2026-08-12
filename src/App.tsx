@@ -35,7 +35,7 @@ import {
 import {
     DEFAULT_SCHEMA_TEMPLATES,
     createSchemaGroupFromTemplate,
-} from "@/lib/schema-registry";
+} from "@/lib/schema/utils";
 import { upsertReportPendingAnchor } from "@/lib/archive/utils";
 import { detectPotentialDuplicatesForDocument, detectPotentialDuplicatesForWorkspace } from "@/lib/duplicates";
 import { getOrCreateUserId } from "@/lib/provenance";

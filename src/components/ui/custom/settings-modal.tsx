@@ -84,19 +84,6 @@ function SettingsModal({
         }
     }, [groups, selectedTemplateGroupId, activeWorkspace])
 
-    const importSchemaGroup = useMemo(() => {
-        return {
-            ...activeSchemaGroup,
-            documents: activeSchemaGroup.documents.map((doc) => ({
-                ...doc,
-                fields: doc.fields.map((field) => ({
-                    ...field,
-                    type: typeof field.type === "string" ? field.type : field.type.data,
-                })),
-            })),
-        }
-    }, [activeSchemaGroup])
-
     const handleExport = async () => {
         setIsExporting(true)
         try {
@@ -283,7 +270,7 @@ function SettingsModal({
                                 </Button>
                                 <ImportDataModal
                                     workspaceId={workspaceId}
-                                    schemaGroup={importSchemaGroup}
+                                    schemaGroup={activeSchemaGroup}
                                     onImportCompleted={onImportCompleted}
                                 >
                                     <Button variant="secondary" className="w-full justify-start gap-2">

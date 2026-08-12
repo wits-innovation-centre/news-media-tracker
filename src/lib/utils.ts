@@ -8,9 +8,9 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 interface GetDocumentTitleOptions {
-    schema?: DocumentSchema
-    document?: Partial<StoredDocument> | Record<string, any>
-    fallbackIndex?: number
+  schema?: DocumentSchema
+  document?: Partial<StoredDocument> | Record<string, any>
+  fallbackIndex?: number
 }
 
 interface SQLiteNoteRecord {
@@ -192,21 +192,21 @@ export function generateFieldValue(field: FieldDefinition, formValues: Record<st
 }
 
 export function getDocumentTitle({ schema, document, fallbackIndex }: GetDocumentTitleOptions): string {
-    const documentType = schema?.name || schema?.id || "Document"
-    const countLabel = fallbackIndex !== undefined ? ` ${fallbackIndex}` : ""
+  const documentType = schema?.name || schema?.id || "Document"
+  const countLabel = fallbackIndex !== undefined ? ` ${fallbackIndex}` : ""
 
-    if (!schema || !document) {
-        return `${documentType}${countLabel}`
-    }
-
-    const values = "frontmatter" in document && document.frontmatter ? document.frontmatter : document
-
-    if (schema.titleField && values[schema.titleField]) {
-        const val = values[schema.titleField]
-        if (typeof val === "string" && val.trim().length > 0) {
-            return val.trim()
-        }
-    }
-
+  if (!schema || !document) {
     return `${documentType}${countLabel}`
+  }
+
+  const values = "frontmatter" in document && document.frontmatter ? document.frontmatter : document
+
+  if (schema.titleField && values[schema.titleField]) {
+    const val = values[schema.titleField]
+    if (typeof val === "string" && val.trim().length > 0) {
+      return val.trim()
+    }
+  }
+
+  return `${documentType}${countLabel}`
 }

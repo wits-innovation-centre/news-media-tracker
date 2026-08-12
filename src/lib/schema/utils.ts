@@ -1,4 +1,203 @@
-import type { DocumentSchema, DocumentSchemaGroup, FieldDefinition, TieredOptionsSchema } from "@/lib/types"
+import type { ParsedSpreadsheetSheet } from "@/lib/export-import"
+import type { FieldDefinition, DocumentSchema, DocumentSchemaGroup, TieredOptionsSchema } from "@/lib/types"
+
+function createSchemaFromSheet(
+    sheet: ParsedSpreadsheetSheet,
+    groupId?: string,
+    groupName?: string
+): DocumentSchema {
+    const canonicalName = sheet.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")
+    const schemaId = canonicalName || crypto.randomUUID()
+
+    // Map headers to FieldDefinition matching FieldDataType & FieldInputType
+    const fields: FieldDefinition[] = sheet.headers.map((header) => {
+        const key = header.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_")
+        return {
+            name: key || header,
+            label: header,
+            type: {
+                data: "string",
+                input: "text",
+            },
+            required: false,
+        }
+    })
+
+    // Infer title field key or default to first column key / fallback
+    const titleHeader = sheet.headers.find((h) =>
+        ["title", "name", "label", "heading"].includes(h.trim().toLowerCase())
+    )
+    const titleField = titleHeader
+        ? titleHeader.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_")
+        : fields[0]?.name || "title"
+
+    return {
+        id: schemaId,
+        name: sheet.name,
+        titleField,
+        groupId,
+        groupName,
+        fields,
+    }
+}
+
+
+
+function createSchemaFromTemplate(template: DocumentSchema, overrides?: Partial<DocumentSchema>): DocumentSchema;
+function createSchemaFromTemplate(template: DocumentSchemaGroup): DocumentSchema[];
+
+function createSchemaFromTemplate(
+    template: DocumentSchema | DocumentSchemaGroup,
+    overrides?: Partial<DocumentSchema>
+): DocumentSchema | DocumentSchema[] {
+
+    if ("documents" in template) {
+        const idMap: Record<string, string> = {};
+        template.documents.forEach((doc) => {
+            idMap[doc.id] = `${doc.id}-${crypto.randomUUID()}`;
+        });
+
+        return template.documents.map((doc) => {
+            const newDocId = idMap[doc.id];
+
+            const clonedFields = doc.fields.map((field) => ({
+                ...field,
+                type: { ...field.type },
+                options: Array.isArray(field.options)
+                    ? [...field.options]
+                    : field.options
+                        ? JSON.parse(JSON.stringify(field.options))
+                        : undefined
+            }));
+
+            const clonedSubtypeFields: Record<string, FieldDefinition[]> = {};
+            if (doc.subtypeFields) {
+                Object.entries(doc.subtypeFields).forEach(([subType, fields]) => {
+                    clonedSubtypeFields[subType] = fields.map((field) => ({
+                        ...field,
+                        type: { ...field.type },
+                        options: Array.isArray(field.options)
+                            ? [...field.options]
+                            : field.options
+                                ? JSON.parse(JSON.stringify(field.options))
+                                : undefined
+                    }));
+                });
+            }
+
+            return {
+                ...doc,
+                id: newDocId,
+                parentSchemaId: doc.parentSchemaId ? (idMap[doc.parentSchemaId] ?? doc.parentSchemaId) : undefined,
+                groupId: template.id,
+                groupName: template.name,
+                fields: clonedFields,
+                subtypeFields: doc.subtypeFields ? clonedSubtypeFields : undefined,
+            };
+        });
+    }
+
+    return {
+        ...template,
+        ...overrides,
+        id: overrides?.id ?? `${template.id}-${crypto.randomUUID()}`,
+        name: overrides?.name ?? template.name,
+        groupId: undefined,
+        groupName: undefined,
+        fields: (overrides?.fields ?? template.fields).map((field) => ({
+            ...field,
+            type: { ...field.type },
+            options: Array.isArray(field.options)
+                ? [...field.options]
+                : field.options
+                    ? JSON.parse(JSON.stringify(field.options))
+                    : undefined
+        })),
+        subtypeFields: template.subtypeFields ? Object.fromEntries(
+            Object.entries(template.subtypeFields).map(([k, fields]) => [
+                k,
+                fields.map((field) => ({
+                    ...field,
+                    type: { ...field.type },
+                    options: Array.isArray(field.options)
+                        ? [...field.options]
+                        : field.options
+                            ? JSON.parse(JSON.stringify(field.options))
+                            : undefined
+                }))
+            ])
+        ) : undefined
+    };
+};
+
+function createSchemaGroupFromTemplate(
+    template: DocumentSchemaGroup,
+    overrides?: Partial<DocumentSchemaGroup>,
+    options?: { preserveTemplateIds?: boolean }
+): DocumentSchemaGroup {
+    const preserveTemplateIds = options?.preserveTemplateIds === true;
+    const groupId = overrides?.id ?? (preserveTemplateIds ? template.id : `${template.id}-${crypto.randomUUID()}`);
+
+    const idMap: Record<string, string> = {};
+    template.documents.forEach((doc) => {
+        idMap[doc.id] = preserveTemplateIds ? doc.id : `${doc.id}-${crypto.randomUUID()}`;
+    });
+
+    const clonedDocuments = template.documents.map((doc) => {
+        const newDocId = idMap[doc.id];
+
+        const clonedFields = doc.fields.map((field) => ({
+            ...field,
+            type: { ...field.type },
+            options: Array.isArray(field.options)
+                ? [...field.options]
+                : field.options
+                    ? JSON.parse(JSON.stringify(field.options))
+                    : undefined
+        }));
+
+        const clonedSubtypeFields: Record<string, FieldDefinition[]> = {};
+        if (doc.subtypeFields) {
+            Object.entries(doc.subtypeFields).forEach(([subType, fields]) => {
+                clonedSubtypeFields[subType] = fields.map((field) => ({
+                    ...field,
+                    type: { ...field.type },
+                    options: Array.isArray(field.options)
+                        ? [...field.options]
+                        : field.options
+                            ? JSON.parse(JSON.stringify(field.options))
+                            : undefined
+                }));
+            });
+        }
+
+        return {
+            ...doc,
+            id: newDocId,
+            parentSchemaId: doc.parentSchemaId ? (idMap[doc.parentSchemaId] ?? doc.parentSchemaId) : undefined,
+            fields: clonedFields,
+            subtypeFields: doc.subtypeFields ? clonedSubtypeFields : undefined,
+        };
+    });
+
+    return {
+        ...template,
+        ...overrides,
+        id: groupId,
+        name: overrides?.name ?? template.name,
+        description: overrides?.description ?? template.description,
+        documents: clonedDocuments,
+    };
+};
+
+function buildFieldDefinitionsForParent(parentSchema?: DocumentSchema, childSchema?: DocumentSchema): FieldDefinition[] {
+    const inheritedFields = parentSchema?.fields ?? []
+    const childFields = childSchema?.fields ?? []
+    return [
+        ...inheritedFields.map((field) => ({ ...field })),
+        ...childFields.map((field) => ({ ...field })),
+    ]
+}
 
 const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
     {
@@ -807,166 +1006,11 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
     }
 ]
 
-function createSchemaFromTemplate(template: DocumentSchema, overrides?: Partial<DocumentSchema>): DocumentSchema;
-function createSchemaFromTemplate(template: DocumentSchemaGroup): DocumentSchema[];
-
-function createSchemaFromTemplate(
-    template: DocumentSchema | DocumentSchemaGroup,
-    overrides?: Partial<DocumentSchema>
-): DocumentSchema | DocumentSchema[] {
-
-    if ("documents" in template) {
-        const idMap: Record<string, string> = {};
-        template.documents.forEach((doc) => {
-            idMap[doc.id] = `${doc.id}-${crypto.randomUUID()}`;
-        });
-
-        return template.documents.map((doc) => {
-            const newDocId = idMap[doc.id];
-
-            const clonedFields = doc.fields.map((field) => ({
-                ...field,
-                type: { ...field.type },
-                options: Array.isArray(field.options)
-                    ? [...field.options]
-                    : field.options
-                        ? JSON.parse(JSON.stringify(field.options))
-                        : undefined
-            }));
-
-            const clonedSubtypeFields: Record<string, FieldDefinition[]> = {};
-            if (doc.subtypeFields) {
-                Object.entries(doc.subtypeFields).forEach(([subType, fields]) => {
-                    clonedSubtypeFields[subType] = fields.map((field) => ({
-                        ...field,
-                        type: { ...field.type },
-                        options: Array.isArray(field.options)
-                            ? [...field.options]
-                            : field.options
-                                ? JSON.parse(JSON.stringify(field.options))
-                                : undefined
-                    }));
-                });
-            }
-
-            return {
-                ...doc,
-                id: newDocId,
-                parentSchemaId: doc.parentSchemaId ? (idMap[doc.parentSchemaId] ?? doc.parentSchemaId) : undefined,
-                groupId: template.id,
-                groupName: template.name,
-                fields: clonedFields,
-                subtypeFields: doc.subtypeFields ? clonedSubtypeFields : undefined,
-            };
-        });
-    }
-
-    return {
-        ...template,
-        ...overrides,
-        id: overrides?.id ?? `${template.id}-${crypto.randomUUID()}`,
-        name: overrides?.name ?? template.name,
-        groupId: undefined,
-        groupName: undefined,
-        fields: (overrides?.fields ?? template.fields).map((field) => ({
-            ...field,
-            type: { ...field.type },
-            options: Array.isArray(field.options)
-                ? [...field.options]
-                : field.options
-                    ? JSON.parse(JSON.stringify(field.options))
-                    : undefined
-        })),
-        subtypeFields: template.subtypeFields ? Object.fromEntries(
-            Object.entries(template.subtypeFields).map(([k, fields]) => [
-                k,
-                fields.map((field) => ({
-                    ...field,
-                    type: { ...field.type },
-                    options: Array.isArray(field.options)
-                        ? [...field.options]
-                        : field.options
-                            ? JSON.parse(JSON.stringify(field.options))
-                            : undefined
-                }))
-            ])
-        ) : undefined
-    };
-};
-
-function createSchemaGroupFromTemplate(
-    template: DocumentSchemaGroup,
-    overrides?: Partial<DocumentSchemaGroup>,
-    options?: { preserveTemplateIds?: boolean }
-): DocumentSchemaGroup {
-    const preserveTemplateIds = options?.preserveTemplateIds === true;
-    const groupId = overrides?.id ?? (preserveTemplateIds ? template.id : `${template.id}-${crypto.randomUUID()}`);
-
-    const idMap: Record<string, string> = {};
-    template.documents.forEach((doc) => {
-        idMap[doc.id] = preserveTemplateIds ? doc.id : `${doc.id}-${crypto.randomUUID()}`;
-    });
-
-    const clonedDocuments = template.documents.map((doc) => {
-        const newDocId = idMap[doc.id];
-
-        const clonedFields = doc.fields.map((field) => ({
-            ...field,
-            type: { ...field.type },
-            options: Array.isArray(field.options)
-                ? [...field.options]
-                : field.options
-                    ? JSON.parse(JSON.stringify(field.options))
-                    : undefined
-        }));
-
-        const clonedSubtypeFields: Record<string, FieldDefinition[]> = {};
-        if (doc.subtypeFields) {
-            Object.entries(doc.subtypeFields).forEach(([subType, fields]) => {
-                clonedSubtypeFields[subType] = fields.map((field) => ({
-                    ...field,
-                    type: { ...field.type },
-                    options: Array.isArray(field.options)
-                        ? [...field.options]
-                        : field.options
-                            ? JSON.parse(JSON.stringify(field.options))
-                            : undefined
-                }));
-            });
-        }
-
-        return {
-            ...doc,
-            id: newDocId,
-            parentSchemaId: doc.parentSchemaId ? (idMap[doc.parentSchemaId] ?? doc.parentSchemaId) : undefined,
-            fields: clonedFields,
-            subtypeFields: doc.subtypeFields ? clonedSubtypeFields : undefined,
-        };
-    });
-
-    return {
-        ...template,
-        ...overrides,
-        id: groupId,
-        name: overrides?.name ?? template.name,
-        description: overrides?.description ?? template.description,
-        documents: clonedDocuments,
-    };
-};
-
-function buildFieldDefinitionsForParent(parentSchema?: DocumentSchema, childSchema?: DocumentSchema): FieldDefinition[] {
-    const inheritedFields = parentSchema?.fields ?? []
-    const childFields = childSchema?.fields ?? []
-    return [
-        ...inheritedFields.map((field) => ({ ...field })),
-        ...childFields.map((field) => ({ ...field })),
-    ]
-}
-
 export {
-    DEFAULT_SCHEMA_TEMPLATES,
-
     buildFieldDefinitionsForParent,
     createSchemaFromTemplate,
-    createSchemaGroupFromTemplate
+    createSchemaGroupFromTemplate,
+    createSchemaFromSheet,
+
+    DEFAULT_SCHEMA_TEMPLATES
 }
