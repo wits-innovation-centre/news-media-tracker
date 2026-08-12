@@ -111,7 +111,7 @@ function WorkspaceProvider({ children }: { children: React.ReactNode }) {
             ?? workspaces[0]
             ?? {
             id: "default",
-                name: "My Workspace",
+            name: "My Workspace",
             description: "Primary local workspace",
             created_at: FALLBACK_WORKSPACE_TIMESTAMP,
             last_accessed_at: FALLBACK_WORKSPACE_TIMESTAMP,

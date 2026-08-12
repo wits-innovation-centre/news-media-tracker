@@ -79,7 +79,7 @@ function SettingsMainContent({
     const [includeTutorial, setIncludeTutorial] = useState(defaultIncludeTutorial)
 
     const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
-    const [selectedTemplateGroupId, setSelectedTemplateGroupId] = useState<string>(() => activeWorkspace?.template_group_id ?? "__none")
+    const [selectedTemplateGroupId, setSelectedTemplateGroupId] = useState<string>(() => activeWorkspace?.template_group_id ?? "__none__")
 
     const handleExport = async () => {
         setIsExporting(true)
@@ -143,7 +143,7 @@ function SettingsMainContent({
         try {
             await onSetWorkspaceTemplateGroup(
                 activeWorkspace.id,
-                selectedTemplateGroupId === "__none" ? undefined : selectedTemplateGroupId
+                selectedTemplateGroupId === "__none__" ? undefined : selectedTemplateGroupId
             )
         } finally {
             setIsSavingTemplateGroup(false)
@@ -153,7 +153,7 @@ function SettingsMainContent({
     const totalSchemas = useMemo(() => groups.reduce((acc, g) => acc + (g.documents?.length || 0), 0), [groups])
 
     return (
-        <div className="p-6 space-y-6 max-w-4xl mx-auto">
+        <div className="p-6 space-y-6 max-w-5xl mx-auto">
             {/* Feature Modules Routing Cards */}
             <div>
                 <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wider">Settings Modules</h3>
@@ -220,7 +220,7 @@ function SettingsMainContent({
                                 if (!value) return
                                 void onSwitchWorkspace(value)
                                 const nextWorkspace = workspaces.find((workspace) => workspace.id === value)
-                                setSelectedTemplateGroupId(nextWorkspace?.template_group_id ?? "__none")
+                                setSelectedTemplateGroupId(nextWorkspace?.template_group_id ?? "__none__")
                             }}
                         >
                             <SelectTrigger className="w-56 text-xs h-8">
@@ -266,13 +266,13 @@ function SettingsMainContent({
                     <div className="flex gap-2 items-center">
                         <Select
                             value={selectedTemplateGroupId}
-                            onValueChange={(value) => setSelectedTemplateGroupId(value ?? "__none")}
+                            onValueChange={(value) => setSelectedTemplateGroupId(value ?? "__none__")}
                         >
                             <SelectTrigger className="flex-1 text-xs h-8">
                                 <SelectValue placeholder="Select template group" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="__none" className="text-xs">No default template group</SelectItem>
+                                <SelectItem value="__none__" className="text-xs">No default template group</SelectItem>
                                 {groups.map((group) => (
                                     <SelectItem key={group.id} value={group.id} className="text-xs">
                                         {group.name}
@@ -525,8 +525,7 @@ export function SettingsModal(props: SettingsModalProps) {
                 )}
             </DialogTrigger>
 
-            {/* [&>button.absolute]:hidden suppresses Radix/shadcn default close button to prevent duplicate X */}
-            <DialogContent className="flex h-[94vh] w-[96vw] max-w-5xl flex-col overflow-hidden p-0 [&>button.absolute]:hidden">
+            <DialogContent className="flex h-[92vh] w-[95vw] sm:max-w-7xl flex-col overflow-hidden p-0 [&>button.absolute]:hidden">
                 <ModalStackHeader
                     stack={modalStack.stack}
                     onBack={modalStack.pop}
