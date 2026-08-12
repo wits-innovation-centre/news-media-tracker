@@ -17,7 +17,14 @@ import {
     type ParsedSpreadsheetSheet,
     type SpreadsheetImportMapping,
 } from "@/lib/export-import"
-import type { DocumentSchema, DocumentSchemaGroup, FieldDataType, FieldInputType, SpecificationDefinition } from "@/lib/types"
+import {
+    DATA_TO_INPUT,
+    type DocumentSchema,
+    type DocumentSchemaGroup,
+    type FieldDataType,
+    type FieldInputType,
+    type SpecificationDefinition,
+} from "@/lib/types"
 import { toast } from "sonner"
 
 interface CustomSchemaFieldConfig {
@@ -61,7 +68,6 @@ export interface ImportDataModalProps {
 
 const SPECIAL_MAPPING_FIELDS = [...SPREADSHEET_SPECIAL_FIELDS]
 const DATA_TYPES: FieldDataType[] = ["string", "array<string>", "hierarchical-select", "select", "number", "boolean", "date", "date-range", "markdown", "form"]
-const INPUT_TYPES: FieldInputType[] = ["text", "textarea", "select", "search-select", "search-select-input", "date", "date-range", "text-multi", "checkbox", "switch", "subtype-form-select", "embedded-form-list"]
 
 const canonicalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "")
 
@@ -84,21 +90,6 @@ const guessTargetField = (header: string, availableFields: string[]) => {
     return ""
 }
 
-const getSampleValue = (sheet: ParsedSpreadsheetSheet, header: string, colIndex: number) => {
-    const rows = (sheet as any).rows ?? (sheet as any).data
-    const firstRow = rows?.[0]
-    if (!firstRow) return ""
-    if (typeof firstRow === "object" && !Array.isArray(firstRow)) {
-        const val = firstRow[header] ?? Object.values(firstRow)[colIndex]
-        return val !== undefined && val !== null ? String(val) : ""
-    }
-    if (Array.isArray(firstRow)) {
-        const val = firstRow[colIndex]
-        return val !== undefined && val !== null ? String(val) : ""
-    }
-    return ""
-}
-
 function ImportDataModal({
     children,
     workspaceId = "default",
@@ -117,17 +108,13 @@ function ImportDataModal({
     const [spreadsheetPreview, setSpreadsheetPreview] = useState<{ fileName: string; sheetNames: string[]; sheets: ParsedSpreadsheetSheet[] } | null>(null)
     const [expandedSheets, setExpandedSheets] = useState<Record<string, boolean>>({})
 
-    // Schema Groups State
     const [localGroups, setLocalGroups] = useState<DocumentSchemaGroup[]>([])
 
-    // Per-sheet configuration state
     const [sheetConfigs, setSheetConfigs] = useState<Record<string, SheetImportConfig>>({})
     const [isImporting, setIsImporting] = useState(false)
 
-    // Expanded field options collapsibles state: key = `${sheetName}-${header}`
     const [expandedNewSchemaFields, setExpandedNewSchemaFields] = useState<Record<string, boolean>>({})
 
-    // "Create New Schema" Dialog State
     const [newSchemaModalSheet, setNewSchemaModalSheet] = useState<string | null>(null)
     const [newSchemaName, setNewSchemaName] = useState("")
     const [selectedGroupIdForNewSchema, setSelectedGroupIdForNewSchema] = useState<string>("")
@@ -149,27 +136,14 @@ function ImportDataModal({
         const schemas: DocumentSchema[] = []
         allGroups.forEach((g) => schemas.push(...g.documents))
 
-        // Dynamically extract schema definitions from any inline newly created schemas
         Object.values(sheetConfigs).forEach((config) => {
             if (config.isNewSchema && !schemas.some((s) => s.id === config.schemaId)) {
-                const fields = config.customFields
-                    ? Object.values(config.customFields)
-                          .filter((f) => !f.ignored)
-                          .map((f) => ({
-                              name: f.name.trim() || f.header,
-                              label: f.label.trim() || f.header,
-                              type: { data: f.dataType, input: f.inputType },
-                              required: f.required,
-                              description: f.description.trim() || undefined,
-                          }))
-                    : []
-
                 schemas.push({
                     id: config.schemaId,
                     name: config.schemaName || config.sheetName,
                     groupId: config.groupId,
-                    titleField: fields[0]?.name || "title",
-                    fields,
+                    titleField: "title",
+                    fields: [],
                 })
             }
         })
@@ -714,14 +688,14 @@ function ImportDataModal({
                                                                     <div className="space-y-2">
                                                                         <Label className="text-xs font-semibold">Column Configurations</Label>
                                                                         <div className="grid gap-2">
-                                                                            {sheet.headers.map((header, colIdx) => {
+                                                                            {sheet.headers.map((header) => {
                                                                                 const fieldCfg = config.customFields?.[header]
                                                                                 if (!fieldCfg) return null
 
                                                                                 const fieldKey = `${sheet.name}-${header}`
                                                                                 const isOptionsExpanded = expandedNewSchemaFields[fieldKey] ?? false
                                                                                 const isIgnored = fieldCfg.ignored
-                                                                                const sampleVal = getSampleValue(sheet, header, colIdx)
+                                                                                const allowedInputs = DATA_TO_INPUT[fieldCfg.dataType] || []
 
                                                                                 return (
                                                                                     <div
@@ -735,14 +709,6 @@ function ImportDataModal({
                                                                                                 <span className="text-xs font-mono font-semibold bg-muted px-2 py-1 rounded text-muted-foreground truncate max-w-37.5">
                                                                                                     {header}
                                                                                                 </span>
-                                                                                                {sampleVal && (
-                                                                                                    <span
-                                                                                                        className="text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded truncate max-w-35"
-                                                                                                        title={`Row 1 sample value:\n${sampleVal}`}
-                                                                                                    >
-                                                                                                        e.g. "{sampleVal}"
-                                                                                                    </span>
-                                                                                                )}
                                                                                                 <span className="text-xs text-muted-foreground">➔</span>
                                                                                                 {!isIgnored ? (
                                                                                                     <Input
@@ -824,7 +790,18 @@ function ImportDataModal({
                                                                                                         <Label className="text-xs text-muted-foreground">Data Type</Label>
                                                                                                         <Select
                                                                                                             value={fieldCfg.dataType}
-                                                                                                            onValueChange={(val) => updateCustomField(sheet.name, header, { dataType: val as FieldDataType })}
+                                                                                                            onValueChange={(val) => {
+                                                                                                                const newDataType = val as FieldDataType
+                                                                                                                const validInputs = DATA_TO_INPUT[newDataType] || []
+                                                                                                                const nextInput = validInputs.includes(fieldCfg.inputType)
+                                                                                                                    ? fieldCfg.inputType
+                                                                                                                    : validInputs[0] ?? "text"
+
+                                                                                                                updateCustomField(sheet.name, header, {
+                                                                                                                    dataType: newDataType,
+                                                                                                                    inputType: nextInput,
+                                                                                                                })
+                                                                                                            }}
                                                                                                         >
                                                                                                             <SelectTrigger className="h-8 text-xs">
                                                                                                                 <SelectValue />
@@ -848,7 +825,7 @@ function ImportDataModal({
                                                                                                                 <SelectValue />
                                                                                                             </SelectTrigger>
                                                                                                             <SelectContent>
-                                                                                                                {INPUT_TYPES.map((type) => (
+                                                                                                                {allowedInputs.map((type) => (
                                                                                                                     <SelectItem key={type} value={type} className="text-xs">
                                                                                                                         {type}
                                                                                                                     </SelectItem>
@@ -933,40 +910,27 @@ function ImportDataModal({
                                                                 <div className="space-y-2">
                                                                     <Label className="text-xs font-semibold">Column Mappings</Label>
                                                                     <div className="grid gap-2">
-                                                                        {sheet.headers.map((header, colIdx) => {
-                                                                            const sampleVal = getSampleValue(sheet, header, colIdx)
-                                                                            return (
-                                                                                <div key={header} className="grid grid-cols-2 gap-4 items-center">
-                                                                                    <div className="flex items-center gap-2 min-w-0">
-                                                                                        <span className="text-xs truncate font-mono bg-muted/50 p-2 rounded flex-1">{header}</span>
-                                                                                        {sampleVal && (
-                                                                                            <span
-                                                                                                className="text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded truncate max-w-35"
-                                                                                                title={`Row 1 sample value:\n${sampleVal}`}
-                                                                                            >
-                                                                                                e.g. "{sampleVal}"
-                                                                                            </span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                    <Select
-                                                                                        value={config.mapping[header] || "__ignore__"}
-                                                                                        onValueChange={(val) => handleMappingChange(sheet.name, header, val)}
-                                                                                    >
-                                                                                        <SelectTrigger className="h-8 text-xs">
-                                                                                            <SelectValue placeholder="Ignore field" />
-                                                                                        </SelectTrigger>
-                                                                                        <SelectContent>
-                                                                                            <SelectItem value="__ignore__">Ignore field</SelectItem>
-                                                                                            {availableFields.map((field) => (
-                                                                                                <SelectItem key={field} value={field}>
-                                                                                                    {field}
-                                                                                                </SelectItem>
-                                                                                            ))}
-                                                                                        </SelectContent>
-                                                                                    </Select>
-                                                                                </div>
-                                                                            )
-                                                                        })}
+                                                                        {sheet.headers.map((header) => (
+                                                                            <div key={header} className="grid grid-cols-2 gap-4 items-center">
+                                                                                <span className="text-xs truncate font-mono bg-muted/50 p-2 rounded">{header}</span>
+                                                                                <Select
+                                                                                    value={config.mapping[header] || "__ignore__"}
+                                                                                    onValueChange={(val) => handleMappingChange(sheet.name, header, val)}
+                                                                                >
+                                                                                    <SelectTrigger className="h-8 text-xs">
+                                                                                        <SelectValue placeholder="Ignore field" />
+                                                                                    </SelectTrigger>
+                                                                                    <SelectContent>
+                                                                                        <SelectItem value="__ignore__">Ignore field</SelectItem>
+                                                                                        {availableFields.map((field) => (
+                                                                                            <SelectItem key={field} value={field}>
+                                                                                                {field}
+                                                                                            </SelectItem>
+                                                                                        ))}
+                                                                                    </SelectContent>
+                                                                                </Select>
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
                                                                 </div>
                                                             )}
@@ -996,7 +960,6 @@ function ImportDataModal({
                 </Tabs>
             </DialogContent>
 
-            {/* Modal for Creating New Schema & Schema Group Assignment */}
             <Dialog open={Boolean(newSchemaModalSheet)} onOpenChange={(o) => !o && setNewSchemaModalSheet(null)}>
                 <DialogContent className="max-w-md space-y-4">
                     <DialogHeader>

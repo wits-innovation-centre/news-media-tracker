@@ -7,8 +7,7 @@ type FieldDataType = "string" |
     "boolean" |
     "date" |
     "date-range" |
-    "markdown" |
-    "form";
+    "markdown";
 
 type FieldInputType = "text" |
     "textarea" |
@@ -22,9 +21,40 @@ type FieldInputType = "text" |
     "date-range" |
     "text-multi" |
     "checkbox" |
-    "switch" |
-    "subtype-form-select" |
-    "embedded-form-list";
+    "switch";
+
+export const DATA_TO_INPUT: Record<FieldDataType, FieldInputType[]> = {
+    "string": ["text", "textarea", "select", "search-select", "search-select-input"],
+    "array<string>": ["multi-select", "text-multi"],
+    "hierarchical-select": ["select", "search-select"],
+    "select": ["select", "search-select", "search-select-input"],
+    "number": ["text", "select", "search-select", "search-select-input"],
+    "boolean": ["checkbox", "switch"],
+    "date": ["date"],
+    "date-range": ["date-range"],
+    "markdown": ["textarea", "text"],
+    "form": ["subtype-form-select", "embedded-form-list"]
+};
+
+export const INPUT_TO_DATA: Record<FieldInputType, FieldDataType[]> = {
+    "text": ["string", "number", "markdown"],
+    "textarea": ["string", "markdown"],
+    "select": ["select", "string", "number", "hierarchical-select"],
+    "multi-select": ["array<string>"],
+    "search-select": ["select", "string", "number", "hierarchical-select"],
+    "search-select-input": ["select", "string", "number"],
+    "subtype-form-select": ["form"],
+    "embedded-form-list": ["form"],
+    "date": ["date"],
+    "date-range": ["date-range"],
+    "text-multi": ["array<string>"],
+    "checkbox": ["boolean"],
+    "switch": ["boolean"]
+};
+
+// Map aliases for schema system consistency
+export const DATA_TO_TYPE = DATA_TO_INPUT;
+export const TYPE_TO_DATA = INPUT_TO_DATA;
 
 type IconName =
     "file-plus-2" |
@@ -115,7 +145,6 @@ interface StoredDocument {
     body: string;
     parent_id?: string;
     created_at?: string;
-    // Multi-user & Attribution additions
     workspace_id?: string;
     created_by?: string;
     updated_by?: string;
@@ -155,9 +184,9 @@ interface WorkspaceRecord {
 interface MergeProposal {
     id: string;
     workspace_id: string;
-    document_id: string;                  // Target/Primary Document (the record that survives)
-    secondary_document_id?: string | null;// Duplicate Document (the record being absorbed)
-    author_id: string;                    // User ID or "system:duplicate-detector"
+    document_id: string;
+    secondary_document_id?: string | null;
+    author_id: string;
     user_id?: string | null;
     device_id?: string | null;
     action: "CREATE" | "UPDATE" | "DELETE" | "MERGE_DUPLICATE";
@@ -165,23 +194,14 @@ interface MergeProposal {
     target_id?: string | null;
     entity_type?: string | null;
     similarity_score?: number | null;
-
-    // Target Document Base Snapshot
     base_frontmatter?: string | null;
     base_body?: string | null;
-
-    // Duplicate Document Base Snapshot (For 3-way diff rendering)
     secondary_base_frontmatter?: string | null;
     secondary_base_body?: string | null;
-
-    // Proposed Final Snapshot
     proposed_title: string;
     proposed_frontmatter: string;
     proposed_body: string;
-
-    // Detection details e.g. { similarityScore: 0.91, matchReasons: ["source_url", "incident_date"] }
     metadata?: string | null;
-
     status: "pending" | "approved" | "rejected";
     reviewed_by?: string | null;
     review_comment?: string | null;

@@ -5,17 +5,17 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import type {
-    DocumentSchema,
-    DocumentSchemaGroup,
-    FieldDataType,
-    FieldDefinition,
-    FieldInputType,
-    SpecificationDefinition,
+import {
+    DATA_TO_INPUT,
+    type DocumentSchema,
+    type DocumentSchemaGroup,
+    type FieldDataType,
+    type FieldDefinition,
+    type FieldInputType,
+    type SpecificationDefinition,
 } from "@/lib/types"
 
 const DATA_TYPES: FieldDataType[] = ["string", "array<string>", "hierarchical-select", "select", "number", "boolean", "date", "date-range", "markdown", "form"]
-const INPUT_TYPES: FieldInputType[] = ["text", "textarea", "select", "search-select", "search-select-input", "date", "date-range", "text-multi", "checkbox", "switch", "subtype-form-select", "embedded-form-list"]
 
 interface SchemaManagerProps {
     groups: DocumentSchemaGroup[]
@@ -326,7 +326,6 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
         const schema: DocumentSchema = {
             id: schemaDraft.id || crypto.randomUUID(),
             name: schemaDraft.name.trim(),
-            // Falls back to a standard field key (e.g. "title") if unselected
             titleField: titleFieldTrimmed || "title",
             description: (schemaDraft.description ?? "").trim() || undefined,
             metadata: {
@@ -495,6 +494,8 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
             <div className="space-y-3">
                 {schemaDraft.fields.map((field, index) => {
                     const isExpanded = expandedFieldIndex === index
+                    const allowedInputs = DATA_TO_INPUT[field.type.data] || []
+
                     return (
                         <div
                             key={`${field.name || "field"}-${index}`}
@@ -547,16 +548,37 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
                                         <div className="space-y-3 rounded-xl border p-3">
                                             <div className="space-y-1">
                                                 <label className="text-xs text-muted-foreground">Data type</label>
-                                                <Select value={field.type.data} onValueChange={(value) => updateFieldAt(index, (item) => ({ ...item, type: { ...item.type, data: value as FieldDataType } }))}>
+                                                <Select
+                                                    value={field.type.data}
+                                                    onValueChange={(value) => {
+                                                        const newData = value as FieldDataType
+                                                        const validInputs = DATA_TO_INPUT[newData] || []
+                                                        const nextInput = validInputs.includes(field.type.input)
+                                                            ? field.type.input
+                                                            : validInputs[0] ?? "text"
+
+                                                        updateFieldAt(index, (item) => ({
+                                                            ...item,
+                                                            type: { data: newData, input: nextInput },
+                                                        }))
+                                                    }}
+                                                >
                                                     <SelectTrigger><SelectValue placeholder="Data type" /></SelectTrigger>
                                                     <SelectContent>{DATA_TYPES.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
                                                 </Select>
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-xs text-muted-foreground">Input component</label>
-                                                <Select value={field.type.input} onValueChange={(value) => updateFieldAt(index, (item) => ({ ...item, type: { ...item.type, input: value as FieldInputType } }))}>
+                                                <Select
+                                                    value={field.type.input}
+                                                    onValueChange={(value) => updateFieldAt(index, (item) => ({ ...item, type: { ...item.type, input: value as FieldInputType } }))}
+                                                >
                                                     <SelectTrigger><SelectValue placeholder="Input type" /></SelectTrigger>
-                                                    <SelectContent>{INPUT_TYPES.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                                                    <SelectContent>
+                                                        {allowedInputs.map((option) => (
+                                                            <SelectItem key={option} value={option}>{option}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
                                                 </Select>
                                             </div>
                                             <div className="space-y-1">
@@ -880,7 +902,6 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
                             ) : null}
                             <h4 className="text-sm font-medium">{viewLevel === "groups" ? "Schema Groups" : "Schemas"}</h4>
                         </div>
-
                     </div>
 
                     <div className="mt-3 flex-1 space-y-3 overflow-y-auto pr-1">
