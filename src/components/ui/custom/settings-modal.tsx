@@ -271,7 +271,11 @@ function SettingsModal({
                                 <ImportDataModal
                                     workspaceId={workspaceId}
                                     schemaGroup={activeSchemaGroup}
+                                    groups={groups}
+                                    specificationRegistry={specificationRegistry}
                                     onImportCompleted={onImportCompleted}
+                                    onCreateSchema={onSaveSchema}
+                                    onCreateGroup={onSaveGroup}
                                 >
                                     <Button variant="secondary" className="w-full justify-start gap-2">
                                         <FileUp className="h-4 w-4" />
