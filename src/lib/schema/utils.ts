@@ -674,22 +674,6 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         }
                     },
                     {
-                        name: "type_of_murder",
-                        label: "Type of Murder",
-                        type: { data: "select", input: "select" },
-                        options: [
-                            '',
-                            'Domestic Violence',
-                            'Gang Related',
-                            'Robbery Related',
-                            'Sexual Violence',
-                            'Child Murder',
-                            'Hate Crime',
-                            'Drug Related',
-                            'Unknown/Other',
-                        ]
-                    },
-                    {
                         name: "sexual_assault",
                         label: "Sexual Assault",
                         type: { data: "select", input: "select" },
@@ -699,24 +683,86 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             "Unknown"
                         ]
                     },
-                    // {
-                    //     name: "participants_link",
-                    //     label: "Mentions",
-                    //     type: { data: "form", input: "embedded-form-list" },
-                    //     linkTo: "participant",
-                    //     icon: "users"
-                    // },
-                    // {
-                    //     name: "articles_link",
-                    //     label: "Documented in",
-                    //     type: { data: "form", input: "embedded-form-list" },
-                    //     linkTo: "article",
-                    //     icon: "newspaper"
-                    // },
+                    {
+                        name: "mode_of_death_general",
+                        label: "Mode of Death (General)",
+                        type: { data: "string", input: "select" },
+                        options: [
+                            "Sharp force trauma",
+                            "Blunt force trauma",
+                            "Sharp-blunt/Blunt-sharp force trauma",
+                            "Strangulation or asphyxiation",
+                            "Poison or burning",
+                            "Firearm injury"
+                        ]
+                    },
+                    {
+                        name: "mode_of_death_specific",
+                        label: "Mode of Death (Specific)",
+                        type: { data: "string", input: "select" },
+                        options: [
+                            "Gunshot",
+                            "Strangulation (manual or ligature)",
+                            "Suffocation",
+                            "Stabbing (knife or similar)",
+                            "Chopping (axe or panga or similar)",
+                            "Beating",
+                            "Poison",
+                            "Fire",
+                            "Chemical burns",
+                            "Electrical shock",
+                            "Dogs or other animals",
+                            "Lightning",
+                            "Drowning ",
+                            "Motor vehicle impact",
+                            "Falling from height",
+                            "Suicide",
+                            "Explosive device/explosion",
+                            "Missing presumed dead",
+                            "Unknown",
+                            "Other"
+                        ]
+                    },
+                    {
+                        name: "type_of_murder",
+                        label: "Type of Murder",
+                        type: { data: "array<string>", input: "multi-select" },
+                        options: [
+                            "Adult male homicide",
+                            "Adult female homicide",
+                            "Eldercide",
+                            "Child murder",
+                            "Multiple killing",
+                            "Political killing",
+                            "Gang-related killing",
+                            "Family killing",
+                            "Witch killing",
+                            "LGBTQ killing",
+                            "Sex worker killing",
+                            "Farm killing",
+                            "Serial killing",
+                            "Spree killing",
+                            "Intimate partner killing",
+                            "Rural killing",
+                            "Ritual killing",
+                            "Assassination",
+                            "Culpable homicide",
+                            "Matricide",
+                            "Patricide",
+                            "Natural causes",
+                            "Self-inflicted (including suicide)",
+                            "Killing in police custody",
+                            "Missing presumed dead",
+                            "Hired killers",
+                            "Concealment of birth",
+                            "Terrorism or war",
+                            "Other"
+                        ]
+                    },
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
                 ],
             },
-            {
+            /*{
                 id: "participant",
                 name: "Participant",
                 description: "The people that participated in the reported event.",
@@ -794,82 +840,6 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         }
                     },
                     { name: "nationality", label: "Nationality", type: { data: "string", input: "text" } },
-                    {
-                        name: "mode_of_death_general",
-                        label: "Mode of Death (General)",
-                        type: { data: "string", input: "select" },
-                        options: [
-                            "Sharp force trauma",
-                            "Blunt force trauma",
-                            "Sharp-blunt/Blunt-sharp force trauma",
-                            "Strangulation or asphyxiation",
-                            "Poison or burning",
-                            "Firearm injury"
-                        ]
-                    },
-                    {
-                        name: "mode_of_death_specific",
-                        label: "Mode of Death (Specific)",
-                        type: { data: "string", input: "select" },
-                        options: [
-                            "Gunshot",
-                            "Strangulation (manual or ligature)",
-                            "Suffocation",
-                            "Stabbing (knife or similar)",
-                            "Chopping (axe or panga or similar)",
-                            "Beating",
-                            "Poison",
-                            "Fire",
-                            "Chemical burns",
-                            "Electrical shock",
-                            "Dogs or other animals",
-                            "Lightning",
-                            "Drowning ",
-                            "Motor vehicle impact",
-                            "Falling from height",
-                            "Suicide",
-                            "Explosive device/explosion",
-                            "Missing presumed dead",
-                            "Unknown",
-                            "Other"
-                        ]
-                    },
-                    {
-                        name: "type_of_murder",
-                        label: "Type of Murder",
-                        type: { data: "array<string>", input: "multi-select" },
-                        options: [
-                            "Adult male homicide",
-                            "Adult female homicide",
-                            "Eldercide",
-                            "Child murder",
-                            "Multiple killing",
-                            "Political killing",
-                            "Gang-related killing",
-                            "Family killing",
-                            "Witch killing",
-                            "LGBTQ killing",
-                            "Sex worker killing",
-                            "Farm killing",
-                            "Serial killing",
-                            "Spree killing",
-                            "Intimate partner killing",
-                            "Rural killing",
-                            "Ritual killing",
-                            "Assassination",
-                            "Culpable homicide",
-                            "Matricide",
-                            "Patricide",
-                            "Natural causes",
-                            "Self-inflicted (including suicide)",
-                            "Killing in police custody",
-                            "Missing presumed dead",
-                            "Hired killers",
-                            "Concealment of birth",
-                            "Terrorism or war",
-                            "Other"
-                        ]
-                    },
                     { name: "subtype_form", label: "Participant Type", type: { data: "form", input: "subtype-form-select" } },
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
                 ],
@@ -902,7 +872,6 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                                 value: "approximate"
                             }
                         },
-
                     ],
                     "Perpetrator": [
                         {
@@ -1001,6 +970,289 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         { name: "sentence", label: "Sentence", type: { data: "string", input: "text" } },
                     ]
                 }
+            },*/
+            {
+                id: "victim",
+                name: "Victim",
+                description: "A person that was reported as murdered.",
+                icon: "users",
+                parentSchemaId: "incident",
+                titleField: "name",
+                fields: [
+                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "act-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
+                    { name: "name", label: "Name", type: { data: "string", input: "text" } },
+                    { name: "aliases", label: "Alias(es)", type: { data: "array<string>", input: "text-multi" } },
+                    {
+                        name: "gender",
+                        label: "Gender",
+                        type: { data: "select", input: "select" },
+                        options: [
+                            "Female",
+                            "Male",
+                            "Non-binary",
+                            "Unknown"
+                        ]
+                    },
+                    {
+                        name: "race",
+                        label: "Race",
+                        type: { data: "select", input: "select" },
+                        options: [
+                            'Black',
+                            'Coloured',
+                            'White',
+                            'Indian',
+                            'Asian',
+                            'Unknown',
+                            'Other'
+                        ]
+                    },
+                    {
+                        name: "is_age_known",
+                        label: "Was the age reported?",
+                        type: { data: "boolean", input: "switch" },
+                        // options: [
+                        //     "Known",
+                        //     "Unknown"
+                        // ],
+                        default: true
+                    },
+                    {
+                        name: "age",
+                        label: "Age",
+                        type: { data: "string", input: "text" },
+                        visibility: {
+                            dependsOn: "is_age_known",
+                            operator: "eq",
+                            value: true
+                        }
+                    },
+                    {
+                        name: "age_descriptor",
+                        label: "Age Descriptor",
+                        type: { data: "select", input: "select" },
+                        options: [
+                            'Neonate or abandonment',
+                            'Baby or infant',
+                            'Child',
+                            'Teenager',
+                            'Young Adult',
+                            'Adult',
+                            'Elderly',
+                            'Unknown'
+                        ],
+                        default: "Unknown",
+                        visibility: {
+                            dependsOn: "is_age_known",
+                            operator: "eq",
+                            value: false
+                        }
+                    },
+                    { name: "nationality", label: "Nationality", type: { data: "string", input: "text" } },
+                    {
+                        name: "date_of_death_mode",
+                        label: "Date of Death Known?",
+                        type: { data: "select", input: "select" },
+                        options: ["exact", "approximate", "unknown"],
+                        default: "exact"
+                    },
+                    {
+                        name: "date_of_death",
+                        label: "Date of Death",
+                        type: { data: "date", input: "date" },
+                        visibility: {
+                            dependsOn: "date_of_death_mode",
+                            operator: "eq",
+                            value: "exact"
+                        }
+                    },
+                    {
+                        name: "date_of_death_range",
+                        label: "Approximate Date of Death",
+                        type: { data: "date-range", input: "date-range" },
+                        visibility: {
+                            dependsOn: "date_of_death_mode",
+                            operator: "eq",
+                            value: "approximate"
+                        }
+                    },
+                    { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
+                ]
+            },
+            {
+                id: "perpetrator",
+                name: "Perpetrator",
+                description: "A person who was reported as committing a murder.",
+                icon: "users",
+                parentSchemaId: "incident",
+                titleField: "name",
+                fields: [
+                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "act-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
+                    { name: "name", label: "Name", type: { data: "string", input: "text" } },
+                    { name: "aliases", label: "Alias(es)", type: { data: "array<string>", input: "text-multi" } },
+                    {
+                        name: "gender",
+                        label: "Gender",
+                        type: { data: "select", input: "select" },
+                        options: [
+                            "Female",
+                            "Male",
+                            "Non-binary",
+                            "Unknown"
+                        ]
+                    },
+                    {
+                        name: "race",
+                        label: "Race",
+                        type: { data: "select", input: "select" },
+                        options: [
+                            'Black',
+                            'Coloured',
+                            'White',
+                            'Indian',
+                            'Asian',
+                            'Unknown',
+                            'Other'
+                        ]
+                    },
+                    {
+                        name: "is_age_known",
+                        label: "Was the age reported?",
+                        type: { data: "boolean", input: "switch" },
+                        // options: [
+                        //     "Known",
+                        //     "Unknown"
+                        // ],
+                        default: true
+                    },
+                    {
+                        name: "age",
+                        label: "Age",
+                        type: { data: "string", input: "text" },
+                        visibility: {
+                            dependsOn: "is_age_known",
+                            operator: "eq",
+                            value: true
+                        }
+                    },
+                    {
+                        name: "age_descriptor",
+                        label: "Age Descriptor",
+                        type: { data: "select", input: "select" },
+                        options: [
+                            'Neonate or abandonment',
+                            'Baby or infant',
+                            'Child',
+                            'Teenager',
+                            'Young Adult',
+                            'Adult',
+                            'Elderly',
+                            'Unknown'
+                        ],
+                        default: "Unknown",
+                        visibility: {
+                            dependsOn: "is_age_known",
+                            operator: "eq",
+                            value: false
+                        }
+                    },
+                    { name: "nationality", label: "Nationality", type: { data: "string", input: "text" } },
+                    {
+                            name: "relationship_to_victim",
+                            label: "Relationship to Victim",
+                            type: { data: "array<string>", input: "multi-select" },
+                            options: [
+                                "Stranger",
+                                "Current or former intimate partner",
+                                "Love rival",
+                                "Current or former employee",
+                                "Current or former employer",
+                                "Terrorist (state label)",
+                                "Parent",
+                                "Child",
+                                "Grandchild",
+                                "Grandparent",
+                                "Mother-in-law",
+                                "Sister-in-law",
+                                "Brother-in-law",
+                                "Son-in-law",
+                                "Daughter-in-law",
+                                "Father-in-law",
+                                "Aunt",
+                                "Uncle",
+                                "Niece",
+                                "Nephew",
+                                "Cousin",
+                                "Close family member (unknown relationship or more distant than first cousin)",
+                                "Stepchild",
+                                "Step-parent",
+                                "Foster child",
+                                "Foster parent",
+                                "Police officer",
+                                "Suspect in police or security custody",
+                                "Security Guard",
+                                "Community member",
+                                "Other"
+                            ],
+                            "noSelectionValue": "Unknown"
+                        },
+                        {
+                            name: "relationship_to_victim_specify",
+                            label: "Specify",
+                            type: { data: "string", input: "text" },
+                            visibility: {
+                                dependsOn: "relationship_to_victim",
+                                operator: "includes",
+                                value: "Other"
+                            }
+                        },
+                        {
+                            name: "identified",
+                            label: "Identified?",
+                            type: { data: "select", input: "select" },
+                            options: ["No", "Yes", "Unknown"],
+                            default: "Unknown"
+                        },
+                        {
+                            name: "arrested",
+                            label: "Arrested?",
+                            type: { data: "select", input: "select" },
+                            options: ["No", "Yes", "Unknown"],
+                            default: "Unknown",
+                            visibility: {
+                                dependsOn: "identified",
+                                operator: "eq",
+                                value: "Yes"
+                            }
+                        },
+                        {
+                            name: "charged",
+                            label: "Charged?",
+                            type: { data: "select", input: "select" },
+                            options: ["No", "Yes", "Unknown"],
+                            default: "Unknown",
+                            visibility: {
+                                dependsOn: "arrested",
+                                operator: "eq",
+                                value: "Yes"
+                            }
+                        },
+                        { name: "charges", label: "Charges", type: { data: "string", input: "text" } },
+                        {
+                            name: "convicted",
+                            label: "Convicted?",
+                            type: { data: "select", input: "select" },
+                            options: ["No", "Yes", "Unknown"],
+                            default: "Unknown",
+                            visibility: {
+                                dependsOn: "charged",
+                                operator: "eq",
+                                value: "Yes"
+                            }
+                        },
+                        { name: "sentence", label: "Sentence", type: { data: "string", input: "text" } },
+                    { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
+                ]
             }
         ]
     }

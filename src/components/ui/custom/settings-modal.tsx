@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
     Download,
     FileDown,
@@ -80,6 +80,8 @@ function SettingsMainContent({
 
     const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
     const [selectedTemplateGroupId, setSelectedTemplateGroupId] = useState<string>(() => activeWorkspace?.template_group_id ?? "__none__")
+
+    useEffect(() => { console.log(activeWorkspace) }, [activeWorkspace]);
 
     const handleExport = async () => {
         setIsExporting(true)
@@ -431,7 +433,9 @@ export function SettingsModal(props: SettingsModalProps) {
             name: "Workspace Schemas",
             documents: props.groups.flatMap((group) => group.documents),
         }
-    }, [props.groups, activeWorkspace])
+    }, [props.groups, activeWorkspace]);
+
+    useEffect(() => { console.log(activeWorkspace) }, [activeWorkspace]);
 
     const primaryScreen = {
         id: "settings",

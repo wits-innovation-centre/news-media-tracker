@@ -420,6 +420,35 @@ function Capture({
                       </Button>
                     ) : null}
                   </div>
+                ) : fieldDef.type.input === "date-range" ? (
+                  (() => {
+                    const rawValue = typeof field.value === "string" ? field.value : "";
+                    const [start = "", end = ""] = rawValue ? rawValue.split(" - ") : [];
+
+                    return (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="date"
+                          value={start}
+                          onChange={(e) => {
+                            const nextStart = e.target.value;
+                            field.onChange(nextStart || end ? `${nextStart} - ${end}` : "");
+                          }}
+                          aria-invalid={fieldState.invalid}
+                        />
+                        <span className="text-sm text-muted-foreground">to</span>
+                        <Input
+                          type="date"
+                          value={end}
+                          onChange={(e) => {
+                            const nextEnd = e.target.value;
+                            field.onChange(start || nextEnd ? `${start} - ${nextEnd}` : "");
+                          }}
+                          aria-invalid={fieldState.invalid}
+                        />
+                      </div>
+                    );
+                  })()
                 ) : fieldDef.type.input === "textarea" ? (
                   <Textarea
                     {...field}

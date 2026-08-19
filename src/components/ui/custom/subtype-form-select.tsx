@@ -283,27 +283,33 @@ export function SubtypeFormSelect({
         }
 
         if (fieldDef.type.input === "date-range") {
+            const rawValue = typeof fieldValue === "string" ? fieldValue : "";
+            const [start = "", end = ""] = rawValue ? rawValue.split(" - ") : [];
+
             return (
-                <div key={fieldDef.name} className="flex gap-2">
+                <div key={fieldDef.name} className="flex items-center gap-2">
                     <Input
                         type="date"
-                        placeholder="Start date"
-                        onChange={(e) =>
+                        value={start}
+                        onChange={(e) => {
+                            const nextStart = e.target.value;
                             handleFieldChange(
                                 fieldDef.name,
-                                e.target.value + " - " + (fieldValue as string)?.split(" - ")[1]
-                            )
-                        }
+                                nextStart || end ? `${nextStart} - ${end}` : ""
+                            );
+                        }}
                     />
+                    <span className="text-sm text-muted-foreground">to</span>
                     <Input
                         type="date"
-                        placeholder="End date"
-                        onChange={(e) =>
+                        value={end}
+                        onChange={(e) => {
+                            const nextEnd = e.target.value;
                             handleFieldChange(
                                 fieldDef.name,
-                                (fieldValue as string)?.split(" - ")[0] + " - " + e.target.value
-                            )
-                        }
+                                start || nextEnd ? `${start} - ${nextEnd}` : ""
+                            );
+                        }}
                     />
                 </div>
             );
