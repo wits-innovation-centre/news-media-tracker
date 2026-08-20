@@ -115,6 +115,7 @@ function WorkspaceProvider({ children }: { children: React.ReactNode }) {
             description: "Primary local workspace",
             created_at: FALLBACK_WORKSPACE_TIMESTAMP,
             last_accessed_at: FALLBACK_WORKSPACE_TIMESTAMP,
+            template_group_id: "homicide-tracker"
         }
     }, [activeWorkspaceId, workspaces])
 

@@ -65,7 +65,7 @@ async function ensureDefaultWorkspace(): Promise<WorkspaceRecord> {
   await dbClient.execute(
     `INSERT OR IGNORE INTO workspaces (id, name, description, template_group_id, created_at, last_accessed_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
-    [DEFAULT_WORKSPACE_ID, "My Workspace", "Primary local workspace", null, now, now]
+    [DEFAULT_WORKSPACE_ID, "My Workspace", "Primary local workspace", "homicide-tracker", now, now]
   )
 
   await dbClient.execute(

@@ -39,7 +39,7 @@ function MainContent({
             <Menu className="h-4 w-4" />
           </SidebarTrigger>
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="font-semibold text-foreground">Vault Explorer</span>
+            <span className="font-semibold text-foreground">Homicide Tracker</span>
             {activeDocument && (
               <span className="text-muted-foreground truncate font-medium">
                 / {activeDocument.label}

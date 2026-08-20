@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import {
     Download,
     FileDown,
@@ -81,7 +81,20 @@ function SettingsMainContent({
     const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId)
     const [selectedTemplateGroupId, setSelectedTemplateGroupId] = useState<string>(() => activeWorkspace?.template_group_id ?? "__none__")
 
-    useEffect(() => { console.log(activeWorkspace) }, [activeWorkspace]);
+    const groupItems = useMemo(
+        () => [
+            { value: "__none__", label: "No default template group" },
+            ...groups.map((g) => ({ value: g.id, label: g.name })),
+        ],
+        [groups]
+    )
+
+    const workspaceItems = useMemo(
+        () => [
+            ...workspaces.map((w) => ({ value: w.id, label: w.name })),
+        ],
+        [workspaces]
+    )
 
     const handleExport = async () => {
         setIsExporting(true)
@@ -224,6 +237,7 @@ function SettingsMainContent({
                                 const nextWorkspace = workspaces.find((workspace) => workspace.id === value)
                                 setSelectedTemplateGroupId(nextWorkspace?.template_group_id ?? "__none__")
                             }}
+                            items={workspaceItems}
                         >
                             <SelectTrigger className="w-56 text-xs h-8">
                                 <SelectValue placeholder="Select workspace" />
@@ -267,6 +281,7 @@ function SettingsMainContent({
                     </div>
                     <div className="flex gap-2 items-center">
                         <Select
+                            items={groupItems}
                             value={selectedTemplateGroupId}
                             onValueChange={(value) => setSelectedTemplateGroupId(value ?? "__none__")}
                         >
@@ -282,7 +297,14 @@ function SettingsMainContent({
                                 ))}
                             </SelectContent>
                         </Select>
-                        <Button type="button" variant="outline" size="sm" onClick={() => void handleSaveTemplateGroup()} disabled={isSavingTemplateGroup || !activeWorkspace} className="text-xs">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void handleSaveTemplateGroup()}
+                            disabled={isSavingTemplateGroup || !activeWorkspace}
+                            className="text-xs"
+                        >
                             {isSavingTemplateGroup ? "Saving..." : "Save Default"}
                         </Button>
                     </div>
@@ -434,8 +456,6 @@ export function SettingsModal(props: SettingsModalProps) {
             documents: props.groups.flatMap((group) => group.documents),
         }
     }, [props.groups, activeWorkspace]);
-
-    useEffect(() => { console.log(activeWorkspace) }, [activeWorkspace]);
 
     const primaryScreen = {
         id: "settings",
