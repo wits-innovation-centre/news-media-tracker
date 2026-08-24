@@ -24,7 +24,7 @@ import { useModalStack } from "@/hooks/use-modal-stack"
 import { ModalStackHeader } from "@/components/ui/custom/modal-stack-header"
 
 export interface SettingsModalProps {
-    trigger?: React.ReactNode
+    trigger?: React.ReactElement
     groups: DocumentSchemaGroup[]
     specificationRegistry: SpecificationDefinition[]
     specifications: SpecificationStore
@@ -541,13 +541,15 @@ export function SettingsModal(props: SettingsModalProps) {
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogTrigger>
-                {props.trigger ?? (
-                    <Button variant="ghost" size="icon">
-                        <Settings className="h-5 w-5" />
-                    </Button>
-                )}
-            </DialogTrigger>
+            <DialogTrigger
+                render={
+                    props.trigger ?? (
+                        <Button variant="ghost" size="icon">
+                            <Settings className="h-5 w-5" />
+                        </Button>
+                    )
+                }
+            />
 
             <DialogContent className="flex h-[92vh] w-[95vw] sm:max-w-7xl flex-col overflow-hidden p-0 [&>button.absolute]:hidden">
                 <ModalStackHeader

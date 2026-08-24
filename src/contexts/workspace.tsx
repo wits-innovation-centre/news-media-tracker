@@ -11,6 +11,7 @@ import {
     touchWorkspace,
 } from "@/lib/db/utils"
 import type { WorkspaceRecord } from "@/lib/types"
+import { DEFAULT_WORKSPACE_ICON } from "@/lib/db/utils"
 
 const ACTIVE_WORKSPACE_STORAGE_KEY = "active_workspace_id"
 const FALLBACK_WORKSPACE_TIMESTAMP = 0
@@ -38,6 +39,8 @@ function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
     const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("default")
     const [isReady, setIsReady] = useState(false)
+
+    useEffect(() => { console.log(activeWorkspaceId) }, [activeWorkspaceId]);
 
     const refreshWorkspaces = useCallback(async () => {
         const records = await listWorkspaces()
@@ -111,8 +114,9 @@ function WorkspaceProvider({ children }: { children: React.ReactNode }) {
             ?? workspaces[0]
             ?? {
             id: "default",
-            name: "My Workspace",
-            description: "Primary local workspace",
+            name: "Homicide Tracker",
+            description: "Default workspace set up to track reported incidents of homicide.",
+            icon_path: DEFAULT_WORKSPACE_ICON,
             created_at: FALLBACK_WORKSPACE_TIMESTAMP,
             last_accessed_at: FALLBACK_WORKSPACE_TIMESTAMP,
             template_group_id: "homicide-tracker"

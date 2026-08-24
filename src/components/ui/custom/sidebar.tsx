@@ -15,8 +15,18 @@ import {
 } from "lucide-react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
-import { Sidebar as BaseSidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarHeader, SidebarRail, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-import { resolveIcon } from "@/lib/icon-registry";
+import {
+  Sidebar as BaseSidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarHeader,
+  SidebarRail,
+  SidebarTrigger,
+  useSidebar
+} from "@/components/ui/sidebar";
+import { resolveIcon } from "@/lib/icon/registry";
+import { WorkspaceIcon } from "@/lib/icon/components/workspace";
 import type { DocumentNode, DocumentSchema, WorkspaceRecord } from "@/lib/types";
 
 interface SidebarProps {
@@ -452,11 +462,10 @@ function Sidebar({
                 doc: document,
               });
             }}
-            className={`relative flex items-center justify-between rounded-md px-2 py-1.5 text-xs transition-all cursor-pointer ${
-              isActive
-                ? "bg-primary text-primary-foreground font-medium"
-                : "text-foreground hover:bg-accent hover:text-accent-foreground"
-            }`}
+            className={`relative flex items-center justify-between rounded-md px-2 py-1.5 text-xs transition-all cursor-pointer ${isActive
+              ? "bg-primary text-primary-foreground font-medium"
+              : "text-foreground hover:bg-accent hover:text-accent-foreground"
+              }`}
           >
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
               {canExpand ? (
@@ -526,7 +535,36 @@ function Sidebar({
     >
       <SidebarHeader className="border-b border-border px-3 py-3 space-y-2.5">
         <div className={`flex items-center gap-2 ${isIconCollapsed ? "justify-center" : "justify-between"}`}>
-          {!isIconCollapsed ? <p className="text-sm font-semibold text-foreground">Vault Explorer</p> : null}
+          {!isIconCollapsed ? (
+            <Select
+              value={activeWorkspaceId}
+              onValueChange={(nextWorkspaceId) => {
+                if (!nextWorkspaceId) return;
+                void onSwitchWorkspace(nextWorkspaceId);
+              }}
+            >
+              <SelectTrigger className="h-auto min-h-0 flex-1 border-0 bg-transparent p-0 text-left shadow-none hover:bg-transparent focus-visible:ring-0 [&>svg:last-child]:ml-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <WorkspaceIcon src={activeWorkspace?.icon_path} />
+                  <span className="truncate text-sm font-semibold text-foreground">
+                    {activeWorkspace?.name ?? "Vault Explorer"}
+                  </span>
+                </div>
+              </SelectTrigger>
+              <SelectContent align="start">
+                {workspaces.map((ws) => (
+                  <SelectItem key={ws.id} value={ws.id}>
+                    <div className="flex items-center gap-2">
+                      <WorkspaceIcon src={ws.icon_path} />
+                      <span>{ws.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <WorkspaceIcon src={activeWorkspace?.icon_path} className="h-5 w-5 shrink-0 rounded object-cover" />
+          )}
           <SidebarTrigger className="h-7 w-7" title={isIconCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
             {isIconCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
             <span className="sr-only">{isIconCollapsed ? "Expand sidebar" : "Collapse sidebar"}</span>
@@ -539,11 +577,10 @@ function Sidebar({
             <div className="grid grid-cols-2 gap-1 rounded-full border border-border bg-muted/30 p-1">
               <button
                 type="button"
-                className={`flex w-full items-center justify-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium transition-all ${
-                  activePath === "/"
-                    ? "bg-primary text-primary-foreground shadow-xs"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                }`}
+                className={`flex w-full items-center justify-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium transition-all ${activePath === "/"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
                 onClick={() => {
                   onNavigate("/");
                   if (isMobile) setOpenMobile(false);
@@ -555,11 +592,10 @@ function Sidebar({
               </button>
               <button
                 type="button"
-                className={`flex w-full items-center justify-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium transition-all ${
-                  activePath === "/merge-queue"
-                    ? "bg-primary text-primary-foreground shadow-xs"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                }`}
+                className={`flex w-full items-center justify-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium transition-all ${activePath === "/merge-queue"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
                 onClick={() => {
                   onNavigate("/merge-queue");
                   if (isMobile) setOpenMobile(false);
@@ -619,9 +655,8 @@ function Sidebar({
             <div className="flex flex-col items-center gap-2 px-1 py-1">
               <button
                 type="button"
-                className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${
-                  activePath === "/" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
-                }`}
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${activePath === "/" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
+                  }`}
                 onClick={() => {
                   onNavigate("/");
                   if (isMobile) setOpenMobile(false);
@@ -633,9 +668,8 @@ function Sidebar({
 
               <button
                 type="button"
-                className={`relative flex h-8 w-8 items-center justify-center rounded-full transition-all ${
-                  activePath === "/merge-queue" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
-                }`}
+                className={`relative flex h-8 w-8 items-center justify-center rounded-full transition-all ${activePath === "/merge-queue" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"
+                  }`}
                 onClick={() => {
                   onNavigate("/merge-queue");
                   if (isMobile) setOpenMobile(false);
@@ -664,11 +698,10 @@ function Sidebar({
                         type="button"
                         onClick={() => handleDocumentClick(document.id, document.schemaId)}
                         title={document.label}
-                        className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-semibold uppercase transition ${
-                          isActive
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border bg-background text-foreground hover:bg-accent"
-                        }`}
+                        className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-semibold uppercase transition ${isActive
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-background text-foreground hover:bg-accent"
+                          }`}
                       >
                         {document.label.slice(0, 1) || "?"}
                       </button>
@@ -753,40 +786,13 @@ function Sidebar({
       </SidebarContent>
 
       <SidebarFooter className="mt-auto border-t border-border px-3 py-3 space-y-3">
-        {isIconCollapsed ? (
-          <div className="flex items-center justify-center rounded-md border border-border/70 bg-background/70 p-1.5">
-            {footerContent}
-          </div>
-        ) : (
+        {footerContent ? (
           <div className="flex items-center justify-between gap-2 rounded-md border border-border/70 bg-background/70 px-2.5 py-2">
-            <Select
-              value={activeWorkspaceId}
-              onValueChange={(nextWorkspaceId) => {
-                if (!nextWorkspaceId) return;
-                void onSwitchWorkspace(nextWorkspaceId);
-              }}
-            >
-              <SelectTrigger className="h-auto min-h-0 flex-1 border-0 bg-transparent px-0 py-0 text-left shadow-none hover:bg-transparent focus-visible:ring-0">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Workspace</p>
-                  <span data-slot="select-value" className="flex flex-1 truncate text-left text-xs text-foreground">
-                    {activeWorkspace?.name ?? "My Workspace"}
-                  </span>
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                {workspaces.map((workspace) => (
-                  <SelectItem key={workspace.id} value={workspace.id}>
-                    {workspace.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             {footerContent}
           </div>
-        )}
+        ) : null}
       </SidebarFooter>
-
+      
       {/* Resizing Handle */}
       <SidebarRail
         onMouseDown={handleStartResizing}

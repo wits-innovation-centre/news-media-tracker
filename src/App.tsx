@@ -51,7 +51,7 @@ import type {
     SpecificationStore,
     StoredDocument,
 } from "@/lib/types";
-import { useWorkspace } from "@/contexts/workspace-context";
+import { useWorkspace } from "@/contexts/workspace";
 
 const MERGE_QUEUE_PATH = "/merge-queue";
 const OBSIDIAN_TUTORIAL_EXPORT_KEY = "obsidian-export-tutorial-dismissed";

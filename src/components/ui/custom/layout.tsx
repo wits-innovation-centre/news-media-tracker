@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Sidebar } from "./sidebar";
 import type { DocumentNode, DocumentSchema, WorkspaceRecord } from "@/lib/types";
 import { Menu } from "lucide-react";
+import { WorkspaceIcon } from "@/lib/icon/components/workspace";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -26,9 +27,11 @@ interface LayoutProps {
 function MainContent({
   children,
   activeDocument,
+  activeWorkspace
 }: {
   children: React.ReactNode;
   activeDocument?: DocumentNode;
+  activeWorkspace?: WorkspaceRecord;
 }) {
   return (
     <div className="flex flex-1 flex-col min-w-0 h-full">
@@ -39,7 +42,8 @@ function MainContent({
             <Menu className="h-4 w-4" />
           </SidebarTrigger>
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="font-semibold text-foreground">Homicide Tracker</span>
+            <WorkspaceIcon src={activeWorkspace?.icon_path} />
+            <span className="font-semibold text-foreground">{activeWorkspace?.name ?? "Vault Explorer"}</span>
             {activeDocument && (
               <span className="text-muted-foreground truncate font-medium">
                 / {activeDocument.label}
@@ -75,6 +79,10 @@ export default function Layout({
 }: LayoutProps) {
   const activeDocument = documents.find((doc) => doc.id === activeDocumentId);
 
+  const activeWorkspace = useMemo(() => {
+    return workspaces.find((workspace) => workspace.id === activeWorkspaceId);
+  }, [activeWorkspaceId, workspaces]);
+
   return (
     <SidebarProvider>
       <Sidebar
@@ -94,7 +102,7 @@ export default function Layout({
         onCreateDocument={onCreateDocument}
         onDeleteDocument={onDeleteDocument}
       />
-      <MainContent activeDocument={activeDocument}>{children}</MainContent>
+      <MainContent activeDocument={activeDocument} activeWorkspace={activeWorkspace}>{children}</MainContent>
     </SidebarProvider>
   );
 }

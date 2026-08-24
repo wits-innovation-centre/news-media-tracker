@@ -1,16 +1,32 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "news-media-tracker",
-  "compatibility_date": "2026-07-10",
-  "compatibility_flags": ["nodejs_compat"],
-  "build": {
-    "command": "pnpm run build",
-  },
-  "assets": {
-    "directory": "dist",
-    "not_found_handling": "single-page-application",
-  },
-  "observability": {
-    "enabled": true,
-  },
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "news-media-tracker",
+	"main": "src/lib/db/server.ts",
+	"compatibility_date": "2026-07-10",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"build": {
+		"command": "pnpm run build"
+	},
+	"assets": {
+		"directory": "dist",
+		"not_found_handling": "single-page-application"
+	},
+	"observability": {
+		"enabled": true
+	},
+	"triggers": {
+		"crons": [
+			"0 * * * *"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "news_media_db",
+			"database_id": "edbba307-8427-473c-9aca-e67a8cafd749",
+			"migrations_dir": "./src/lib/db/migrations"
+		}
+	]
 }

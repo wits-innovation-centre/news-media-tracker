@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { resolveIcon } from "@/lib/icon-registry";
+import { resolveIcon } from "@/lib/icon/registry";
 import type { DocumentSchema, IconName } from "@/lib/types";
 
 interface EmbeddedFormListProps {

@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { WorkspaceProvider } from "@/contexts/workspace-context";
+import { WorkspaceProvider } from "@/contexts/workspace.tsx";
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

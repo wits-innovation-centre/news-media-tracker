@@ -176,6 +176,7 @@ interface WorkspaceRecord {
     id: string;
     name: string;
     description?: string;
+    icon_path?: string;
     template_group_id?: string;
     created_at: number;
     last_accessed_at: number;
