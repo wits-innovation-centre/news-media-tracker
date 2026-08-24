@@ -1,45 +1,59 @@
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm"
 import * as Comlink from "comlink"
 import { drizzle } from 'drizzle-orm/d1'
-import { getTableName, getTableColumns, type Table } from 'drizzle-orm'
+import { getTableName, getTableColumns, is, type Column } from 'drizzle-orm'
+import { SQLiteTable } from 'drizzle-orm/sqlite-core'
 import * as schema from './schema'
 
 let sqliteDb: any = null
 export let db: ReturnType<typeof drizzle<typeof schema>>
 
-function syncDrizzleSchema() {
+async function syncDrizzleSchema(dbClient: {
+  query: (sql: string, bind?: any[]) => Promise<any[]>;
+  execute: (sql: string, bind?: any[]) => Promise<any>;
+}) {
   for (const exportValue of Object.values(schema)) {
-    if (!exportValue || typeof exportValue !== "object" || !("_" in exportValue)) {
-      continue
+    // Only process actual Drizzle SQLite table definitions
+    if (!exportValue || !is(exportValue, SQLiteTable)) {
+      continue;
     }
 
     try {
-      const table = exportValue as Table
-      const tableName = getTableName(table)
-      const columns = getTableColumns(table)
+      const tableName = getTableName(exportValue);
+      const columns = getTableColumns(exportValue);
 
-      // Query SQLite for existing columns in this table
-      const existingCols: Array<{ name: string }> = []
-      sqliteDb.exec({
-        sql: `PRAGMA table_info("${tableName}")`,
-        rowMode: "object",
-        callback: (row: any) => existingCols.push(row)
-      })
+      const existingCols: Array<{ name: string }> = await dbClient.query(
+        `PRAGMA table_info("${tableName}")`
+      );
 
-      // Skip if the table hasn't been created yet
-      if (existingCols.length === 0) continue
+      // 1. Table doesn't exist -> CREATE TABLE dynamically from Drizzle schema
+      if (!existingCols || existingCols.length === 0) {
+        const colDefs = (Object.values(columns) as Column[]).map((col) => {
+          let def = `"${col.name}" ${col.getSQLType().toUpperCase()}`;
+          if (col.primary) def += " PRIMARY KEY";
+          if (col.notNull) def += " NOT NULL";
+          return def;
+        });
 
-      const existingColumnNames = new Set(existingCols.map((c) => c.name))
+        await dbClient.execute(
+          `CREATE TABLE IF NOT EXISTS "${tableName}" (${colDefs.join(", ")});`
+        );
+        continue;
+      }
 
-      // Compare Drizzle schema columns against SQLite table columns
-      for (const colObj of Object.values(columns)) {
+      // 2. Table exists -> ALTER TABLE for any missing columns
+      const existingColumnNames = new Set(existingCols.map((col) => col.name));
+
+      for (const colObj of Object.values(columns) as Column[]) {
         if (!existingColumnNames.has(colObj.name)) {
-          const dataType = colObj.getSQLType().toUpperCase()
-          sqliteDb.exec(`ALTER TABLE "${tableName}" ADD COLUMN "${colObj.name}" ${dataType};`)
+          const dataType = colObj.getSQLType().toUpperCase();
+          await dbClient.execute(
+            `ALTER TABLE "${tableName}" ADD COLUMN "${colObj.name}" ${dataType};`
+          );
         }
       }
-    } catch {
-      continue
+    } catch (err) {
+      console.error(`Failed to sync schema for table:`, err);
     }
   }
 }
@@ -66,8 +80,21 @@ const dbWorkerAPI = {
 
       db = drizzle(sqliteDb, { schema })
 
-      // Auto-migrate missing columns defined in schema.ts
-      syncDrizzleSchema()
+      // Base table schema guard
+      sqliteDb.exec(`
+        CREATE TABLE IF NOT EXISTS workspaces (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT,
+          icon_path TEXT,
+          template_group_id TEXT,
+          created_at INTEGER NOT NULL,
+          last_accessed_at INTEGER NOT NULL
+        );
+      `)
+
+      // Auto-migrate missing tables and columns from schema.ts
+      await syncDrizzleSchema(dbWorkerAPI)
 
       return true
     } catch (error) {

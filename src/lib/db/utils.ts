@@ -14,8 +14,6 @@ import type {
   StoredDocument,
   WorkspaceRecord
 } from "@/lib/types"
-import { getTableName, getTableColumns, type Table, type Column } from "drizzle-orm"
-import * as schema from "./schema"
 import { DEFAULT_WORKSPACE_ICON } from '../icon/registry'
 
 const DEFAULT_WORKSPACE_ID = "default"
@@ -428,56 +426,4 @@ export {
   approveMergeProposal,
   rejectMergeProposal,
   proposeDuplicateMerge
-}
-
-// ==========================================
-// SCHEMA SYNC
-// ==========================================
-
-export async function syncDrizzleSchema(dbClient: {
-    query: (sql: string) => Promise<any[]>;
-    execute: (sql: string) => Promise<any>;
-}) {
-    // 1. Iterate through all schema exports from schema.ts
-    for (const exportValue of Object.values(schema)) {
-        // Filter out non-table exports (e.g., relations, helpers)
-        if (!exportValue || typeof exportValue !== "object" || !("_" in exportValue)) {
-            continue;
-        }
-
-        try {
-            const table = exportValue as Table;
-            const tableName = getTableName(table);
-            const columns = getTableColumns(table);
-
-            // 2. Fetch existing column metadata for this table from SQLite
-            const existingCols: Array<{ name: string }> = await dbClient.query(
-                `PRAGMA table_info("${tableName}")`
-            );
-
-            // If table doesn't exist yet, PRAGMA returns an empty array
-            if (existingCols.length === 0) {
-                continue;
-            }
-
-            const existingColumnNames = new Set(existingCols.map((col) => col.name));
-
-            // 3. Check for missing columns defined in Drizzle but absent in SQLite
-            for (const colObj of Object.values(columns) as Column[]) {
-                const colName = colObj.name;
-
-                if (!existingColumnNames.has(colName)) {
-                    const dataType = colObj.getSQLType().toUpperCase();
-                    
-                    // Dynamically execute ALTER TABLE for the missing column
-                    await dbClient.execute(
-                        `ALTER TABLE "${tableName}" ADD COLUMN "${colName}" ${dataType};`
-                    );
-                }
-            }
-        } catch {
-            // Ignore exports that aren't valid tables
-            continue;
-        }
-    }
 }
