@@ -212,7 +212,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 icon: "newspaper",
                 titleField: "headline",
                 fields: [
-                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "rpt-{date}-{rand:6}" }, description: "Auto-generated report identifier." },
+                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "art-{date}-{rand:6}" }, description: "Auto-generated report identifier." },
                     { name: "headline", label: "Headline", type: { data: "string", input: "text" }, required: true },
                     {
                         name: "type_of_source",
@@ -979,7 +979,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 parentSchemaId: "incident",
                 titleField: "name",
                 fields: [
-                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "act-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
+                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "vic-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
                     { name: "name", label: "Name", type: { data: "string", input: "text" } },
                     { name: "aliases", label: "Alias(es)", type: { data: "array<string>", input: "text-multi" } },
                     {
@@ -1087,7 +1087,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 parentSchemaId: "incident",
                 titleField: "name",
                 fields: [
-                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "act-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
+                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "perp-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
                     { name: "name", label: "Name", type: { data: "string", input: "text" } },
                     { name: "aliases", label: "Alias(es)", type: { data: "array<string>", input: "text-multi" } },
                     {

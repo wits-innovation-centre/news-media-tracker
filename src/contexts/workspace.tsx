@@ -40,8 +40,6 @@ function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("default")
     const [isReady, setIsReady] = useState(false)
 
-    useEffect(() => { console.log(activeWorkspaceId) }, [activeWorkspaceId]);
-
     const refreshWorkspaces = useCallback(async () => {
         const records = await listWorkspaces()
         setWorkspaces(records)

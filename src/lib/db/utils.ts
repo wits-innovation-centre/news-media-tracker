@@ -64,11 +64,9 @@ async function ensureDefaultWorkspace(): Promise<WorkspaceRecord> {
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [DEFAULT_WORKSPACE_ID, "Homicide Tracker", "Default workspace set up to track reported incidents of homicide.", DEFAULT_WORKSPACE_ICON, "homicide-tracker", now, now]
   )
-  await dbClient.execute(`UPDATE workspaces SET name = ? WHERE id = ? AND name = ?`, ["My Workspace", DEFAULT_WORKSPACE_ID, "Default Workspace"])
 
   const rows = await dbClient.query(`SELECT id, name, description, icon_path, template_group_id, created_at, last_accessed_at FROM workspaces WHERE id = ? LIMIT 1`, [DEFAULT_WORKSPACE_ID])
   const row = rows[0]
-  console.log(row);
   return {
     id: String(row.id),
     name: String(row.name),

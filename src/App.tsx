@@ -347,24 +347,22 @@ function App() {
             const stored = storedDocuments[doc.id];
             const values = { ...stored?.frontmatter, ...draft };
 
-            const titleKey = Object.keys(values).find(
-                (k) => !k.startsWith("__") && (k === "title" || k === "name" || /title/i.test(k) || /name/i.test(k))
-            );
-            const titleVal = titleKey && typeof values[titleKey] === "string" ? (values[titleKey] as string).trim() : "";
+            const schema = schemasById[doc.schemaId];
+            const titleFieldKey = schema?.titleField;
 
-            const idKey = Object.keys(values).find(
-                (k) => !k.startsWith("__") && (k === "id" || /_id$/i.test(k) || /^id_/i.test(k))
-            );
-            const idVal = idKey && typeof values[idKey] === "string" ? (values[idKey] as string).trim() : "";
+            const titleValue = titleFieldKey && values[titleFieldKey]
+                ? String(values[titleFieldKey]).trim()
+                : "";
 
-            const effectiveLabel = titleVal || idVal || doc.label;
+            // Priority: custom titleField -> schema frontmatter ID -> human fallback label
+            const effectiveLabel = titleValue || (values.id as string) || doc.label;
 
             return {
                 ...doc,
                 label: effectiveLabel,
             };
         });
-    }, [documents, drafts, storedDocuments]);
+    }, [documents, drafts, storedDocuments, schemasById]);
 
     const activeSchemaGroup = useMemo(
         () => groupsWithSpecifications.find((group) => group.id === activeSchema?.groupId),
@@ -448,23 +446,17 @@ function App() {
             }
         }
 
-        const getDocumentTitleFromValues = (frontmatter: Record<string, unknown>, fallbackLabel: string) => {
-            const titleKey = Object.keys(frontmatter).find(
-                (k) => !k.startsWith("__") && (k === "title" || k === "name" || /title/i.test(k) || /name/i.test(k))
-            );
-            const titleVal = titleKey && typeof frontmatter[titleKey] === "string" ? (frontmatter[titleKey] as string).trim() : "";
+        const getDocumentTitleFromValues = (frontmatter: Record<string, unknown>, fallbackId: string) => {
+            const titleFieldKey = schema.titleField;
+            const titleVal = titleFieldKey && frontmatter[titleFieldKey]
+                ? String(frontmatter[titleFieldKey]).trim()
+                : "";
             if (titleVal) return titleVal;
 
-            const idKey = Object.keys(frontmatter).find(
-                (k) => !k.startsWith("__") && (k === "id" || /_id$/i.test(k) || /^id_/i.test(k))
-            );
-            const idVal = idKey && typeof frontmatter[idKey] === "string" ? (frontmatter[idKey] as string).trim() : "";
-            if (idVal) return idVal;
-
-            return fallbackLabel || `Untitled_${Date.now()}`;
+            return fallbackId;
         };
 
-        const documentTitle = getDocumentTitleFromValues(frontmatter, document.label);
+        const documentTitle = getDocumentTitleFromValues(frontmatter, document.id);
 
         const noteId = await saveCapturedNote(
             document.id,
@@ -793,6 +785,7 @@ function App() {
         };
 
         setDocuments((current) => [...current, node]);
+
         if (activate) {
             setActiveDocumentId(node.id);
             setActiveSchemaId(schema.id);

@@ -123,7 +123,7 @@ function InlineGap({
                   <Plus className="h-3 w-3 shrink-0" />
                   <SchemaIcon className="h-3.5 w-3.5 shrink-0 opacity-80" />
                   <span className="truncate text-[11px] font-medium">
-                    New {slot.schema.name}...
+                    {slot.schema.name}...
                   </span>
                   <span className="ml-1 rounded bg-primary/20 px-1 py-0.2 text-[9px] font-semibold uppercase tracking-wider text-primary">
                     {slot.typeLabel}
@@ -748,7 +748,7 @@ function Sidebar({
                       >
                         <Plus className="h-3 w-3 shrink-0" />
                         <SchemaIcon className="h-3.5 w-3.5 shrink-0" />
-                        <span className="font-medium">New {schema.name}...</span>
+                        <span className="font-medium">{schema.name}</span>
                       </button>
                     );
                   })}
