@@ -16,11 +16,12 @@ import {
     inspectSpreadsheetFile,
     type ParsedSpreadsheetSheet,
     type SpreadsheetImportMapping,
-} from "@/lib/export-import"
+} from "@/lib/import-export/fn"
 import {
     DATA_TO_INPUT,
     type DocumentSchema,
     type DocumentSchemaGroup,
+    type FieldDefinition,
     type FieldDataType,
     type FieldInputType,
     type SpecificationDefinition,
@@ -68,7 +69,7 @@ interface ImportDataViewProps {
 }
 
 const SPECIAL_MAPPING_FIELDS = [...SPREADSHEET_SPECIAL_FIELDS]
-const DATA_TYPES: FieldDataType[] = ["string", "array<string>", "hierarchical-select", "select", "number", "boolean", "date", "date-range", "markdown", "form"]
+const DATA_TYPES: FieldDataType[] = ["string", "array", "hierarchical-select", "select", "number", "boolean", "date", "date-range", "markdown", "form"]
 
 const canonicalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "")
 
@@ -463,7 +464,7 @@ function ImportDataView({
                                         message: f.tooltipMessage.trim(),
                                     }
                                     : undefined,
-                            }
+                            } as FieldDefinition
                         }),
                     }
 

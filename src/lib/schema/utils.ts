@@ -1,5 +1,18 @@
-import type { ParsedSpreadsheetSheet } from "@/lib/export-import"
+import type { ParsedSpreadsheetSheet } from "@/lib/import-export/fn"
 import type { FieldDefinition, DocumentSchema, DocumentSchemaGroup, TieredOptionsSchema } from "@/lib/types"
+
+function cloneFields(fields: FieldDefinition[]): FieldDefinition[] {
+    return JSON.parse(JSON.stringify(fields)) as FieldDefinition[];
+}
+
+function cloneSubtypeFields(subtypeFields?: Record<string, FieldDefinition[]>): Record<string, FieldDefinition[]> | undefined {
+    if (!subtypeFields) return undefined;
+    const cloned: Record<string, FieldDefinition[]> = {};
+    for (const [key, fields] of Object.entries(subtypeFields)) {
+        cloned[key] = cloneFields(fields);
+    }
+    return cloned;
+}
 
 function createSchemaFromSheet(
     sheet: ParsedSpreadsheetSheet,
@@ -41,8 +54,6 @@ function createSchemaFromSheet(
     }
 }
 
-
-
 function createSchemaFromTemplate(template: DocumentSchema, overrides?: Partial<DocumentSchema>): DocumentSchema;
 function createSchemaFromTemplate(template: DocumentSchemaGroup): DocumentSchema[];
 
@@ -60,39 +71,14 @@ function createSchemaFromTemplate(
         return template.documents.map((doc) => {
             const newDocId = idMap[doc.id];
 
-            const clonedFields = doc.fields.map((field) => ({
-                ...field,
-                type: { ...field.type },
-                options: Array.isArray(field.options)
-                    ? [...field.options]
-                    : field.options
-                        ? JSON.parse(JSON.stringify(field.options))
-                        : undefined
-            }));
-
-            const clonedSubtypeFields: Record<string, FieldDefinition[]> = {};
-            if (doc.subtypeFields) {
-                Object.entries(doc.subtypeFields).forEach(([subType, fields]) => {
-                    clonedSubtypeFields[subType] = fields.map((field) => ({
-                        ...field,
-                        type: { ...field.type },
-                        options: Array.isArray(field.options)
-                            ? [...field.options]
-                            : field.options
-                                ? JSON.parse(JSON.stringify(field.options))
-                                : undefined
-                    }));
-                });
-            }
-
             return {
                 ...doc,
                 id: newDocId,
                 parentSchemaId: doc.parentSchemaId ? (idMap[doc.parentSchemaId] ?? doc.parentSchemaId) : undefined,
                 groupId: template.id,
                 groupName: template.name,
-                fields: clonedFields,
-                subtypeFields: doc.subtypeFields ? clonedSubtypeFields : undefined,
+                fields: cloneFields(doc.fields),
+                subtypeFields: cloneSubtypeFields(doc.subtypeFields),
             };
         });
     }
@@ -104,31 +90,10 @@ function createSchemaFromTemplate(
         name: overrides?.name ?? template.name,
         groupId: undefined,
         groupName: undefined,
-        fields: (overrides?.fields ?? template.fields).map((field) => ({
-            ...field,
-            type: { ...field.type },
-            options: Array.isArray(field.options)
-                ? [...field.options]
-                : field.options
-                    ? JSON.parse(JSON.stringify(field.options))
-                    : undefined
-        })),
-        subtypeFields: template.subtypeFields ? Object.fromEntries(
-            Object.entries(template.subtypeFields).map(([k, fields]) => [
-                k,
-                fields.map((field) => ({
-                    ...field,
-                    type: { ...field.type },
-                    options: Array.isArray(field.options)
-                        ? [...field.options]
-                        : field.options
-                            ? JSON.parse(JSON.stringify(field.options))
-                            : undefined
-                }))
-            ])
-        ) : undefined
+        fields: cloneFields(overrides?.fields ?? template.fields),
+        subtypeFields: cloneSubtypeFields(template.subtypeFields),
     };
-};
+}
 
 function createSchemaGroupFromTemplate(
     template: DocumentSchemaGroup,
@@ -143,40 +108,15 @@ function createSchemaGroupFromTemplate(
         idMap[doc.id] = preserveTemplateIds ? doc.id : `${doc.id}-${crypto.randomUUID()}`;
     });
 
-    const clonedDocuments = template.documents.map((doc) => {
+    const clonedDocuments: DocumentSchema[] = template.documents.map((doc) => {
         const newDocId = idMap[doc.id];
-
-        const clonedFields = doc.fields.map((field) => ({
-            ...field,
-            type: { ...field.type },
-            options: Array.isArray(field.options)
-                ? [...field.options]
-                : field.options
-                    ? JSON.parse(JSON.stringify(field.options))
-                    : undefined
-        }));
-
-        const clonedSubtypeFields: Record<string, FieldDefinition[]> = {};
-        if (doc.subtypeFields) {
-            Object.entries(doc.subtypeFields).forEach(([subType, fields]) => {
-                clonedSubtypeFields[subType] = fields.map((field) => ({
-                    ...field,
-                    type: { ...field.type },
-                    options: Array.isArray(field.options)
-                        ? [...field.options]
-                        : field.options
-                            ? JSON.parse(JSON.stringify(field.options))
-                            : undefined
-                }));
-            });
-        }
 
         return {
             ...doc,
             id: newDocId,
             parentSchemaId: doc.parentSchemaId ? (idMap[doc.parentSchemaId] ?? doc.parentSchemaId) : undefined,
-            fields: clonedFields,
-            subtypeFields: doc.subtypeFields ? clonedSubtypeFields : undefined,
+            fields: cloneFields(doc.fields),
+            subtypeFields: cloneSubtypeFields(doc.subtypeFields),
         };
     });
 
@@ -188,7 +128,7 @@ function createSchemaGroupFromTemplate(
         description: overrides?.description ?? template.description,
         documents: clonedDocuments,
     };
-};
+}
 
 function buildFieldDefinitionsForParent(parentSchema?: DocumentSchema, childSchema?: DocumentSchema): FieldDefinition[] {
     const inheritedFields = parentSchema?.fields ?? []
@@ -218,6 +158,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         name: "type_of_source",
                         label: "Source Type",
                         type: { data: "select", input: "search-select-input" },
+                        specification: "source_type",
                         options: [
                             'Newspaper',
                             'Online',
@@ -230,8 +171,8 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         ]
                     },
                     {
-                        name: "url",
-                        label: "URL",
+                        name: "source_url",
+                        label: "Source URL",
                         type: { data: "string", input: "text" },
                         visibility: {
                             dependsOn: "type_of_source",
@@ -239,27 +180,82 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             value: "Online"
                         }
                     },
-                    { name: "date", label: "Publication Date", type: { data: "date", input: "date" } },
                     {
-                        name: "author_identity_status",
-                        label: "Author Identity Status",
+                        name: "publication_date_mode",
+                        label: "Publication Date Known?",
+                        type: { data: "select", input: "select" },
+                        options: ["exact", "approximate", "unknown"],
+                        default: "exact"
+                    },
+                    {
+                        name: "publication_date_exact",
+                        label: "Publication Date",
+                        type: { data: "date", input: "date" },
+                        visibility: {
+                            dependsOn: "publication_date_mode",
+                            operator: "eq",
+                            value: "exact"
+                        }
+                    },
+                    {
+                        name: "publication_date_range",
+                        label: "Publication Date",
+                        type: { data: "date", input: "date" },
+                        visibility: {
+                            dependsOn: "publication_date_mode",
+                            operator: "eq",
+                            value: "approximate"
+                        }
+                    },
+                    {
+                        name: "source_archives",
+                        label: "Archived Instance",
+                        type: { data: "array", input: "repeating-group" },
+                        description: "Capture multiple archived locations and their platform hosts.",
+                        fields: [
+                            {
+                                name: "source_archive_platform",
+                                label: "Archive Host / Platform",
+                                type: { data: "select", input: "search-select-input" },
+                                specification: "source_archive_platform",
+                                options: [
+                                    'Wayback Machine',
+                                    'Archive.today',
+                                    'Perma.cc',
+                                    'Newspaper Archive',
+                                    'SA Media (Sabinet)',
+                                    'Newsbank',
+                                    'RDM',
+                                    'NexusUni'
+                                ]
+                            },
+                            {
+                                name: "source_archive_url_accession",
+                                label: "Archive URL / Accession Code",
+                                type: { data: "string", input: "text" },
+                                required: true
+                            }
+                        ]
+                    },
+                    {
+                        name: "byline_status",
+                        label: "Byline Status",
                         type: { data: "string", input: "select" },
                         options: [
                             "Known",
-                            "Undisclosed",
-                            "Anonymous",
-                            "Unknown"
+                            "Unknown",
+                            "None"
                         ],
                         default: "Known"
                     },
                     {
                         name: "byline",
                         label: "Byline",
-                        type: { data: "array<string>", input: "search-select-input" },
+                        type: { data: "select", input: "search-select-input" },
                         specification: "byline",
                         options: [],
                         visibility: {
-                            dependsOn: "author_identity_status",
+                            dependsOn: "byline_status",
                             operator: "eq",
                             value: "Known"
                         }
@@ -276,9 +272,8 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     {
                         name: "language",
                         label: "Language",
-                        type: { data: "select", input: "search-select" },
+                        type: { data: "select", input: "search-select-input" },
                         options: [
-                            '',
                             'English',
                             'Afrikaans',
                             'Zulu',
@@ -291,13 +286,13 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             'Ndebele',
                             'Swati',
                             'Other',
-                        ]
+                        ],
+                        specification: "language"
                     },
                     {
                         name: "report_platform",
                         label: "Report Platform",
-                        type: { data: "select", input: "search-select" },
-                        // specification: "report_platform",
+                        type: { data: "select", input: "search-select-input" },
                         options: [
                             '100punt6',
                             'AFRIKANER',
@@ -476,15 +471,9 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             'ZOUTNET',
                             'ZOUTPANSBURGER',
                             'ZULULAND OBSERVER',
-                        ]
+                        ],
+                        specification: "report_platform"
                     },
-                    // {
-                    //     name: "incidents_link",
-                    //     label: "Report on",
-                    //     type: { data: "form", input: "embedded-form-list" },
-                    //     linkTo: "incident",
-                    //     icon: "map-pin"
-                    // },
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
                 ],
             },
@@ -497,7 +486,6 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 titleField: "id",
                 fields: [
                     { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "evt-{date}-{rand:6}" }, description: "Auto-generated event identifier." },
-                    // { name: "name", label: "Incident Title", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "Event {date} {rand:4}" }, description: "Generated working title; you can rename this after details are known." },
                     { name: "date", label: "Incident Date", type: { data: "date", input: "date" } },
                     {
                         name: "location_of_homicide",
@@ -726,7 +714,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     {
                         name: "type_of_murder",
                         label: "Type of Murder",
-                        type: { data: "array<string>", input: "multi-select" },
+                        type: { data: "array", input: "multi-select" },
                         options: [
                             "Adult male homicide",
                             "Adult female homicide",
@@ -762,215 +750,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
                 ],
             },
-            /*{
-                id: "participant",
-                name: "Participant",
-                description: "The people that participated in the reported event.",
-                icon: "users",
-                parentSchemaId: "incident",
-                titleField: "name",
-                fields: [
-                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "act-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
-                    { name: "name", label: "Name", type: { data: "string", input: "text" } },
-                    { name: "aliases", label: "Alias(es)", type: { data: "array<string>", input: "text-multi" } },
-                    {
-                        name: "gender",
-                        label: "Gender",
-                        type: { data: "select", input: "select" },
-                        options: [
-                            "Female",
-                            "Male",
-                            "Non-binary",
-                            "Unknown"
-                        ]
-                    },
-                    {
-                        name: "race",
-                        label: "Race",
-                        type: { data: "select", input: "select" },
-                        options: [
-                            'Black',
-                            'Coloured',
-                            'White',
-                            'Indian',
-                            'Asian',
-                            'Unknown',
-                            'Other'
-                        ]
-                    },
-                    {
-                        name: "is_age_known",
-                        label: "Was the age reported?",
-                        type: { data: "boolean", input: "switch" },
-                        // options: [
-                        //     "Known",
-                        //     "Unknown"
-                        // ],
-                        default: true
-                    },
-                    {
-                        name: "age",
-                        label: "Age",
-                        type: { data: "string", input: "text" },
-                        visibility: {
-                            dependsOn: "is_age_known",
-                            operator: "eq",
-                            value: true
-                        }
-                    },
-                    {
-                        name: "age_descriptor",
-                        label: "Age Descriptor",
-                        type: { data: "select", input: "select" },
-                        options: [
-                            'Neonate or abandonment',
-                            'Baby or infant',
-                            'Child',
-                            'Teenager',
-                            'Young Adult',
-                            'Adult',
-                            'Elderly',
-                            'Unknown'
-                        ],
-                        default: "Unknown",
-                        visibility: {
-                            dependsOn: "is_age_known",
-                            operator: "eq",
-                            value: false
-                        }
-                    },
-                    { name: "nationality", label: "Nationality", type: { data: "string", input: "text" } },
-                    { name: "subtype_form", label: "Participant Type", type: { data: "form", input: "subtype-form-select" } },
-                    { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
-                ],
-                subtypeFields: {
-                    "Victim": [
-                        {
-                            name: "date_of_death_mode",
-                            label: "Date of Death Known?",
-                            type: { data: "select", input: "select" },
-                            options: ["exact", "approximate", "unknown"],
-                            default: "exact"
-                        },
-                        {
-                            name: "date_of_death",
-                            label: "Date of Death",
-                            type: { data: "date", input: "date" },
-                            visibility: {
-                                dependsOn: "date_of_death_mode",
-                                operator: "eq",
-                                value: "exact"
-                            }
-                        },
-                        {
-                            name: "date_of_death_range",
-                            label: "Approximate Date of Death",
-                            type: { data: "date-range", input: "date-range" },
-                            visibility: {
-                                dependsOn: "date_of_death_mode",
-                                operator: "eq",
-                                value: "approximate"
-                            }
-                        },
-                    ],
-                    "Perpetrator": [
-                        {
-                            name: "relationship_to_victim",
-                            label: "Relationship to Victim",
-                            type: { data: "array<string>", input: "multi-select" },
-                            options: [
-                                "Stranger",
-                                "Current or former intimate partner",
-                                "Love rival",
-                                "Current or former employee",
-                                "Current or former employer",
-                                "Terrorist (state label)",
-                                "Parent",
-                                "Child",
-                                "Grandchild",
-                                "Grandparent",
-                                "Mother-in-law",
-                                "Sister-in-law",
-                                "Brother-in-law",
-                                "Son-in-law",
-                                "Daughter-in-law",
-                                "Father-in-law",
-                                "Aunt",
-                                "Uncle",
-                                "Niece",
-                                "Nephew",
-                                "Cousin",
-                                "Close family member (unknown relationship or more distant than first cousin)",
-                                "Stepchild",
-                                "Step-parent",
-                                "Foster child",
-                                "Foster parent",
-                                "Police officer",
-                                "Suspect in police or security custody",
-                                "Security Guard",
-                                "Community member",
-                                "Other"
-                            ],
-                            "noSelectionValue": "Unknown"
-                        },
-                        {
-                            name: "relationship_to_victim_specify",
-                            label: "Specify",
-                            type: { data: "string", input: "text" },
-                            visibility: {
-                                dependsOn: "relationship_to_victim",
-                                operator: "includes",
-                                value: "Other"
-                            }
-                        },
-                        {
-                            name: "identified",
-                            label: "Identified?",
-                            type: { data: "select", input: "select" },
-                            options: ["No", "Yes", "Unknown"],
-                            default: "Unknown"
-                        },
-                        {
-                            name: "arrested",
-                            label: "Arrested?",
-                            type: { data: "select", input: "select" },
-                            options: ["No", "Yes", "Unknown"],
-                            default: "Unknown",
-                            visibility: {
-                                dependsOn: "identified",
-                                operator: "eq",
-                                value: "Yes"
-                            }
-                        },
-                        {
-                            name: "charged",
-                            label: "Charged?",
-                            type: { data: "select", input: "select" },
-                            options: ["No", "Yes", "Unknown"],
-                            default: "Unknown",
-                            visibility: {
-                                dependsOn: "arrested",
-                                operator: "eq",
-                                value: "Yes"
-                            }
-                        },
-                        { name: "charges", label: "Charges", type: { data: "string", input: "text" } },
-                        {
-                            name: "convicted",
-                            label: "Convicted?",
-                            type: { data: "select", input: "select" },
-                            options: ["No", "Yes", "Unknown"],
-                            default: "Unknown",
-                            visibility: {
-                                dependsOn: "charged",
-                                operator: "eq",
-                                value: "Yes"
-                            }
-                        },
-                        { name: "sentence", label: "Sentence", type: { data: "string", input: "text" } },
-                    ]
-                }
-            },*/
+
             {
                 id: "victim",
                 name: "Victim",
@@ -981,7 +761,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 fields: [
                     { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "vic-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
                     { name: "name", label: "Name", type: { data: "string", input: "text" } },
-                    { name: "aliases", label: "Alias(es)", type: { data: "array<string>", input: "text-multi" } },
+                    { name: "aliases", label: "Alias(es)", type: { data: "array", input: "text-multi" } },
                     {
                         name: "gender",
                         label: "Gender",
@@ -1011,10 +791,6 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         name: "is_age_known",
                         label: "Was the age reported?",
                         type: { data: "boolean", input: "switch" },
-                        // options: [
-                        //     "Known",
-                        //     "Unknown"
-                        // ],
                         default: true
                     },
                     {
@@ -1089,7 +865,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 fields: [
                     { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "perp-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
                     { name: "name", label: "Name", type: { data: "string", input: "text" } },
-                    { name: "aliases", label: "Alias(es)", type: { data: "array<string>", input: "text-multi" } },
+                    { name: "aliases", label: "Alias(es)", type: { data: "array", input: "text-multi" } },
                     {
                         name: "gender",
                         label: "Gender",
@@ -1119,10 +895,6 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         name: "is_age_known",
                         label: "Was the age reported?",
                         type: { data: "boolean", input: "switch" },
-                        // options: [
-                        //     "Known",
-                        //     "Unknown"
-                        // ],
                         default: true
                     },
                     {
@@ -1158,99 +930,99 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     },
                     { name: "nationality", label: "Nationality", type: { data: "string", input: "text" } },
                     {
-                            name: "relationship_to_victim",
-                            label: "Relationship to Victim",
-                            type: { data: "array<string>", input: "multi-select" },
-                            options: [
-                                "Stranger",
-                                "Current or former intimate partner",
-                                "Love rival",
-                                "Current or former employee",
-                                "Current or former employer",
-                                "Terrorist (state label)",
-                                "Parent",
-                                "Child",
-                                "Grandchild",
-                                "Grandparent",
-                                "Mother-in-law",
-                                "Sister-in-law",
-                                "Brother-in-law",
-                                "Son-in-law",
-                                "Daughter-in-law",
-                                "Father-in-law",
-                                "Aunt",
-                                "Uncle",
-                                "Niece",
-                                "Nephew",
-                                "Cousin",
-                                "Close family member (unknown relationship or more distant than first cousin)",
-                                "Stepchild",
-                                "Step-parent",
-                                "Foster child",
-                                "Foster parent",
-                                "Police officer",
-                                "Suspect in police or security custody",
-                                "Security Guard",
-                                "Community member",
-                                "Other"
-                            ],
-                            "noSelectionValue": "Unknown"
-                        },
-                        {
-                            name: "relationship_to_victim_specify",
-                            label: "Specify",
-                            type: { data: "string", input: "text" },
-                            visibility: {
-                                dependsOn: "relationship_to_victim",
-                                operator: "includes",
-                                value: "Other"
-                            }
-                        },
-                        {
-                            name: "identified",
-                            label: "Identified?",
-                            type: { data: "select", input: "select" },
-                            options: ["No", "Yes", "Unknown"],
-                            default: "Unknown"
-                        },
-                        {
-                            name: "arrested",
-                            label: "Arrested?",
-                            type: { data: "select", input: "select" },
-                            options: ["No", "Yes", "Unknown"],
-                            default: "Unknown",
-                            visibility: {
-                                dependsOn: "identified",
-                                operator: "eq",
-                                value: "Yes"
-                            }
-                        },
-                        {
-                            name: "charged",
-                            label: "Charged?",
-                            type: { data: "select", input: "select" },
-                            options: ["No", "Yes", "Unknown"],
-                            default: "Unknown",
-                            visibility: {
-                                dependsOn: "arrested",
-                                operator: "eq",
-                                value: "Yes"
-                            }
-                        },
-                        { name: "charges", label: "Charges", type: { data: "string", input: "text" } },
-                        {
-                            name: "convicted",
-                            label: "Convicted?",
-                            type: { data: "select", input: "select" },
-                            options: ["No", "Yes", "Unknown"],
-                            default: "Unknown",
-                            visibility: {
-                                dependsOn: "charged",
-                                operator: "eq",
-                                value: "Yes"
-                            }
-                        },
-                        { name: "sentence", label: "Sentence", type: { data: "string", input: "text" } },
+                        name: "relationship_to_victim",
+                        label: "Relationship to Victim",
+                        type: { data: "array", input: "multi-select" },
+                        options: [
+                            "Stranger",
+                            "Current or former intimate partner",
+                            "Love rival",
+                            "Current or former employee",
+                            "Current or former employer",
+                            "Terrorist (state label)",
+                            "Parent",
+                            "Child",
+                            "Grandchild",
+                            "Grandparent",
+                            "Mother-in-law",
+                            "Sister-in-law",
+                            "Brother-in-law",
+                            "Son-in-law",
+                            "Daughter-in-law",
+                            "Father-in-law",
+                            "Aunt",
+                            "Uncle",
+                            "Niece",
+                            "Nephew",
+                            "Cousin",
+                            "Close family member (unknown relationship or more distant than first cousin)",
+                            "Stepchild",
+                            "Step-parent",
+                            "Foster child",
+                            "Foster parent",
+                            "Police officer",
+                            "Suspect in police or security custody",
+                            "Security Guard",
+                            "Community member",
+                            "Other"
+                        ],
+                        "noSelectionValue": "Unknown"
+                    },
+                    {
+                        name: "relationship_to_victim_specify",
+                        label: "Specify",
+                        type: { data: "string", input: "text" },
+                        visibility: {
+                            dependsOn: "relationship_to_victim",
+                            operator: "includes",
+                            value: "Other"
+                        }
+                    },
+                    {
+                        name: "identified",
+                        label: "Identified?",
+                        type: { data: "select", input: "select" },
+                        options: ["No", "Yes", "Unknown"],
+                        default: "Unknown"
+                    },
+                    {
+                        name: "arrested",
+                        label: "Arrested?",
+                        type: { data: "select", input: "select" },
+                        options: ["No", "Yes", "Unknown"],
+                        default: "Unknown",
+                        visibility: {
+                            dependsOn: "identified",
+                            operator: "eq",
+                            value: "Yes"
+                        }
+                    },
+                    {
+                        name: "charged",
+                        label: "Charged?",
+                        type: { data: "select", input: "select" },
+                        options: ["No", "Yes", "Unknown"],
+                        default: "Unknown",
+                        visibility: {
+                            dependsOn: "arrested",
+                            operator: "eq",
+                            value: "Yes"
+                        }
+                    },
+                    { name: "charges", label: "Charges", type: { data: "string", input: "text" } },
+                    {
+                        name: "convicted",
+                        label: "Convicted?",
+                        type: { data: "select", input: "select" },
+                        options: ["No", "Yes", "Unknown"],
+                        default: "Unknown",
+                        visibility: {
+                            dependsOn: "charged",
+                            operator: "eq",
+                            value: "Yes"
+                        }
+                    },
+                    { name: "sentence", label: "Sentence", type: { data: "string", input: "text" } },
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
                 ]
             }

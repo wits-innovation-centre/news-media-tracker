@@ -5,17 +5,24 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import {
-    DATA_TO_INPUT,
-    type DocumentSchema,
-    type DocumentSchemaGroup,
-    type FieldDataType,
-    type FieldDefinition,
-    type FieldInputType,
-    type SpecificationDefinition,
+import type {
+    DocumentSchema,
+    DocumentSchemaGroup,
+    FieldDataType,
+    FieldInputType,
+    SpecificationDefinition,
 } from "@/lib/types"
 
-const DATA_TYPES: FieldDataType[] = ["string", "array<string>", "hierarchical-select", "select", "number", "boolean", "date", "date-range", "markdown", "form"]
+import {
+    buildFieldGuidance,
+    createEmptyField,
+    DATA_TYPES,
+    getAllowedInputs,
+    moveItem,
+    parseField,
+    schemaToEditableFields,
+    type EditableField,
+} from "./fn"
 
 interface SchemaManagerProps {
     groups: DocumentSchemaGroup[]
@@ -24,135 +31,6 @@ interface SchemaManagerProps {
     onDeleteGroup: (groupId: string) => void
     onSaveSchema: (schema: DocumentSchema) => void
     onDeleteSchema: (schemaId: string) => void
-}
-
-interface EditableField extends FieldDefinition {
-    optionsText: string
-    tooltipKind: "help" | "warn" | "info"
-    tooltipUseIcon: boolean
-    tooltipMessage: string
-}
-
-function createEmptyField(): EditableField {
-    return {
-        name: "",
-        label: "",
-        type: { data: "string", input: "text" },
-        required: false,
-        description: "",
-        noSelectionValue: "",
-        optionsText: "",
-        specification: undefined,
-        tooltipKind: "info",
-        tooltipUseIcon: true,
-        tooltipMessage: "",
-    }
-}
-
-function schemaToEditableFields(schema?: DocumentSchema): EditableField[] {
-    if (!schema) return [createEmptyField()]
-
-    return schema.fields.map((field) => ({
-        ...field,
-        optionsText: field.options
-            ? Array.isArray(field.options)
-                ? field.options.join("\n")
-                : JSON.stringify(field.options, null, 2)
-            : "",
-        tooltipKind: field.tooltip?.kind ?? "info",
-        tooltipUseIcon: field.tooltip?.useIcon ?? true,
-        tooltipMessage: field.tooltip?.message ?? "",
-    }))
-}
-
-function parseField(field: EditableField): FieldDefinition {
-    const nextField: FieldDefinition = {
-        name: field.name.trim(),
-        label: field.label.trim(),
-        type: field.type,
-        required: field.required,
-        description: field.description?.trim() || undefined,
-        default: field.default === "" ? undefined : field.default,
-        generator: field.generator,
-        visibility: field.visibility?.dependsOn ? field.visibility : undefined,
-        noSelectionValue: field.noSelectionValue?.trim() || undefined,
-        specification: field.specification,
-    }
-
-    if (field.optionsText.trim()) {
-        if (field.type.data === "hierarchical-select") {
-            nextField.options = JSON.parse(field.optionsText)
-        } else {
-            const maybeJson = field.optionsText.trim()
-            nextField.options = maybeJson.startsWith("[")
-                ? JSON.parse(maybeJson)
-                : maybeJson.split("\n").map((item) => item.trim()).filter(Boolean)
-        }
-    }
-
-    if (field.tooltipMessage.trim()) {
-        nextField.tooltip = {
-            kind: field.tooltipKind,
-            useIcon: field.tooltipUseIcon,
-            message: field.tooltipMessage.trim(),
-        }
-    }
-
-    return nextField
-}
-
-function moveItem<T>(items: T[], fromIndex: number, toIndex: number): T[] {
-    if (fromIndex === toIndex) return items
-    const nextItems = [...items]
-    const [moved] = nextItems.splice(fromIndex, 1)
-    nextItems.splice(toIndex, 0, moved)
-    return nextItems
-}
-
-const DATA_TYPE_GUIDANCE: Partial<Record<FieldDataType, string>> = {
-    "array<string>": "Use this for multi-value entries. Pick an input that supports repeated values.",
-    "hierarchical-select": "Expect nested options JSON with levels (for example Province -> Town).",
-    "date-range": "Stores a start and end value; make sure downstream filters handle ranges.",
-    markdown: "Best for longer rich text notes that can include formatting.",
-    form: "Use form inputs when this field controls a composite UI (for example subtype or embedded records).",
-}
-
-const INPUT_TYPE_GUIDANCE: Partial<Record<FieldInputType, string>> = {
-    "search-select": "Searches and selects from existing options only.",
-    "search-select-input": "Lets users search existing options and create a new value when needed.",
-    "text-multi": "Use for multiple free-text values (aliases, tags, and similar lists).",
-    "subtype-form-select": "Switches the active subtype and displays subtype-specific fields.",
-    "embedded-form-list": "Manages linked documents directly from this field.",
-    switch: "Use with a short option set, typically binary states.",
-}
-
-const GENERATOR_GUIDANCE: Record<"uuid" | "timestamp" | "pattern", string> = {
-    uuid: "Generates a random unique identifier automatically.",
-    timestamp: "Generates a time-based value; useful for sortable IDs.",
-    pattern: "Builds values from tokens like {date} and {rand:n}. Example: evt-{date}-{rand:6}.",
-}
-
-function buildFieldGuidance(field: EditableField): string[] {
-    const guidance: string[] = []
-    const dataHint = DATA_TYPE_GUIDANCE[field.type.data]
-    const inputHint = INPUT_TYPE_GUIDANCE[field.type.input]
-
-    if (dataHint) guidance.push(`Data type: ${dataHint}`)
-    if (inputHint) guidance.push(`Input type: ${inputHint}`)
-
-    if (field.generator?.strategy) {
-        guidance.push(`Generator: ${GENERATOR_GUIDANCE[field.generator.strategy]}`)
-    }
-
-    if (field.type.input === "search-select-input" && !field.specification) {
-        guidance.push("Consider setting a specification source so users search from maintained vocabularies.")
-    }
-
-    if (field.type.input === "embedded-form-list" && !field.linkTo) {
-        guidance.push("Set linkTo so this field knows which schema to embed.")
-    }
-
-    return guidance
 }
 
 function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGroup, onSaveSchema, onDeleteSchema }: SchemaManagerProps) {
@@ -494,7 +372,7 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
             <div className="space-y-3">
                 {schemaDraft.fields.map((field, index) => {
                     const isExpanded = expandedFieldIndex === index
-                    const allowedInputs = DATA_TO_INPUT[field.type.data] || []
+                    const allowedInputs = getAllowedInputs(field.type.data)
 
                     return (
                         <div
@@ -552,7 +430,7 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
                                                     value={field.type.data}
                                                     onValueChange={(value) => {
                                                         const newData = value as FieldDataType
-                                                        const validInputs = DATA_TO_INPUT[newData] || []
+                                                        const validInputs = getAllowedInputs(newData)
                                                         const nextInput = validInputs.includes(field.type.input)
                                                             ? field.type.input
                                                             : validInputs[0] ?? "text"
@@ -564,7 +442,7 @@ function SchemaManager({ groups, specificationRegistry, onSaveGroup, onDeleteGro
                                                     }}
                                                 >
                                                     <SelectTrigger><SelectValue placeholder="Data type" /></SelectTrigger>
-                                                    <SelectContent>{DATA_TYPES.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                                                    <SelectContent>{DATA_TYPES.map((option: string) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
                                                 </Select>
                                             </div>
                                             <div className="space-y-1">

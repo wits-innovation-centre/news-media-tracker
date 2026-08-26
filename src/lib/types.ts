@@ -1,31 +1,26 @@
-type FieldDataType = "string" |
-    "array<string>" |
-    "hierarchical-select" |
-    "select" |
-    "form" |
-    "number" |
-    "boolean" |
-    "date" |
-    "date-range" |
-    "markdown";
+type FieldDataType =
+    | "string"
+    | "array" // <-- Replaces array<string> and array<object>
+    | "hierarchical-select"
+    | "select"
+    | "form"
+    | "number" | "boolean" | "date" | "date-range" | "markdown";
 
-type FieldInputType = "text" |
-    "textarea" |
-    "select" |
-    "multi-select" |
-    "search-select" |
-    "search-select-input" |
-    "subtype-form-select" |
-    "embedded-form-list" |
-    "date" |
-    "date-range" |
-    "text-multi" |
-    "checkbox" |
-    "switch";
+type FieldInputType =
+    | "text"
+    | "textarea"
+    | "select"
+    | "multi-select"
+    | "search-select"
+    | "search-select-input"
+    | "subtype-form-select"
+    | "embedded-form-list"
+    | "repeating-group"
+    | "date" | "date-range" | "text-multi" | "checkbox" | "switch";
 
 export const DATA_TO_INPUT: Record<FieldDataType, FieldInputType[]> = {
     "string": ["text", "textarea", "select", "search-select", "search-select-input"],
-    "array<string>": ["multi-select", "text-multi"],
+    "array": ["repeating-group", "multi-select", "text-multi"],
     "hierarchical-select": ["select", "search-select"],
     "select": ["select", "search-select", "search-select-input"],
     "number": ["text", "select", "search-select", "search-select-input"],
@@ -40,14 +35,15 @@ export const INPUT_TO_DATA: Record<FieldInputType, FieldDataType[]> = {
     "text": ["string", "number", "markdown"],
     "textarea": ["string", "markdown"],
     "select": ["select", "string", "number", "hierarchical-select"],
-    "multi-select": ["array<string>"],
+    "multi-select": ["array"],
     "search-select": ["select", "string", "number", "hierarchical-select"],
     "search-select-input": ["select", "string", "number"],
     "subtype-form-select": ["form"],
     "embedded-form-list": ["form"],
+    "repeating-group": ["array"],
     "date": ["date"],
     "date-range": ["date-range"],
-    "text-multi": ["array<string>"],
+    "text-multi": ["array"],
     "checkbox": ["boolean"],
     "switch": ["boolean"]
 };
@@ -96,25 +92,79 @@ interface FieldTooltip {
     message: string;
 }
 
-interface FieldDefinition {
+interface BaseFieldDefinition {
     name: string;
     label: string;
-    type: {
-        data: FieldDataType;
-        input: FieldInputType;
-    };
-    default?: any;
-    noSelectionValue?: string;
-    generator?: FieldGeneratorConfig;
-    visibility?: VisibilityCondition;
-    required?: boolean;
-    options?: string[] | TieredOptions;
-    specification?: string;
     description?: string;
+    required?: boolean;
+    default?: any;
+    visibility?: VisibilityCondition;
+    generator?: FieldGeneratorConfig;
     linkTo?: string;
     icon?: IconName;
     tooltip?: FieldTooltip;
-};
+    [key: string]: unknown;
+}
+
+interface RepeatingGroupFieldDefinition extends BaseFieldDefinition {
+    type: {
+        data: "array";
+        input: "repeating-group";
+    };
+    fields: FieldDefinition[];
+    addButtonText?: string;
+    minItems?: number;
+    maxItems?: number;
+}
+
+interface MultiSelectFieldDefinition extends BaseFieldDefinition {
+    type: {
+        data: "array";
+        input: "multi-select" | "text-multi";
+    };
+    options?: string[] | TieredOptions;
+}
+
+interface SelectFieldDefinition extends BaseFieldDefinition {
+    type: {
+        data: "select" | "string" | "number" | "hierarchical-select";
+        input: "select" | "search-select";
+    };
+    options: string[] | TieredOptions;
+    noSelectionValue?: string;
+}
+
+interface SearchSelectInputDefinition extends BaseFieldDefinition {
+    type: {
+        data: "select" | "string" | "number" ;
+        input: "search-select-input";
+    };
+    options: string[] | TieredOptions;
+    specification: string;
+    noSelectionValue?: string;
+}
+
+interface FormFieldDefinition extends BaseFieldDefinition {
+    type: {
+        data: "form";
+        input: "subtype-form-select" | "embedded-form-list";
+    };
+}
+
+interface StandardFieldDefinition extends BaseFieldDefinition {
+    type: {
+        data: "string" | "number" | "boolean" | "date" | "date-range" | "markdown";
+        input: "text" | "textarea" | "date" | "date-range" | "checkbox" | "switch";
+    };
+}
+
+type FieldDefinition =
+    | RepeatingGroupFieldDefinition
+    | MultiSelectFieldDefinition
+    | SelectFieldDefinition
+    | SearchSelectInputDefinition
+    | FormFieldDefinition
+    | StandardFieldDefinition;
 
 interface DocumentSchema {
     id: string;

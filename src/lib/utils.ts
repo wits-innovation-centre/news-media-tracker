@@ -186,7 +186,7 @@ export function generateFieldValue(field: FieldDefinition, formValues: Record<st
   if (field.default !== undefined) return field.default
   if (field.type.data === "boolean") return false
   if (field.type.data === "number") return 0
-  if (field.type.data === "array<string>") return []
+  if (field.type.data === "array") return []
 
   return ""
 }

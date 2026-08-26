@@ -337,10 +337,10 @@ export async function exportWorkspaceToExcel(
                 const specColLetter = getColumnLetter(specInfo.colIndex)
 
                 if (!(mainSheet as any)["!validations"]) {
-                    ;(mainSheet as any)["!validations"] = []
+                    ; (mainSheet as any)["!validations"] = []
                 }
 
-                ;(mainSheet as any)["!validations"].push({
+                ; (mainSheet as any)["!validations"].push({
                     sqref: `${colLetter}2:${colLetter}10000`,
                     type: "list",
                     operator: "equal",
@@ -658,7 +658,7 @@ export async function importExcelWorkbook(options: ExcelImportOptions): Promise<
             schema.fields.forEach((field) => {
                 const rawVal = row[field.name]
                 if (rawVal !== undefined && rawVal !== "") {
-                    if (field.type.data === "array<string>") {
+                    if (field.type.data === "array" || (field.type.data as string) === "array<string>") {
                         frontmatter[field.name] = rawVal.split(";").map((s) => s.trim()).filter(Boolean)
                     } else if (field.type.data === "boolean") {
                         frontmatter[field.name] = ["true", "yes", "1"].includes(rawVal.toLowerCase())
@@ -677,7 +677,7 @@ export async function importExcelWorkbook(options: ExcelImportOptions): Promise<
                     schema.subtypeFields[stKey].forEach((f) => {
                         const rawVal = subData[f.name]
                         if (rawVal !== undefined && rawVal !== "") {
-                            if (f.type.data === "array<string>") {
+                            if (f.type.data === "array" || (f.type.data as string) === "array<string>") {
                                 frontmatter[f.name] = rawVal.split(";").map((s) => s.trim()).filter(Boolean)
                             } else {
                                 frontmatter[f.name] = rawVal

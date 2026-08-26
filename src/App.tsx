@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Settings } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Capture } from "@/components/ui/custom/capture";
+import { Capture } from "@/lib/capture/ui";
 import { LedgerBadge } from "@/components/ui/custom/ledger-badge";
 import Layout from "@/components/ui/custom/layout";
 import { SettingsModal } from "@/components/ui/custom/settings-modal";
@@ -31,7 +31,7 @@ import {
 import {
     exportWorkspaceAsObsidianVault,
     exportWorkspaceAsSpreadsheetBundle,
-} from "@/lib/export-import";
+} from "@/lib/import-export/fn";
 import {
     DEFAULT_SCHEMA_TEMPLATES,
     createSchemaGroupFromTemplate,
@@ -70,7 +70,7 @@ const extractSpecificationDefaults = (groups: DocumentSchemaGroup[]): Specificat
     const byId: SpecificationStore = {};
     allFields.forEach((field) => {
         const specificationId = field.specification?.trim();
-        if (!specificationId || !Array.isArray(field.options)) return;
+        if (!specificationId || !("options" in field) || !Array.isArray(field.options)) return;
 
         const seeded = (field.options as string[]).map((value) => value.trim()).filter(Boolean);
         byId[specificationId] = [...new Set([...(byId[specificationId] ?? []), ...seeded])];
