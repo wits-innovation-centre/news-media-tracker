@@ -486,7 +486,33 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                 titleField: "id",
                 fields: [
                     { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "evt-{date}-{rand:6}" }, description: "Auto-generated event identifier." },
-                    { name: "date", label: "Incident Date", type: { data: "date", input: "date" } },
+                    {
+                        name: "incident_date_mode",
+                        label: "Incident Date Known?",
+                        type: { data: "select", input: "select" },
+                        options: ["exact", "approximate", "unknown"],
+                        default: "exact"
+                    },
+                    {
+                        name: "incident_date_exact",
+                        label: "Incident Date",
+                        type: { data: "date", input: "date" },
+                        visibility: {
+                            dependsOn: "incident_date_mode",
+                            operator: "eq",
+                            value: "exact"
+                        }
+                    },
+                    {
+                        name: "incident_date_range",
+                        label: "Incident Date",
+                        type: { data: "date", input: "date" },
+                        visibility: {
+                            dependsOn: "incident_date_mode",
+                            operator: "eq",
+                            value: "approximate"
+                        }
+                    },
                     {
                         name: "location_of_homicide",
                         label: "Location",
@@ -652,13 +678,143 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         }
                     },
                     {
-                        name: "location_of_homicide_specify",
-                        label: "Specify",
+                        name: "location_of_homicide_coordinates",
+                        label: "GPS Coordinates",
+                        type: { data: "string", input: "text" }
+                    },
+                    { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
+                ],
+            },
+            {
+                id: "victim",
+                name: "Victim",
+                description: "A person that was reported as murdered.",
+                icon: "users",
+                parentSchemaId: "incident",
+                titleField: "name",
+                fields: [
+                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "vic-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
+                    { name: "name", label: "Name", type: { data: "string", input: "text" } },
+                    { name: "aliases", label: "Other names or spelling of name", type: { data: "array", input: "text-multi" }, },
+                    {
+                        name: "gender",
+                        label: "Gender",
+                        type: { data: "select", input: "search-select-input" },
+                        options: [
+                            "Female",
+                            "Male",
+                            "Trans woman",
+                            "Trans man",
+                            "Non-binary",
+                            "Genderqueer/Fluid",
+                            "Unknown"
+                        ],
+                        specification: "gender"
+                    },
+                    {
+                        name: "race",
+                        label: "Race",
+                        type: { data: "select", input: "select" },
+                        options: [
+                            'Black',
+                            'Coloured',
+                            'White',
+                            'Indian',
+                            'Asian',
+                            'Unknown',
+                            'Other'
+                        ]
+                    },
+                    {
+                        name: "is_age_known",
+                        label: "Was the age reported?",
+                        type: { data: "boolean", input: "switch" },
+                        default: true
+                    },
+                    {
+                        name: "age",
+                        label: "Age",
                         type: { data: "string", input: "text" },
                         visibility: {
-                            dependsOn: "location_of_homicide.province.town",
+                            dependsOn: "is_age_known",
                             operator: "eq",
-                            value: "Other"
+                            value: true
+                        }
+                    },
+                    {
+                        name: "age_descriptor",
+                        label: "Age Descriptor",
+                        type: { data: "select", input: "select" },
+                        options: [
+                            'Neonate or abandonment',
+                            'Baby or infant',
+                            'Child',
+                            'Teenager',
+                            'Young Adult',
+                            'Adult',
+                            'Elderly',
+                            'Unknown'
+                        ],
+                        default: "Unknown",
+                        visibility: {
+                            dependsOn: "is_age_known",
+                            operator: "eq",
+                            value: false
+                        }
+                    },
+                    { name: "nationality", label: "Nationality", type: { data: "string", input: "text" } },
+                    {
+                        name: "date_of_death_mode",
+                        label: "Do you know when this victim passed?",
+                        type: { data: "select", input: "select" },
+                        options: ["exact", "approximate", "unknown"],
+                        default: "exact"
+                    },
+                    {
+                        name: "date_of_death",
+                        label: "Exactly when did the victim pass?",
+                        type: { data: "date", input: "date" },
+                        visibility: {
+                            dependsOn: "date_of_death_mode",
+                            operator: "eq",
+                            value: "exact"
+                        }
+                    },
+                    {
+                        name: "date_of_death_range",
+                        label: "Approximately when did the victim pass?",
+                        type: { data: "date-range", input: "date-range" },
+                        visibility: {
+                            dependsOn: "date_of_death_mode",
+                            operator: "eq",
+                            value: "approximate"
+                        }
+                    },
+                    {
+                        name: "date_of_discovery_mode",
+                        label: "Do you know when the body was discovered?",
+                        type: { data: "select", input: "select" },
+                        options: ["exact", "approximate", "unknown"],
+                        default: "exact"
+                    },
+                    {
+                        name: "date_of_discovery",
+                        label: "Exactly when was the body discovered?",
+                        type: { data: "date", input: "date" },
+                        visibility: {
+                            dependsOn: "date_of_discovery_mode",
+                            operator: "eq",
+                            value: "exact"
+                        }
+                    },
+                    {
+                        name: "date_of_death_range",
+                        label: "Approximately when was the body discovered?",
+                        type: { data: "date-range", input: "date-range" },
+                        visibility: {
+                            dependsOn: "date_of_discovery_mode",
+                            operator: "eq",
+                            value: "approximate"
                         }
                     },
                     {
@@ -674,7 +830,8 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     {
                         name: "mode_of_death_general",
                         label: "Mode of Death (General)",
-                        type: { data: "string", input: "select" },
+                        specification: "mode_of_death_general",
+                        type: { data: "string", input: "search-select-input" },
                         options: [
                             "Sharp force trauma",
                             "Blunt force trauma",
@@ -687,7 +844,8 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     {
                         name: "mode_of_death_specific",
                         label: "Mode of Death (Specific)",
-                        type: { data: "string", input: "select" },
+                        type: { data: "string", input: "search-select-input" },
+                        specification: "mode_of_death_specific",
                         options: [
                             "Gunshot",
                             "Strangulation (manual or ligature)",
@@ -747,110 +905,33 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                             "Other"
                         ]
                     },
-                    { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
-                ],
-            },
-
-            {
-                id: "victim",
-                name: "Victim",
-                description: "A person that was reported as murdered.",
-                icon: "users",
-                parentSchemaId: "incident",
-                titleField: "name",
-                fields: [
-                    { name: "id", label: "ID", type: { data: "string", input: "text" }, required: true, generator: { strategy: "pattern", pattern: "vic-{date}-{rand:6}" }, description: "Auto-generated actor identifier." },
-                    { name: "name", label: "Name", type: { data: "string", input: "text" } },
-                    { name: "aliases", label: "Alias(es)", type: { data: "array", input: "text-multi" } },
                     {
-                        name: "gender",
-                        label: "Gender",
+                        name: "other_crimes",
+                        label: "Other Crimes",
+                        type: { data: "array", input: "repeating-group" },
+                        fields: [
+                            {
+                                name: "other_crimes_entry",
+                                label: "Crime",
+                                type: { data: "select", input: "search-select-input" },
+                                specification: "other_crimes",
+                                options: [
+                                    'Robbery',
+                                    'Assault'
+                                ]
+                            },
+                        ]
+                    },
+                    {
+                        name: "other_victims",
+                        label: "Were there any other victims?",
                         type: { data: "select", input: "select" },
                         options: [
-                            "Female",
-                            "Male",
-                            "Non-binary",
+                            "Yes",
+                            "No",
                             "Unknown"
-                        ]
-                    },
-                    {
-                        name: "race",
-                        label: "Race",
-                        type: { data: "select", input: "select" },
-                        options: [
-                            'Black',
-                            'Coloured',
-                            'White',
-                            'Indian',
-                            'Asian',
-                            'Unknown',
-                            'Other'
-                        ]
-                    },
-                    {
-                        name: "is_age_known",
-                        label: "Was the age reported?",
-                        type: { data: "boolean", input: "switch" },
-                        default: true
-                    },
-                    {
-                        name: "age",
-                        label: "Age",
-                        type: { data: "string", input: "text" },
-                        visibility: {
-                            dependsOn: "is_age_known",
-                            operator: "eq",
-                            value: true
-                        }
-                    },
-                    {
-                        name: "age_descriptor",
-                        label: "Age Descriptor",
-                        type: { data: "select", input: "select" },
-                        options: [
-                            'Neonate or abandonment',
-                            'Baby or infant',
-                            'Child',
-                            'Teenager',
-                            'Young Adult',
-                            'Adult',
-                            'Elderly',
-                            'Unknown'
                         ],
-                        default: "Unknown",
-                        visibility: {
-                            dependsOn: "is_age_known",
-                            operator: "eq",
-                            value: false
-                        }
-                    },
-                    { name: "nationality", label: "Nationality", type: { data: "string", input: "text" } },
-                    {
-                        name: "date_of_death_mode",
-                        label: "Date of Death Known?",
-                        type: { data: "select", input: "select" },
-                        options: ["exact", "approximate", "unknown"],
-                        default: "exact"
-                    },
-                    {
-                        name: "date_of_death",
-                        label: "Date of Death",
-                        type: { data: "date", input: "date" },
-                        visibility: {
-                            dependsOn: "date_of_death_mode",
-                            operator: "eq",
-                            value: "exact"
-                        }
-                    },
-                    {
-                        name: "date_of_death_range",
-                        label: "Approximate Date of Death",
-                        type: { data: "date-range", input: "date-range" },
-                        visibility: {
-                            dependsOn: "date_of_death_mode",
-                            operator: "eq",
-                            value: "approximate"
-                        }
+                        default: "No"
                     },
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
                 ]
@@ -869,13 +950,17 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     {
                         name: "gender",
                         label: "Gender",
-                        type: { data: "select", input: "select" },
+                        type: { data: "select", input: "search-select-input" },
                         options: [
                             "Female",
                             "Male",
+                            "Trans woman",
+                            "Trans man",
                             "Non-binary",
+                            "Genderqueer/Fluid",
                             "Unknown"
-                        ]
+                        ],
+                        specification: "gender"
                     },
                     {
                         name: "race",
@@ -932,41 +1017,47 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     {
                         name: "relationship_to_victim",
                         label: "Relationship to Victim",
-                        type: { data: "array", input: "multi-select" },
-                        options: [
-                            "Stranger",
-                            "Current or former intimate partner",
-                            "Love rival",
-                            "Current or former employee",
-                            "Current or former employer",
-                            "Terrorist (state label)",
-                            "Parent",
-                            "Child",
-                            "Grandchild",
-                            "Grandparent",
-                            "Mother-in-law",
-                            "Sister-in-law",
-                            "Brother-in-law",
-                            "Son-in-law",
-                            "Daughter-in-law",
-                            "Father-in-law",
-                            "Aunt",
-                            "Uncle",
-                            "Niece",
-                            "Nephew",
-                            "Cousin",
-                            "Close family member (unknown relationship or more distant than first cousin)",
-                            "Stepchild",
-                            "Step-parent",
-                            "Foster child",
-                            "Foster parent",
-                            "Police officer",
-                            "Suspect in police or security custody",
-                            "Security Guard",
-                            "Community member",
-                            "Other"
-                        ],
-                        "noSelectionValue": "Unknown"
+                        type: { data: "array", input: "repeating-group" },
+                        fields: [
+                            {
+                                name: "realtionship_to_victim_entry",
+                                label: "Relationship",
+                                type: { data: "select", input: "search-select-input" },
+                                specification: "relationship_to_victim",
+                                options: [
+                                    "Stranger",
+                                    "Current or former intimate partner",
+                                    "Love rival",
+                                    "Current or former employee",
+                                    "Current or former employer",
+                                    "Terrorist (state label)",
+                                    "Parent",
+                                    "Child",
+                                    "Grandchild",
+                                    "Grandparent",
+                                    "Mother-in-law",
+                                    "Sister-in-law",
+                                    "Brother-in-law",
+                                    "Son-in-law",
+                                    "Daughter-in-law",
+                                    "Father-in-law",
+                                    "Aunt",
+                                    "Uncle",
+                                    "Niece",
+                                    "Nephew",
+                                    "Cousin",
+                                    "Close family member (unknown relationship or more distant than first cousin)",
+                                    "Stepchild",
+                                    "Step-parent",
+                                    "Foster child",
+                                    "Foster parent",
+                                    "Police officer",
+                                    "Suspect in police or security custody",
+                                    "Security Guard",
+                                    "Community member"
+                                ]
+                            }
+                        ]
                     },
                     {
                         name: "relationship_to_victim_specify",
@@ -1023,6 +1114,27 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                         }
                     },
                     { name: "sentence", label: "Sentence", type: { data: "string", input: "text" } },
+                    {
+                        name: "at_large",
+                        label: "Is the perpetrator at large?",
+                        type: { data: "boolean", input: "switch" }
+                    },
+                    {
+                        name: "suicide",
+                        label: "Suicide",
+                        type: { data: "boolean", input: "switch" }
+                    },
+                    {
+                        name: "additional_perpetrators",
+                        label: "Were there any other perpetrators?",
+                        type: { data: "select", input: "select" },
+                        options: [
+                            "Yes",
+                            "No",
+                            "Unknown"
+                        ],
+                        default: "No"
+                    },
                     { name: "notes", label: "Notes", type: { data: "markdown", input: "textarea" } },
                 ]
             }

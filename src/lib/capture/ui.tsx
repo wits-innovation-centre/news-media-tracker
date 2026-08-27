@@ -390,6 +390,8 @@ export function Capture({
                     options={("options" in fieldDef ? (fieldDef as any).options : undefined) as TieredOptions}
                     placeholder={`Select ${fieldDef.label.toLowerCase()}...`}
                     onChange={field.onChange}
+                    allowOther={Boolean(fieldDef.allowOther)}
+                    allowUnknown={Boolean(fieldDef.allowUnknown)}
                   />
                 ) : fieldDef.type.input === "search-select-input" || fieldDef.type.input === "search-select" ? (
                   (() => {

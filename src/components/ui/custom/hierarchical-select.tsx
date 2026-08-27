@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, Check, ChevronRight, Search, X } from "lucide-react"
+import { ArrowLeft, Check, ChevronRight, HelpCircle, Plus, Search, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,12 +17,18 @@ interface HierarchicalSelectProps {
     value: string
     options: TieredOptions
     placeholder?: string
+    allowOther?: boolean
+    allowUnknown?: boolean
     onChange: (value: string) => void
 }
 
+/**
+ * Builds nodes while filtering out hardcoded legacy 'Other' and 'Unknown' strings.
+ */
 function buildNodes(options: TieredOptions, schema?: TieredOptionsSchema, parentPath: string[] = []): TierNode[] {
     return Object.entries(options).flatMap(([key, value]) => {
         if (key.startsWith("$")) return []
+        if (key === "Other" || key === "Unknown") return []
 
         const nextPath = [...parentPath, key]
         const keyLabel = typeof schema?.$label === "object" && schema.$label?.[key] ? String(schema.$label[key]) : key
@@ -32,11 +38,13 @@ function buildNodes(options: TieredOptions, schema?: TieredOptionsSchema, parent
                 id: nextPath.join("/"),
                 label: keyLabel,
                 path: nextPath,
-                children: value.map((leaf) => ({
-                    id: [...nextPath, leaf].join("/"),
-                    label: leaf,
-                    path: [...nextPath, leaf],
-                })),
+                children: value
+                    .filter((leaf) => leaf !== "Other" && leaf !== "Unknown")
+                    .map((leaf) => ({
+                        id: [...nextPath, leaf].join("/"),
+                        label: leaf,
+                        path: [...nextPath, leaf],
+                    })),
             }]
         }
 
@@ -53,22 +61,21 @@ function flattenNodes(nodes: TierNode[]): TierNode[] {
     return nodes.flatMap((node) => [node, ...(node.children ? flattenNodes(node.children) : [])])
 }
 
-function findNodeByPath(nodes: TierNode[], path: string[]): TierNode | undefined {
-    for (const node of nodes) {
-        if (node.path.join(" / ") === path.join(" / ")) return node
-        if (node.children) {
-            const nested = findNodeByPath(node.children, path)
-            if (nested) return nested
-        }
-    }
-
-    return undefined
-}
-
-function HierarchicalSelect({ id, value, options, placeholder = "Select option...", onChange }: HierarchicalSelectProps) {
+function HierarchicalSelect({
+    id,
+    value,
+    options,
+    placeholder = "Select option...",
+    allowOther = false,
+    allowUnknown = false,
+    onChange,
+}: HierarchicalSelectProps) {
     const [isOpen, setIsOpen] = useState(false)
     const [searchQuery, setSearchQuery] = useState(value)
     const [currentPath, setCurrentPath] = useState<TierNode[]>([])
+    const [isSpecifyingOther, setIsSpecifyingOther] = useState(false)
+    const [customInputValue, setCustomInputValue] = useState("")
+
     const containerRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
 
@@ -82,6 +89,7 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
                 setIsOpen(false)
                 setSearchQuery(value)
                 setCurrentPath([])
+                setIsSpecifyingOther(false)
             }
         }
 
@@ -92,28 +100,56 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
     useEffect(() => {
         if (!isOpen) {
             setSearchQuery(value)
+            setIsSpecifyingOther(false)
         }
     }, [isOpen, value])
 
-    const filteredOptions = useMemo(() => {
+    // Global search filter across flat leaf nodes
+    const filteredGlobalOptions = useMemo(() => {
         if (!searchQuery.trim()) return []
-
         const normalized = searchQuery.trim().toLowerCase()
         return flatNodes.filter((node) => node.path.join(" / ").toLowerCase().includes(normalized))
     }, [flatNodes, searchQuery])
 
-    const currentOptions = useMemo(() => {
+    // Level-by-level options based on currentPath depth
+    const currentLevelNodes = useMemo(() => {
         if (searchQuery.trim()) return []
         if (currentPath.length === 0) return rootNodes
         return currentPath[currentPath.length - 1].children ?? []
     }, [currentPath, rootNodes, searchQuery])
 
-    const handleSelect = (node: TierNode) => {
-        const nextValue = node.path.join(" / ")
+    const finalizeSelection = (pathStrings: string[]) => {
+        const nextValue = pathStrings.join(" / ")
         onChange(nextValue)
         setSearchQuery(nextValue)
         setIsOpen(false)
         setCurrentPath([])
+        setIsSpecifyingOther(false)
+    }
+
+    // Handles selecting "Unknown" at level n -> sets path to levels 1 to n-1
+    const handleSelectUnknown = () => {
+        const previousLevelStrings = currentPath.map((node) => node.label)
+        finalizeSelection(previousLevelStrings)
+    }
+
+    // Handles adding a custom "Other" entry at the current level n
+    const handleAddCustom = (customLabel: string) => {
+        const trimmed = customLabel.trim()
+        if (!trimmed) return
+
+        const newPathStrings = [...currentPath.map((n) => n.label), trimmed]
+        const customNode: TierNode = {
+            id: newPathStrings.join("/"),
+            label: trimmed,
+            path: newPathStrings,
+        }
+
+        // Advance path to level n so proceeding levels can be specified
+        setCurrentPath((previous) => [...previous, customNode])
+        setSearchQuery("")
+        setCustomInputValue("")
+        setIsSpecifyingOther(false)
     }
 
     const openNode = (node: TierNode) => {
@@ -121,27 +157,27 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
             setCurrentPath((previous) => [...previous, node])
             return
         }
-
-        handleSelect(node)
+        finalizeSelection(node.path)
     }
 
     const goBack = () => {
         setCurrentPath((previous) => previous.slice(0, -1))
+        setIsSpecifyingOther(false)
     }
 
     const clearSelection = () => {
         onChange("")
         setSearchQuery("")
         setCurrentPath([])
+        setIsSpecifyingOther(false)
         setIsOpen(true)
         inputRef.current?.focus()
     }
 
-    useEffect(() => {
-        if (!value) return
-        const selectedNode = findNodeByPath(rootNodes, value.split(" / "))
-        if (!selectedNode) return
-    }, [rootNodes, value])
+    const currentPathString = currentPath.map((n) => n.label).join(" / ")
+    const hasExactSearchMatch = searchQuery.trim()
+        ? currentLevelNodes.some((n) => n.label.toLowerCase() === searchQuery.trim().toLowerCase())
+        : false
 
     return (
         <div ref={containerRef} className="w-full space-y-2">
@@ -166,6 +202,7 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
                             setIsOpen(false)
                             setSearchQuery(value)
                             setCurrentPath([])
+                            setIsSpecifyingOther(false)
                             inputRef.current?.blur()
                         }
                     }}
@@ -189,9 +226,11 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
             {isOpen ? (
                 <div className="rounded-2xl border bg-popover p-3 shadow-xl">
                     {!searchQuery.trim() ? (
-                        <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                             <span>
-                                {currentPath.length === 0 ? "Choose a region" : `Viewing ${currentPath[currentPath.length - 1].label}`}
+                                {currentPath.length === 0
+                                    ? "Select location"
+                                    : `Viewing: ${currentPathString}`}
                             </span>
                             {currentPath.length > 0 ? (
                                 <Button type="button" variant="ghost" size="sm" onClick={goBack} className="h-7 px-2">
@@ -202,10 +241,23 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
                         </div>
                     ) : null}
 
-                    <div className="mt-3 max-h-72 space-y-1 overflow-y-auto">
+                    <div className="mt-2 max-h-72 space-y-1.5 overflow-y-auto">
+                        {/* Option to complete selection at current path */}
+                        {currentPath.length > 0 && !searchQuery.trim() ? (
+                            <button
+                                type="button"
+                                onClick={() => finalizeSelection(currentPath.map((n) => n.label))}
+                                className="flex w-full items-center justify-between rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-left text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+                            >
+                                <span>Select "{currentPathString}"</span>
+                                <Check className="size-4" />
+                            </button>
+                        ) : null}
+
+                        {/* Search results mode */}
                         {searchQuery.trim() ? (
-                            filteredOptions.length > 0 ? (
-                                filteredOptions.map((node) => {
+                            filteredGlobalOptions.length > 0 ? (
+                                filteredGlobalOptions.map((node) => {
                                     const nodeValue = node.path.join(" / ")
                                     const isSelected = value === nodeValue
 
@@ -213,7 +265,7 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
                                         <button
                                             key={node.id}
                                             type="button"
-                                            onClick={() => handleSelect(node)}
+                                            onClick={() => finalizeSelection(node.path)}
                                             className="flex w-full items-center justify-between rounded-xl border border-transparent px-3 py-2 text-left text-sm transition-colors hover:border-border hover:bg-muted"
                                         >
                                             <span>
@@ -226,11 +278,12 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
                                 })
                             ) : (
                                 <div className="rounded-xl border border-dashed px-3 py-4 text-sm text-muted-foreground">
-                                    No locations match your search.
+                                    No predefined locations match search.
                                 </div>
                             )
-                        ) : currentOptions.length > 0 ? (
-                            currentOptions.map((node) => {
+                        ) : currentLevelNodes.length > 0 ? (
+                            /* Level-by-level navigation mode */
+                            currentLevelNodes.map((node) => {
                                 const nodeValue = node.path.join(" / ")
                                 const isSelected = value === nodeValue
 
@@ -239,7 +292,7 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
                                         <button
                                             type="button"
                                             onClick={() => openNode(node)}
-                                            className="flex flex-1 items-center justify-between rounded-lg px-2 py-2 text-left"
+                                            className="flex flex-1 items-center justify-between rounded-lg px-2 py-1 text-left"
                                         >
                                             <span className="text-sm font-medium">{node.label}</span>
                                             {node.children?.length ? (
@@ -249,7 +302,7 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
                                             )}
                                         </button>
                                         {!node.children?.length ? (
-                                            <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => handleSelect(node)}>
+                                            <Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={() => finalizeSelection(node.path)}>
                                                 {isSelected ? "Selected" : "Choose"}
                                             </Button>
                                         ) : null}
@@ -257,10 +310,79 @@ function HierarchicalSelect({ id, value, options, placeholder = "Select option..
                                 )
                             })
                         ) : (
-                            <div className="rounded-xl border border-dashed px-3 py-4 text-sm text-muted-foreground">
-                                No sub-locations available for this selection.
+                            <div className="rounded-xl border border-dashed px-3 py-3 text-sm text-muted-foreground">
+                                No sub-locations listed for this level.
                             </div>
                         )}
+
+                        {/* Dynamic "Unknown" Option */}
+                        {allowUnknown && !searchQuery.trim() ? (
+                            <button
+                                type="button"
+                                onClick={handleSelectUnknown}
+                                className="flex w-full items-center justify-between rounded-xl border border-dashed px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground"
+                            >
+                                <span className="flex items-center gap-2 italic">
+                                    <HelpCircle className="size-3.5" />
+                                    Unknown {currentPath.length > 0 ? `(ends at ${currentPath[currentPath.length - 1].label})` : ""}
+                                </span>
+                                <span className="text-xs font-medium">Select</span>
+                            </button>
+                        ) : null}
+
+                        {/* Dynamic "Other" Option */}
+                        {allowOther ? (
+                            searchQuery.trim() && !hasExactSearchMatch ? (
+                                <button
+                                    type="button"
+                                    onClick={() => handleAddCustom(searchQuery.trim())}
+                                    className="flex w-full items-center justify-between rounded-xl border border-dashed border-primary/40 px-3 py-2 text-left text-sm font-medium text-primary hover:bg-primary/5"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <Plus className="size-4" />
+                                        Add "{searchQuery.trim()}" at current level
+                                    </span>
+                                </button>
+                            ) : !searchQuery.trim() && !isSpecifyingOther ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsSpecifyingOther(true)}
+                                    className="flex w-full items-center justify-between rounded-xl border border-dashed px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:border-border hover:bg-muted hover:text-foreground"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <Plus className="size-3.5" />
+                                        Other (Specify custom...)
+                                    </span>
+                                </button>
+                            ) : !searchQuery.trim() && isSpecifyingOther ? (
+                                <div className="flex items-center gap-2 rounded-xl border bg-muted/40 p-2">
+                                    <Input
+                                        autoFocus
+                                        type="text"
+                                        placeholder="Enter custom location..."
+                                        value={customInputValue}
+                                        onChange={(e) => setCustomInputValue(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                e.preventDefault()
+                                                handleAddCustom(customInputValue)
+                                            } else if (e.key === "Escape") {
+                                                setIsSpecifyingOther(false)
+                                            }
+                                        }}
+                                        className="h-8 text-sm"
+                                    />
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        className="h-8 px-3"
+                                        onClick={() => handleAddCustom(customInputValue)}
+                                    >
+                                        Add
+                                    </Button>
+                                </div>
+                            ) : null
+                        ) : null}
                     </div>
                 </div>
             ) : null}

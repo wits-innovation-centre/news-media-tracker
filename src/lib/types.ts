@@ -103,6 +103,7 @@ interface BaseFieldDefinition {
     linkTo?: string;
     icon?: IconName;
     tooltip?: FieldTooltip;
+    specification?: string;
     [key: string]: unknown;
 }
 
@@ -127,11 +128,22 @@ interface MultiSelectFieldDefinition extends BaseFieldDefinition {
 
 interface SelectFieldDefinition extends BaseFieldDefinition {
     type: {
-        data: "select" | "string" | "number" | "hierarchical-select";
+        data: "select" | "string" | "number";
         input: "select" | "search-select";
     };
     options: string[] | TieredOptions;
     noSelectionValue?: string;
+}
+
+interface HierarchicalSelectDefinition extends BaseFieldDefinition {
+    type: {
+        data: "hierarchical-select";
+        input: "select" | "search-select"
+    },
+    options: TieredOptions;
+    noSelectionValue?: string;
+    allowOther?: boolean;
+    allowUnknown?: boolean;
 }
 
 interface SearchSelectInputDefinition extends BaseFieldDefinition {
@@ -164,7 +176,8 @@ type FieldDefinition =
     | SelectFieldDefinition
     | SearchSelectInputDefinition
     | FormFieldDefinition
-    | StandardFieldDefinition;
+    | StandardFieldDefinition
+    | HierarchicalSelectDefinition;
 
 interface DocumentSchema {
     id: string;

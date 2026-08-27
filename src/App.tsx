@@ -109,7 +109,7 @@ const applySpecificationsToGroups = (
         if (!field.specification) return field;
         const specificationValues = specifications[field.specification];
         if (!specificationValues) return field;
-        return { ...field, options: specificationValues };
+        return { ...field, options: specificationValues } as FieldDefinition;
     };
 
     return groups.map((group) => ({

@@ -41,7 +41,9 @@ export const getSelectOptions = (field: FieldDefinition): string[] => {
 };
 
 export const getSpecificationKind = (fieldDef: FieldDefinition): string | undefined => {
-  return fieldDef.specification;
+  return "specification" in fieldDef && typeof fieldDef.specification === "string"
+    ? fieldDef.specification
+    : undefined;
 };
 
 export const getSearchSelectOptions = (fieldDef: FieldDefinition, specifications: SpecificationStore): string[] => {
