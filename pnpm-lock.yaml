@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  js-sha256: ^0.11.0
+
 importers:
 
   .:
@@ -3691,8 +3694,8 @@ packages:
   jose@6.2.3:
     resolution: {integrity: sha512-YYVDInQKFJfR/xa3ojUTl8c2KoTwiL1R5Wg9YCydwH0x0B9grbzlg5HC7mMjCtUJjbQ/YnGEZIhI5tCgfTb4Hw==}
 
-  js-sha256@0.9.0:
-    resolution: {integrity: sha512-sga3MHh9sgQN2+pJ9VYZ+1LPwXOxuBJBA5nrR5/ofPfuiJBE2hnjsaN8se8JznOmGLN2p49Pe5U/ttafcs/apA==}
+  js-sha256@0.11.1:
+    resolution: {integrity: sha512-o6WSo/LUvY2uC4j7mO50a2ms7E/EAdbP0swigLV+nzHKTTaYnaLIWJ02VdXrsJX0vGedDESQnLsOekr94ryfjg==}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -7394,7 +7397,7 @@ snapshots:
     dependencies:
       bigi: 1.4.2
       ecurve: 1.0.6
-      js-sha256: 0.9.0
+      js-sha256: 0.11.1
       randombytes: 2.1.0
       safe-buffer: 5.2.1
 
@@ -8669,7 +8672,7 @@ snapshots:
 
   jose@6.2.3: {}
 
-  js-sha256@0.9.0: {}
+  js-sha256@0.11.1: {}
 
   js-tokens@4.0.0: {}
 

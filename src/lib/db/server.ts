@@ -1,4 +1,3 @@
-import './polyfill';
 import { drizzle } from 'drizzle-orm/d1';
 import { eq, and, gt, sql, asc } from 'drizzle-orm';
 import * as schema from './schema';
