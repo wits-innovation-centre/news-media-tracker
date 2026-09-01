@@ -86,5 +86,9 @@ const archiveWorkerAPI = {
   }
 };
 
-Comlink.expose(archiveWorkerAPI);
+// Safe evaluation guard for Cloudflare Workers / SSR build bundling
+if (typeof self !== "undefined" && typeof self.addEventListener === "function") {
+  Comlink.expose(archiveWorkerAPI);
+}
+
 export type ArchiveWorkerType = typeof archiveWorkerAPI;
