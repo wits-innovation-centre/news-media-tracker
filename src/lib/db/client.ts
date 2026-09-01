@@ -1,13 +1,26 @@
-import * as Comlink from "comlink"
-import type { DbWorkerType } from "./worker"
+import * as Comlink from "comlink";
+import type { DbWorkerType } from "./worker";
 
-const workerInstance = new Worker(
-  new URL("./worker.ts", import.meta.url),
-  { type: "module" }
-)
+let clientInstance: Comlink.Remote<DbWorkerType> | null = null;
 
-export const dbClient = Comlink.wrap<DbWorkerType>(workerInstance)
+export function getDbClient(): Comlink.Remote<DbWorkerType> | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
 
-export async function initializeDatabase() {
-  await dbClient.init()
+  if (!clientInstance) {
+    const workerInstance = new Worker(
+      new URL("./worker.ts", import.meta.url),
+      { type: "module" }
+    );
+    clientInstance = Comlink.wrap<DbWorkerType>(workerInstance);
+  }
+
+  return clientInstance;
+}
+
+export async function initializeDatabase(): Promise<boolean> {
+  const client = getDbClient();
+  if (!client) return false;
+  return await client.init();
 }
