@@ -19,6 +19,17 @@ export function getDbClient(): Comlink.Remote<DbWorkerType> | null {
   return clientInstance;
 }
 
+export const dbClient = new Proxy({} as Comlink.Remote<DbWorkerType>, {
+  get(_target, prop) {
+    const client = getDbClient();
+    if (!client) {
+      throw new Error("Database client can only be accessed in the browser.");
+    }
+    const value = (client as any)[prop];
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});
+
 export async function initializeDatabase(): Promise<boolean> {
   const client = getDbClient();
   if (!client) return false;
