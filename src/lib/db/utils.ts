@@ -68,12 +68,20 @@ const mapMergeProposalRecord = (row: Record<string, any>): MergeProposal => ({
 async function ensureDefaultWorkspace(): Promise<WorkspaceRecord> {
   const now = Date.now()
   await getDb().execute(
-    `INSERT OR IGNORE INTO workspaces (id, name, description, icon_path, template_group_id, created_at, last_accessed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO workspaces (id, name, description, icon_path, template_group_id, created_at, last_accessed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       name = excluded.name,
+       description = excluded.description,
+       icon_path = excluded.icon_path,
+       template_group_id = excluded.template_group_id`,
     [DEFAULT_WORKSPACE_ID, "Homicide Tracker", "Default workspace set up to track reported incidents of homicide.", DEFAULT_WORKSPACE_ICON, "homicide-tracker", now, now]
   )
 
-  const rows = await getDb().query(`SELECT id, name, description, icon_path, template_group_id, created_at, last_accessed_at FROM workspaces WHERE id = ? LIMIT 1`, [DEFAULT_WORKSPACE_ID])
+  const rows = await getDb().query(
+    `SELECT id, name, description, icon_path, template_group_id, created_at, last_accessed_at FROM workspaces WHERE id = ? LIMIT 1`,
+    [DEFAULT_WORKSPACE_ID]
+  )
   const row = rows[0]
   return {
     id: String(row.id),
