@@ -16,8 +16,18 @@ import type {
 } from "@/lib/types"
 import { DEFAULT_WORKSPACE_ICON } from '../icon/registry'
 
-const DEFAULT_WORKSPACE_ID = "default"
-const normalizeWorkspaceId = (workspaceId?: string) => workspaceId?.trim() || DEFAULT_WORKSPACE_ID
+export function getActiveWorkspaceId(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem("active_workspace_id") || "";
+}
+
+const normalizeWorkspaceId = (workspaceId?: string) => {
+  const resolved = workspaceId?.trim() || getActiveWorkspaceId();
+  if (!resolved) {
+    throw new Error("Workspace ID is required but no active workspace is set.");
+  }
+  return resolved;
+};
 
 function getDb() {
   const client = getDbClient()
@@ -34,7 +44,7 @@ const safeJsonParse = <T>(value: unknown, fallback: T): T => {
 
 const mapMergeProposalRecord = (row: Record<string, any>): MergeProposal => ({
   id: String(row.id),
-  workspace_id: String(row.workspace_id ?? DEFAULT_WORKSPACE_ID),
+  workspace_id: String(row.workspace_id ?? getActiveWorkspaceId()),
   document_id: String(row.document_id),
   secondary_document_id: row.secondary_document_id ? String(row.secondary_document_id) : null,
   author_id: String(row.author_id),
@@ -65,24 +75,44 @@ const mapMergeProposalRecord = (row: Record<string, any>): MergeProposal => ({
 // WORKSPACE MANAGEMENT
 // ==========================================
 
-async function ensureDefaultWorkspace(): Promise<WorkspaceRecord> {
-  const now = Date.now()
-  await getDb().execute(
-    `INSERT INTO workspaces (id, name, description, icon_path, template_group_id, created_at, last_accessed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET
-       name = excluded.name,
-       description = excluded.description,
-       icon_path = excluded.icon_path,
-       template_group_id = excluded.template_group_id`,
-    [DEFAULT_WORKSPACE_ID, "Homicide Tracker", "Default workspace set up to track reported incidents of homicide.", DEFAULT_WORKSPACE_ICON, "homicide-tracker", now, now]
-  )
+async function ensureInitialWorkspace(): Promise<WorkspaceRecord> {
+  const db = getDb()
+  const countRows = await db.query(`SELECT COUNT(*) as count FROM workspaces`)
+  const count = Number(countRows[0]?.count ?? 0)
 
-  const rows = await getDb().query(
-    `SELECT id, name, description, icon_path, template_group_id, created_at, last_accessed_at FROM workspaces WHERE id = ? LIMIT 1`,
-    [DEFAULT_WORKSPACE_ID]
+  if (count === 0) {
+    const now = Date.now()
+    const initialId = `ws-${crypto.randomUUID()}`
+    await db.execute(
+      `INSERT INTO workspaces (id, name, description, icon_path, template_group_id, created_at, last_accessed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [initialId, "Homicide Tracker", "Default workspace set up to track reported incidents of homicide.", DEFAULT_WORKSPACE_ICON, "homicide-tracker", now, now]
+    )
+
+    if (typeof window !== "undefined" && !localStorage.getItem("active_workspace_id")) {
+      localStorage.setItem("active_workspace_id", initialId)
+    }
+
+    return {
+      id: initialId,
+      name: "Homicide Tracker",
+      description: "Default workspace set up to track reported incidents of homicide.",
+      icon_path: DEFAULT_WORKSPACE_ICON,
+      template_group_id: "homicide-tracker",
+      created_at: now,
+      last_accessed_at: now,
+    }
+  }
+
+  const rows = await db.query(
+    `SELECT id, name, description, icon_path, template_group_id, created_at, last_accessed_at FROM workspaces ORDER BY last_accessed_at DESC, created_at ASC LIMIT 1`
   )
   const row = rows[0]
+
+  if (typeof window !== "undefined" && !localStorage.getItem("active_workspace_id") && row) {
+    localStorage.setItem("active_workspace_id", String(row.id))
+  }
+
   return {
     id: String(row.id),
     name: String(row.name),
@@ -95,7 +125,7 @@ async function ensureDefaultWorkspace(): Promise<WorkspaceRecord> {
 }
 
 async function listWorkspaces(): Promise<WorkspaceRecord[]> {
-  await ensureDefaultWorkspace()
+  await ensureInitialWorkspace()
   const rows = await getDb().query(`SELECT id, name, description, icon_path, template_group_id, created_at, last_accessed_at FROM workspaces ORDER BY last_accessed_at DESC, created_at ASC`)
   return rows.map((row) => ({
     id: String(row.id),
@@ -106,6 +136,44 @@ async function listWorkspaces(): Promise<WorkspaceRecord[]> {
     created_at: Number(row.created_at),
     last_accessed_at: Number(row.last_accessed_at),
   }))
+}
+
+async function deleteWorkspace(workspaceId: string): Promise<{ isReset: boolean; activeWorkspaceId: string }> {
+  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
+  const db = getDb()
+
+  // 1. Purge all workspace data
+  await db.execute("DELETE FROM notes WHERE workspace_id = ?", [scopedWorkspaceId])
+  await db.execute("DELETE FROM merge_queue WHERE workspace_id = ?", [scopedWorkspaceId])
+  await db.execute("DELETE FROM archival_records WHERE workspace_id = ?", [scopedWorkspaceId])
+  await db.execute("DELETE FROM schemas WHERE workspace_id = ?", [scopedWorkspaceId])
+  await db.execute("DELETE FROM schema_metadata WHERE workspace_id = ?", [scopedWorkspaceId])
+  await db.execute("DELETE FROM schema_groups WHERE workspace_id = ?", [scopedWorkspaceId])
+  await db.execute("DELETE FROM specifications WHERE workspace_id = ?", [scopedWorkspaceId])
+  await db.execute("DELETE FROM specification_registry WHERE workspace_id = ?", [scopedWorkspaceId])
+  await db.execute("DELETE FROM workspaces WHERE id = ?", [scopedWorkspaceId])
+
+  // 2. Check remaining count
+  const countRows = await db.query(`SELECT COUNT(*) as count FROM workspaces`)
+  const count = Number(countRows[0]?.count ?? 0)
+
+  if (count === 0) {
+    // Re-create a fresh initial workspace and set it active
+    const newWorkspace = await ensureInitialWorkspace()
+    return { isReset: true, activeWorkspaceId: newWorkspace.id }
+  }
+
+  // 3. Switch active pointer if the deleted workspace was active
+  let activeWorkspaceId = localStorage.getItem("active_workspace_id") || ""
+  if (activeWorkspaceId === scopedWorkspaceId) {
+    const remaining = await db.query(`SELECT id FROM workspaces ORDER BY last_accessed_at DESC LIMIT 1`)
+    if (remaining[0]) {
+      activeWorkspaceId = String(remaining[0].id)
+      localStorage.setItem("active_workspace_id", activeWorkspaceId)
+    }
+  }
+
+  return { isReset: false, activeWorkspaceId }
 }
 
 async function createWorkspace(name: string, description?: string, iconPath?: string): Promise<WorkspaceRecord> {
@@ -137,24 +205,8 @@ async function touchWorkspace(workspaceId: string): Promise<void> {
   await getDb().execute(`UPDATE workspaces SET last_accessed_at = ? WHERE id = ?`, [Date.now(), scopedWorkspaceId])
 }
 
-async function deleteWorkspace(workspaceId: string): Promise<void> {
-  const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
-  if (scopedWorkspaceId === DEFAULT_WORKSPACE_ID) throw new Error("Default workspace cannot be deleted.")
-
-  const db = getDb()
-  await db.execute("DELETE FROM notes WHERE workspace_id = ?", [scopedWorkspaceId])
-  await db.execute("DELETE FROM merge_queue WHERE workspace_id = ?", [scopedWorkspaceId])
-  await db.execute("DELETE FROM archival_records WHERE workspace_id = ?", [scopedWorkspaceId])
-  await db.execute("DELETE FROM schemas WHERE workspace_id = ?", [scopedWorkspaceId])
-  await db.execute("DELETE FROM schema_metadata WHERE workspace_id = ?", [scopedWorkspaceId])
-  await db.execute("DELETE FROM schema_groups WHERE workspace_id = ?", [scopedWorkspaceId])
-  await db.execute("DELETE FROM specifications WHERE workspace_id = ?", [scopedWorkspaceId])
-  await db.execute("DELETE FROM specification_registry WHERE workspace_id = ?", [scopedWorkspaceId])
-  await db.execute("DELETE FROM workspaces WHERE id = ?", [scopedWorkspaceId])
-}
-
 export {
-  ensureDefaultWorkspace,
+  ensureInitialWorkspace,
   listWorkspaces,
   createWorkspace,
   renameWorkspace,
@@ -168,13 +220,13 @@ export {
 // SCHEMAS & SPECIFICATIONS
 // ==========================================
 
-async function loadSchemaGroups(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function loadSchemaGroups(workspaceId: string = getActiveWorkspaceId()) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const records = await getDb().query("SELECT * FROM schema_groups WHERE workspace_id = ? AND is_deleted = 0 ORDER BY name", [scopedWorkspaceId])
   return records.map((row) => ({ id: row.id, name: row.name, description: row.description ?? undefined, documents: [] })) as DocumentSchemaGroup[]
 }
 
-async function loadActiveSchemas(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function loadActiveSchemas(workspaceId: string = getActiveWorkspaceId()) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const db = getDb()
   const records = await db.query("SELECT * FROM schemas WHERE workspace_id = ? AND is_deleted = 0", [scopedWorkspaceId])
@@ -195,7 +247,7 @@ async function loadActiveSchemas(workspaceId: string = DEFAULT_WORKSPACE_ID) {
   })) as DocumentSchema[]
 }
 
-async function saveSchemaWorkspace(groups: DocumentSchemaGroup[], workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function saveSchemaWorkspace(groups: DocumentSchemaGroup[], workspaceId: string = getActiveWorkspaceId()) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const db = getDb()
   await db.execute("DELETE FROM schemas WHERE workspace_id = ?", [scopedWorkspaceId])
@@ -216,12 +268,12 @@ async function saveSchemaWorkspace(groups: DocumentSchemaGroup[], workspaceId: s
   }
 }
 
-async function updateCapturedNoteSchema(noteId: string, schemaId: string, workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function updateCapturedNoteSchema(noteId: string, schemaId: string, workspaceId: string = getActiveWorkspaceId()) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   await getDb().execute("UPDATE notes SET schema_id = ? WHERE workspace_id = ? AND id = ?", [schemaId, scopedWorkspaceId, noteId])
 }
 
-async function loadSpecifications(workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<SpecificationStore> {
+async function loadSpecifications(workspaceId: string = getActiveWorkspaceId()): Promise<SpecificationStore> {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const rows = await getDb().query("SELECT kind, value FROM specifications WHERE workspace_id = ? ORDER BY kind, value", [scopedWorkspaceId])
   const byId: SpecificationStore = {}
@@ -233,13 +285,13 @@ async function loadSpecifications(workspaceId: string = DEFAULT_WORKSPACE_ID): P
   return byId
 }
 
-async function loadSpecificationRegistry(workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<SpecificationDefinition[]> {
+async function loadSpecificationRegistry(workspaceId: string = getActiveWorkspaceId()): Promise<SpecificationDefinition[]> {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const rows = await getDb().query("SELECT id, name, description FROM specification_registry WHERE workspace_id = ? ORDER BY name", [scopedWorkspaceId])
   return rows.map((row) => ({ id: String(row.id), name: String(row.name), description: row.description ? String(row.description) : undefined }))
 }
 
-async function saveSpecificationRegistry(registry: SpecificationDefinition[], workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function saveSpecificationRegistry(registry: SpecificationDefinition[], workspaceId: string = getActiveWorkspaceId()) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const db = getDb()
   await db.execute("DELETE FROM specification_registry WHERE workspace_id = ?", [scopedWorkspaceId])
@@ -250,7 +302,7 @@ async function saveSpecificationRegistry(registry: SpecificationDefinition[], wo
   }
 }
 
-async function saveSpecificationValues(specificationId: string, values: string[], workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function saveSpecificationValues(specificationId: string, values: string[], workspaceId: string = getActiveWorkspaceId()) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const normalized = [...new Set(values.map((v) => v.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
   const db = getDb()
@@ -260,7 +312,7 @@ async function saveSpecificationValues(specificationId: string, values: string[]
   }
 }
 
-async function saveSpecificationsStore(store: SpecificationStore, workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function saveSpecificationsStore(store: SpecificationStore, workspaceId: string = getActiveWorkspaceId()) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const db = getDb()
   await db.execute("DELETE FROM specifications WHERE workspace_id = ?", [scopedWorkspaceId])
@@ -288,7 +340,7 @@ export {
 // NOTES & CAPTURED DOCUMENTS
 // ==========================================
 
-async function saveCapturedNote(id: string, schemaId: string, title: string, frontmatter: Record<string, any>, body: string, userId?: string, parentId?: string, workspaceId: string = "default", deviceId?: string) {
+async function saveCapturedNote(id: string, schemaId: string, title: string, frontmatter: Record<string, any>, body: string, userId?: string, parentId?: string, workspaceId: string = getActiveWorkspaceId(), deviceId?: string) {
   const actor = getMutationActor({ userId, deviceId })
   const now = Date.now()
   await getDb().execute(
@@ -303,7 +355,7 @@ async function saveCapturedNote(id: string, schemaId: string, title: string, fro
   return id
 }
 
-async function loadWaybackArchiveRecordByArticleId(articleId: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<ArchivalLedgerRecord | null> {
+async function loadWaybackArchiveRecordByArticleId(articleId: string, workspaceId: string = getActiveWorkspaceId()): Promise<ArchivalLedgerRecord | null> {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const rows = await getDb().query(
     `SELECT * FROM archival_records WHERE workspace_id = ? AND article_id = ? AND archive_type = 'WAYBACK_MACHINE' AND is_deleted = 0 ORDER BY updated_at DESC LIMIT 1`,
@@ -314,37 +366,37 @@ async function loadWaybackArchiveRecordByArticleId(articleId: string, workspaceI
   return { id: String(row.id), article_id: String(row.article_id), workspace_id: row.workspace_id ? String(row.workspace_id) : undefined, archive_type: String(row.archive_type), sha256_hash: String(row.sha256_hash), uri_or_path: row.uri_or_path ? String(row.uri_or_path) : null, file_size_bytes: typeof row.file_size_bytes === "number" ? row.file_size_bytes : null, device_id: row.device_id ? String(row.device_id) : undefined, last_verified_at: typeof row.last_verified_at === "number" ? row.last_verified_at : null, health_status: row.health_status ? String(row.health_status) : undefined, sync_status: row.sync_status ? String(row.sync_status) : undefined, blockchain_tx_hash: row.blockchain_tx_hash ? String(row.blockchain_tx_hash) : null, blockchain_network: row.blockchain_network ? String(row.blockchain_network) : null, ots_proof_payload: row.ots_proof_payload ? String(row.ots_proof_payload) : null, anchored_at: row.anchored_at ? String(row.anchored_at) : null, created_at: typeof row.created_at === "number" ? row.created_at : undefined, updated_at: typeof row.updated_at === "number" ? row.updated_at : undefined }
 }
 
-async function softDeleteCapturedNote(id: string, userId?: string, workspaceId: string = DEFAULT_WORKSPACE_ID, deviceId?: string) {
+async function softDeleteCapturedNote(id: string, userId?: string, workspaceId: string = getActiveWorkspaceId(), deviceId?: string) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const actor = getMutationActor({ userId, deviceId })
   const now = Date.now()
   await getDb().execute(`UPDATE notes SET is_deleted = 1, deleted_by = ?, updated_by = ?, user_id = ?, device_id = ?, updated_at = ?, synced_at = NULL WHERE workspace_id = ? AND id = ?`, [actor.userId, actor.userId, actor.userId, actor.deviceId, now, scopedWorkspaceId, id])
 }
 
-async function loadCapturedDocuments(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function loadCapturedDocuments(workspaceId: string = getActiveWorkspaceId()) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const records = await getDb().query(`SELECT id, workspace_id, schema_id, parent_id, title, frontmatter, body, created_at, created_by, updated_by, user_id, device_id, updated_at FROM notes WHERE workspace_id = ? AND is_deleted = 0 ORDER BY created_at DESC`, [scopedWorkspaceId])
   return records.map((row) => ({ id: row.id, workspace_id: row.workspace_id, schema_id: row.schema_id, title: row.title, frontmatter: JSON.parse(row.frontmatter), body: row.body, parent_id: row.parent_id ?? undefined, created_at: typeof row.created_at === "number" ? new Date(row.created_at).toISOString() : row.created_at, created_by: row.created_by ?? undefined, updated_by: row.updated_by ?? undefined, user_id: row.user_id ?? undefined, device_id: row.device_id ?? undefined, updated_at: typeof row.updated_at === "number" ? row.updated_at : undefined })) as StoredDocument[]
 }
 
-async function loadDeletedDocumentsForReview(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function loadDeletedDocumentsForReview(workspaceId: string = getActiveWorkspaceId()) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   return await getDb().query(`SELECT id, schema_id, title, created_by, deleted_by, updated_at FROM notes WHERE workspace_id = ? AND is_deleted = 1 ORDER BY updated_at DESC`, [scopedWorkspaceId])
 }
 
-async function restoreDeletedNote(id: string, userId?: string, workspaceId: string = DEFAULT_WORKSPACE_ID, deviceId?: string) {
+async function restoreDeletedNote(id: string, userId?: string, workspaceId: string = getActiveWorkspaceId(), deviceId?: string) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const actor = getMutationActor({ userId, deviceId })
   const now = Date.now()
   await getDb().execute(`UPDATE notes SET is_deleted = 0, deleted_by = NULL, updated_by = ?, user_id = ?, device_id = ?, updated_at = ?, synced_at = NULL WHERE workspace_id = ? AND id = ?`, [actor.userId, actor.userId, actor.deviceId, now, scopedWorkspaceId, id])
 }
 
-async function getNotesForWorkspaceExport(workspaceId: string = DEFAULT_WORKSPACE_ID) {
+async function getNotesForWorkspaceExport(workspaceId: string = getActiveWorkspaceId()) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   return await getDb().query("SELECT title, frontmatter, body FROM notes WHERE workspace_id = ? AND is_deleted = 0", [scopedWorkspaceId])
 }
 
-async function loadLedgerRecordByArticleId(articleId: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<ArchivalLedgerRecord | null> {
+async function loadLedgerRecordByArticleId(articleId: string, workspaceId: string = getActiveWorkspaceId()): Promise<ArchivalLedgerRecord | null> {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const rows = await getDb().query(`SELECT * FROM archival_records WHERE workspace_id = ? AND article_id = ? AND is_deleted = 0 ORDER BY CASE WHEN archive_type = 'REPORT_CONTENT' THEN 0 ELSE 1 END, updated_at DESC LIMIT 1`, [scopedWorkspaceId, articleId])
   if (rows.length === 0) return null
@@ -352,7 +404,7 @@ async function loadLedgerRecordByArticleId(articleId: string, workspaceId: strin
   return { id: String(row.id), article_id: String(row.article_id), workspace_id: row.workspace_id ? String(row.workspace_id) : undefined, archive_type: String(row.archive_type), sha256_hash: String(row.sha256_hash), uri_or_path: row.uri_or_path ? String(row.uri_or_path) : null, file_size_bytes: typeof row.file_size_bytes === "number" ? row.file_size_bytes : null, device_id: row.device_id ? String(row.device_id) : undefined, last_verified_at: typeof row.last_verified_at === "number" ? row.last_verified_at : null, health_status: row.health_status ? String(row.health_status) : undefined, sync_status: row.sync_status ? String(row.sync_status) : undefined, blockchain_tx_hash: row.blockchain_tx_hash ? String(row.blockchain_tx_hash) : null, blockchain_network: row.blockchain_network ? String(row.blockchain_network) : null, ots_proof_payload: row.ots_proof_payload ? String(row.ots_proof_payload) : null, anchored_at: row.anchored_at ? String(row.anchored_at) : null, created_at: typeof row.created_at === "number" ? row.created_at : undefined, updated_at: typeof row.updated_at === "number" ? row.updated_at : undefined }
 }
 
-async function loadLedgerRecordByNoteId(noteId: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Promise<ArchivalLedgerRecord | null> {
+async function loadLedgerRecordByNoteId(noteId: string, workspaceId: string = getActiveWorkspaceId()): Promise<ArchivalLedgerRecord | null> {
   return loadLedgerRecordByArticleId(noteId, workspaceId)
 }
 
@@ -373,7 +425,7 @@ export {
 // MERGE QUEUE & PROPOSALS
 // ==========================================
 
-async function submitNoteProposal(documentId: string, schemaId: string, proposedTitle: string, proposedFrontmatter: Record<string, any>, proposedBody: string, authorId: string, action: "CREATE" | "UPDATE" | "DELETE", existingNote?: StoredDocument, workspaceId: string = "default") {
+async function submitNoteProposal(documentId: string, schemaId: string, proposedTitle: string, proposedFrontmatter: Record<string, any>, proposedBody: string, authorId: string, action: "CREATE" | "UPDATE" | "DELETE", existingNote?: StoredDocument, workspaceId: string = getActiveWorkspaceId()) {
   const proposalId = `prop-${crypto.randomUUID()}`
   const now = Date.now()
   await getDb().execute(
@@ -384,12 +436,12 @@ async function submitNoteProposal(documentId: string, schemaId: string, proposed
   return proposalId
 }
 
-async function loadPendingProposals(workspaceId: string = "default") {
+async function loadPendingProposals(workspaceId: string = getActiveWorkspaceId()) {
   const records = await getDb().query(`SELECT * FROM merge_queue WHERE workspace_id = ? AND status = 'pending' ORDER BY created_at ASC`, [workspaceId])
   return records.map((row) => mapMergeProposalRecord(row as Record<string, any>))
 }
 
-async function approveMergeProposal(proposalId: string, reviewerId?: string, workspaceId: string = DEFAULT_WORKSPACE_ID, resolution?: MergeResolutionPayload, reviewerDeviceId?: string) {
+async function approveMergeProposal(proposalId: string, reviewerId?: string, workspaceId: string = getActiveWorkspaceId(), resolution?: MergeResolutionPayload, reviewerDeviceId?: string) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const actor = getMutationActor({ userId: reviewerId, deviceId: reviewerDeviceId })
   const db = getDb()
@@ -422,21 +474,33 @@ async function approveMergeProposal(proposalId: string, reviewerId?: string, wor
   await db.execute(`UPDATE merge_queue SET proposed_title = ?, proposed_frontmatter = ?, proposed_body = ?, status = 'approved', reviewed_by = ?, review_comment = ?, updated_at = ?, synced_at = NULL WHERE workspace_id = ? AND id = ?`, [resolvedTitle, resolvedFrontmatter, resolvedBody, actor.userId, "Merged from review UI", now, scopedWorkspaceId, proposalId])
 }
 
-async function rejectMergeProposal(proposalId: string, reviewerId: string, comment: string, workspaceId: string = DEFAULT_WORKSPACE_ID, deviceId?: string) {
+async function rejectMergeProposal(proposalId: string, reviewerId: string, comment: string, workspaceId: string = getActiveWorkspaceId(), deviceId?: string) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const actor = getMutationActor({ userId: reviewerId, deviceId })
   const now = Date.now()
   await getDb().execute(`UPDATE merge_queue SET status = 'rejected', reviewed_by = ?, review_comment = ?, updated_at = ?, synced_at = NULL WHERE workspace_id = ? AND id = ?`, [actor.userId, comment, now, scopedWorkspaceId, proposalId])
 }
 
-async function proposeDuplicateMerge(primaryDoc: StoredDocument, duplicateDoc: StoredDocument, mergedTitle: string, mergedFrontmatter: Record<string, any>, mergedBody: string, authorId: string = "system:duplicate-detector", detectionMetadata: DuplicateDetectionMetadata, entityType: string = "documents", deviceId?: string) {
+async function proposeDuplicateMerge(
+  primaryDoc: StoredDocument,
+  duplicateDoc: StoredDocument,
+  mergedTitle: string,
+  mergedFrontmatter: Record<string, any>,
+  mergedBody: string,
+  authorId: string = "system:duplicate-detector",
+  detectionMetadata: DuplicateDetectionMetadata,
+  entityType: string = "documents",
+  deviceId?: string
+) {
   const proposalId = `dup-${crypto.randomUUID()}`
   const now = Date.now()
   const actor = getMutationActor({ userId: authorId, deviceId })
+  const scopedWorkspaceId = normalizeWorkspaceId(primaryDoc.workspace_id)
+
   await getDb().execute(
     `INSERT INTO merge_queue (id, workspace_id, document_id, secondary_document_id, author_id, user_id, device_id, action, source_id, target_id, entity_type, similarity_score, base_frontmatter, base_body, secondary_base_frontmatter, secondary_base_body, proposed_title, proposed_frontmatter, proposed_body, metadata, status, created_at, updated_at, synced_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, 'MERGE_DUPLICATE', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, NULL)`,
-    [proposalId, primaryDoc.workspace_id ?? "default", primaryDoc.id, duplicateDoc.id, authorId, actor.userId, actor.deviceId, duplicateDoc.id, primaryDoc.id, entityType, detectionMetadata.similarityScore, JSON.stringify(primaryDoc.frontmatter), primaryDoc.body, JSON.stringify(duplicateDoc.frontmatter), duplicateDoc.body, mergedTitle, JSON.stringify(mergedFrontmatter), mergedBody, JSON.stringify(detectionMetadata), now, now]
+    [proposalId, scopedWorkspaceId, primaryDoc.id, duplicateDoc.id, authorId, actor.userId, actor.deviceId, duplicateDoc.id, primaryDoc.id, entityType, detectionMetadata.similarityScore, JSON.stringify(primaryDoc.frontmatter), primaryDoc.body, JSON.stringify(duplicateDoc.frontmatter), duplicateDoc.body, mergedTitle, JSON.stringify(mergedFrontmatter), mergedBody, JSON.stringify(detectionMetadata), now, now]
   )
   return proposalId
 }

@@ -52,6 +52,7 @@ import type {
     StoredDocument,
 } from "@/lib/types";
 import { useWorkspace } from "@/contexts/workspace";
+import { redeemWorkspaceInvite } from "@/lib/auth/invites";
 
 const MERGE_QUEUE_PATH = "/merge-queue";
 const OBSIDIAN_TUTORIAL_EXPORT_KEY = "obsidian-export-tutorial-dismissed";
@@ -130,7 +131,6 @@ const TEMPLATE_SCHEMA_IDS = new Set(
     DEFAULT_SCHEMA_TEMPLATES.flatMap((group) => group.documents.map((schema) => schema.id))
 );
 
-
 const normalizeLegacySchemaId = (schemaId: string, availableSchemaIds: Set<string>): string => {
     if (availableSchemaIds.has(schemaId)) return schemaId;
 
@@ -184,6 +184,10 @@ function App() {
 
         return window.localStorage.getItem(OBSIDIAN_TUTORIAL_EXPORT_KEY) !== "true";
     });
+    const [pendingInvite, setPendingInvite] = useState<{ inviteId: string; rawToken: string } | null>(null);
+    const [invitePassword, setInvitePassword] = useState("");
+    const [redeemError, setRedeemError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const activeWorkspaceId = activeWorkspace.id;
 
     const navigateTo = (path: string) => {
@@ -214,10 +218,69 @@ function App() {
         return loadedDocuments;
     };
 
+    const handleRedeemSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!pendingInvite || !invitePassword) return;
+
+        setIsSubmitting(true);
+        setRedeemError(null);
+
+        try {
+            // 1. Unpack workspace information returned by the invite redemption
+            const result = await redeemWorkspaceInvite({
+                inviteId: pendingInvite.inviteId,
+                rawToken: pendingInvite.rawToken,
+                password: invitePassword,
+            });
+
+            // 2. Persist active workspace ID so the reloaded app boots directly into it
+            if (result?.workspaceId) {
+                localStorage.setItem("active_workspace_id", result.workspaceId);
+            }
+
+            setPendingInvite(null);
+            setInvitePassword("");
+
+            // 3. Clear URL params and point back to root "/" instead of "/join"
+            window.history.replaceState({}, document.title, "/");
+
+            // 4. Reload into the newly selected active workspace
+            window.location.reload();
+        } catch (err) {
+            setRedeemError(err instanceof Error ? err.message : "Failed to redeem invite");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleCancelInvite = () => {
+        setPendingInvite(null);
+        setInvitePassword("");
+        setRedeemError(null);
+        window.history.replaceState({}, document.title, window.location.pathname);
+    };
+
     useEffect(() => {
         const handlePopState = () => setActivePath(getCurrentPath());
         window.addEventListener("popstate", handlePopState);
         return () => window.removeEventListener("popstate", handlePopState);
+    }, []);
+
+    useEffect(() => {
+        const checkInviteParams = () => {
+            const params = new URLSearchParams(window.location.search);
+            // Added params.get("id") to support join URLs formatted as ?id=...
+            const inviteId = params.get("id") || params.get("inviteId") || params.get("invite_id");
+            const rawToken = params.get("token") || params.get("rawToken") || params.get("raw_token");
+
+            if (inviteId && rawToken) {
+                setPendingInvite({ inviteId, rawToken });
+            }
+        };
+
+        checkInviteParams();
+        window.addEventListener("popstate", checkInviteParams);
+        return () => window.removeEventListener("popstate", checkInviteParams);
     }, []);
 
     useEffect(() => {
@@ -235,11 +298,11 @@ function App() {
         void (async () => {
             try {
                 await initializeDatabase();
-                const storedGroups = await loadSchemaGroups();
-                const storedSchemas = await loadActiveSchemas();
-                const loadedDocuments = await loadCapturedDocuments();
-                const storedRegistry = await loadSpecificationRegistry();
-                const storedSpecifications = await loadSpecifications();
+                const storedGroups = await loadSchemaGroups(activeWorkspaceId);
+                const storedSchemas = await loadActiveSchemas(activeWorkspaceId);
+                const loadedDocuments = await loadCapturedDocuments(activeWorkspaceId);
+                const storedRegistry = await loadSpecificationRegistry(activeWorkspaceId);
+                const storedSpecifications = await loadSpecifications(activeWorkspaceId);
                 const defaultGroups = createDefaultSchemaGroups();
 
                 const hydratedGroups =
@@ -352,12 +415,15 @@ function App() {
             const schema = schemasById[doc.schemaId];
             const titleFieldKey = schema?.titleField;
 
-            const titleValue = titleFieldKey && values[titleFieldKey]
+            let titleValue = titleFieldKey && values[titleFieldKey]
                 ? String(values[titleFieldKey]).trim()
                 : "";
 
-            // Priority: custom titleField -> schema frontmatter ID -> human fallback label
-            const effectiveLabel = titleValue || (values.id as string) || doc.label;
+            if (!titleValue) {
+                titleValue = String(values.headline || values.title || values.name || "").trim();
+            }
+
+            const effectiveLabel = titleValue || doc.label || (values.id as string);
 
             return {
                 ...doc,
@@ -452,7 +518,7 @@ function App() {
             const titleFieldKey = schema.titleField;
             const titleVal = titleFieldKey && frontmatter[titleFieldKey]
                 ? String(frontmatter[titleFieldKey]).trim()
-                : "";
+                : String(frontmatter.headline || frontmatter.title || frontmatter.name || "").trim();
             if (titleVal) return titleVal;
 
             return fallbackId;
@@ -1002,48 +1068,34 @@ function App() {
             <div className="relative min-h-screen bg-background text-foreground flex p-8">
                 <main className="max-w-2xl mx-auto w-full space-y-4">
                     {activeSchema && activeDocumentId ? (
-                        <Capture
-                            fields={activeSchema.fields}
-                            subtypeFields={activeSchema.subtypeFields}
-                            initialValues={activeInitialValues}
-                            specifications={specifications}
-                            schemas={schemasById}
-                            activeDocumentId={activeDocumentId}
-                            onCreateLinkedDocument={handleCreateLinkedDocument}
-                            onDeleteLinkedDocument={(documentId) => {
-                                void handleDeleteDocument(documentId);
-                            }}
-                            onNavigateToLinkedDocument={(documentId, schemaId) => {
-                                handleSelectDocument(documentId, schemaId);
-                            }}
-                            getExistingLinkedDocuments={getExistingLinkedDocuments}
-                            onValuesChange={(values) => {
-                                if (!activeDocumentId) return;
-                                setDrafts((current) => ({ ...current, [activeDocumentId]: values }));
-                            }}
-                            onAddSpecification={handleAddSpecification}
-                            onSubmit={handleCaptureSubmit}
-                        />
-                    ) : activeSchema && activeDocumentId ? (
                         <>
                             <Capture
                                 fields={activeSchema.fields}
+                                subtypeFields={activeSchema.subtypeFields}
                                 initialValues={activeInitialValues}
                                 specifications={specifications}
+                                schemas={schemasById}
+                                activeDocumentId={activeDocumentId}
+                                onCreateLinkedDocument={handleCreateLinkedDocument}
+                                onDeleteLinkedDocument={(documentId) => {
+                                    void handleDeleteDocument(documentId);
+                                }}
+                                onNavigateToLinkedDocument={(documentId, schemaId) => {
+                                    handleSelectDocument(documentId, schemaId);
+                                }}
+                                getExistingLinkedDocuments={getExistingLinkedDocuments}
                                 onValuesChange={(values) => {
                                     if (!activeDocumentId) return;
                                     setDrafts((current) => ({
                                         ...current,
-                                        [activeDocumentId]: {
-                                            ...(current[activeDocumentId] ?? {}),
-                                            ...values,
-                                        },
+                                        [activeDocumentId]: values,
                                     }));
                                 }}
                                 onAddSpecification={handleAddSpecification}
                                 onSubmit={handleCaptureSubmit}
                             />
 
+                            {/* Linked Document Capture Section */}
                             {activeSchema.id === "event" && activeDocument ? (
                                 <section className="space-y-3 rounded-xl border border-border/70 bg-card/40 p-4">
                                     <div className="flex items-center justify-between">
@@ -1189,6 +1241,7 @@ function App() {
                                 </section>
                             ) : null}
 
+                            {/* Mentioned Participants Section */}
                             {activeSchema.id === "report" && activeDocument?.parentId ? (
                                 <section className="rounded-xl border border-border/70 bg-card/40 p-4">
                                     <div className="text-sm font-medium">Mentioned Participants</div>
@@ -1221,6 +1274,7 @@ function App() {
                                 </section>
                             ) : null}
 
+                            {/* Record Utilities Section */}
                             <section className="rounded-xl border border-border/70 bg-card/40 p-4">
                                 <div className="flex items-center justify-between">
                                     <div>
@@ -1299,6 +1353,54 @@ function App() {
                     )}
                 </main>
             </div>
+
+            {/* Redeem Invite Modal Dialog */}
+            {pendingInvite && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-md rounded-lg bg-background p-6 shadow-lg border border-border">
+                        <h2 className="text-lg font-semibold mb-2">Join Workspace</h2>
+                        <p className="text-sm text-muted-foreground mb-4">
+                            Enter the password provided with this invite link to access the workspace.
+                        </p>
+
+                        <form onSubmit={handleRedeemSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Invite Password</label>
+                                <input
+                                    type="password"
+                                    value={invitePassword}
+                                    onChange={(e) => setInvitePassword(e.target.value)}
+                                    placeholder="Enter password..."
+                                    required
+                                    autoFocus
+                                    className="w-full px-3 py-2 border rounded-md bg-input text-foreground"
+                                />
+                            </div>
+
+                            {redeemError && (
+                                <p className="text-sm text-destructive">{redeemError}</p>
+                            )}
+
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={handleCancelInvite}
+                                    className="px-4 py-2 border rounded-md hover:bg-accent"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting || !invitePassword}
+                                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md disabled:opacity-50"
+                                >
+                                    {isSubmitting ? "Joining..." : "Join Workspace"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </Layout>
     );
 }

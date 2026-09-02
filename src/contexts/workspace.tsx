@@ -4,7 +4,7 @@ import { initializeDatabase } from "@/lib/db/client"
 import {
     createWorkspace as createWorkspaceRecord,
     deleteWorkspace as deleteWorkspaceRecord,
-    ensureDefaultWorkspace,
+    ensureInitialWorkspace,
     listWorkspaces,
     renameWorkspace as renameWorkspaceRecord,
     setWorkspaceTemplateGroup as setWorkspaceTemplateGroupRecord,
@@ -48,7 +48,7 @@ function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         void (async () => {
             await initializeDatabase()
-            const defaultWorkspace = await ensureDefaultWorkspace()
+            const initialWorkspace = await ensureInitialWorkspace()
             const records = await listWorkspaces()
 
             const storedWorkspaceId = getStoredWorkspaceId()
@@ -58,7 +58,7 @@ function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
             const initialWorkspaceId = storedWorkspaceExists
                 ? String(storedWorkspaceId)
-                : defaultWorkspace.id
+                : initialWorkspace.id
 
             setWorkspaces(records)
             setActiveWorkspaceId(initialWorkspaceId)

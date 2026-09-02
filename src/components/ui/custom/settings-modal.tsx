@@ -152,12 +152,26 @@ function SettingsMainContent({
         await onRenameWorkspace(activeWorkspace.id, name.trim(), description?.trim() || undefined)
     }
 
-    const handleDeleteWorkspace = async () => {
-        if (!activeWorkspace || activeWorkspace.id === "default") return
-        const confirmed = window.confirm(`Delete workspace "${activeWorkspace.name}"? This removes all workspace data.`)
-        if (!confirmed) return
-        await onDeleteWorkspace(activeWorkspace.id)
-    }
+    const handleDeleteWorkspace = async (targetWorkspace: WorkspaceRecord, totalWorkspaces: number) => {
+        const isLastRemaining = totalWorkspaces <= 1;
+
+        const confirmationMessage = isLastRemaining
+            ? `Deleting "${targetWorkspace.name}" will completely clear all local documents, schemas, and queues, resetting your app to a fresh initial workspace. Proceed?`
+            : `Are you sure you want to delete "${targetWorkspace.name}"? This action cannot be undone.`;
+
+        if (!window.confirm(confirmationMessage)) {
+            return;
+        }
+
+        try {
+            await onDeleteWorkspace(targetWorkspace.id);
+
+            // Refresh application state / reload window to hydrate new active workspace
+            window.location.reload();
+        } catch (error) {
+            console.error("Failed to delete workspace:", error);
+        }
+    };
 
     const handleSaveTemplateGroup = async () => {
         if (!activeWorkspace) return
@@ -292,8 +306,8 @@ function SettingsMainContent({
                             type="button"
                             variant="destructive"
                             size="sm"
-                            disabled={!activeWorkspace || activeWorkspace.id === "default"}
-                            onClick={() => void handleDeleteWorkspace()}
+                            disabled={!activeWorkspace}
+                            onClick={() => activeWorkspace && void handleDeleteWorkspace(activeWorkspace, workspaces.length)}
                             className="text-xs"
                         >
                             Delete

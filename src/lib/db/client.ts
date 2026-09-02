@@ -2,6 +2,7 @@ import * as Comlink from "comlink";
 import type { DbWorkerType } from "./worker";
 
 let clientInstance: Comlink.Remote<DbWorkerType> | null = null;
+let initPromise: Promise<boolean> | null = null;
 
 export function getDbClient(): Comlink.Remote<DbWorkerType> | null {
   if (typeof window === "undefined") {
@@ -33,5 +34,14 @@ export const dbClient = new Proxy({} as Comlink.Remote<DbWorkerType>, {
 export async function initializeDatabase(): Promise<boolean> {
   const client = getDbClient();
   if (!client) return false;
-  return await client.init();
+
+  // Cache the execution promise so parallel or duplicate calls await the same execution
+  if (!initPromise) {
+    initPromise = client.init().catch((err) => {
+      initPromise = null; // Reset cache if initialization fails to allow retry
+      throw err;
+    });
+  }
+
+  return await initPromise;
 }
