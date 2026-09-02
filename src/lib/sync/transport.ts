@@ -24,7 +24,11 @@ export const SYNC_SERVER_URL = import.meta.env.DEV
   : import.meta.env.VITE_SYNC_SERVER_URL;
 
 export class D1HttpTransport implements SyncTransport {
-  constructor(private baseUrl: string = SYNC_SERVER_URL) {}
+  private baseUrl: string;
+
+  constructor(baseUrl: string = SYNC_SERVER_URL) {
+    this.baseUrl = baseUrl;
+  }
 
   private getAuthHeader(): Record<string, string> {
     const token = localStorage.getItem("workspace_session_token");

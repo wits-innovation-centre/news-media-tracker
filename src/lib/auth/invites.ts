@@ -68,7 +68,7 @@ export async function createWorkspaceInvite({
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    const errorData = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(
       errorData.error || `Failed to create invite (${response.status})`
     );
@@ -99,7 +99,7 @@ export async function redeemWorkspaceInvite({
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    const errorData = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(
       errorData.error || `Failed to redeem invite (${response.status})`
     );

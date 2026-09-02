@@ -929,7 +929,7 @@ function App() {
             onOpenChange={setIsSettingsOpen}
             initialScreenId={settingsScreen}
             trigger={
-                <Button type="button" variant="ghost" size="icon" className="h-7 w-7">
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={handleOpenSettings}>
                     <Settings className="h-4 w-4" />
                     <span className="sr-only">Open settings</span>
                 </Button>
