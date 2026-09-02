@@ -22,6 +22,7 @@ interface LayoutProps {
   onSelectDocument: (documentId: string, schemaId: string) => void;
   onCreateDocument: (schema: DocumentSchema, parentId?: string) => void;
   onDeleteDocument: (documentId: string) => void;
+  onOpenInvite: () => void;
 }
 
 function MainContent({
@@ -76,6 +77,7 @@ export default function Layout({
   onSelectDocument,
   onCreateDocument,
   onDeleteDocument,
+  onOpenInvite
 }: LayoutProps) {
   const activeDocument = documents.find((doc) => doc.id === activeDocumentId);
 
@@ -101,6 +103,7 @@ export default function Layout({
         onSelectDocument={onSelectDocument}
         onCreateDocument={onCreateDocument}
         onDeleteDocument={onDeleteDocument}
+        onOpenInvite={onOpenInvite}
       />
       <MainContent activeDocument={activeDocument} activeWorkspace={activeWorkspace}>{children}</MainContent>
     </SidebarProvider>

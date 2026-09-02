@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, real, index, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { sqliteTable, text, integer, real, index, primaryKey, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import type { MergeProposal, ArchivalLedgerRecord } from '../types';
 
 export const workspaces = sqliteTable('workspaces', {
@@ -10,6 +11,45 @@ export const workspaces = sqliteTable('workspaces', {
   createdAt: integer('created_at').notNull(),
   lastAccessedAt: integer('last_accessed_at').notNull(),
 });
+
+export const workspaceInvites = sqliteTable(
+  "workspace_invites",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    role: text("role").notNull().default("EDITOR"),
+    inviteType: text("invite_type").notNull().default("SHARE"),
+    expiresAt: integer("expires_at").notNull(),
+    usedAt: integer("used_at"),
+    createdAt: integer("created_at")
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    idxInvitesWorkspace: index("idx_invites_workspace").on(table.workspaceId),
+  })
+);
+
+export const workspaceMembers = sqliteTable(
+  "workspace_members",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    role: text("role").notNull().default("EDITOR"),
+    createdAt: integer("created_at")
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    idxMembersWorkspaceDevice: uniqueIndex("idx_members_workspace_device").on(
+      table.workspaceId,
+      table.deviceId
+    ),
+  })
+);
 
 export const notes = sqliteTable('notes', {
   id: text('id').primaryKey(),

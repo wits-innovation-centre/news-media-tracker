@@ -1,82 +1,14 @@
 import { dbClient } from "@/lib/db/client";
+import { defaultTransport, type SyncTransport } from "./transport";
 
-interface SyncPullResponse {
-  timestamp: number;
-  notes: Array<{
-    id: string;
-    workspace_id: string;
-    schema_id: string;
-    parent_id?: string | null;
-    title: string;
-    frontmatter: string;
-    body: string;
-    created_by?: string | null;
-    updated_by?: string | null;
-    deleted_by?: string | null;
-    user_id?: string | null;
-    device_id?: string | null;
-    created_at: number;
-    updated_at: number;
-    is_deleted: number;
-  }>;
-  proposals: Array<{
-    id: string;
-    workspace_id: string;
-    document_id: string;
-    secondary_document_id?: string | null;
-    author_id: string;
-    user_id?: string | null;
-    device_id?: string | null;
-    action: string;
-    source_id?: string | null;
-    target_id?: string | null;
-    entity_type?: string | null;
-    similarity_score?: number | null;
-    base_frontmatter?: string | null;
-    base_body?: string | null;
-    secondary_base_frontmatter?: string | null;
-    secondary_base_body?: string | null;
-    proposed_title: string;
-    proposed_frontmatter: string;
-    proposed_body: string;
-    metadata?: string | null;
-    status: string;
-    reviewed_by?: string | null;
-    review_comment?: string | null;
-    created_at: number;
-    updated_at: number;
-  }>;
-  archives: Array<{
-    id: string;
-    article_id: string;
-    workspace_id: string;
-    archive_type: string;
-    sha256_hash: string;
-    ipfs_cid?: string | null;
-    torrent_infohash?: string | null;
-    uri_or_path?: string | null;
-    file_size_bytes?: number | null;
-    device_id: string;
-    last_verified_at?: number | null;
-    health_status: string;
-    sync_status?: string | null;
-    blockchain_tx_hash?: string | null;
-    blockchain_network?: string | null;
-    ots_proof_payload?: string | null;
-    anchored_at?: string | null;
-    created_at: number;
-    updated_at: number;
-    is_deleted: number;
-  }>;
-}
-
-// Vite replaces `import.meta.env.DEV` at build time.
-// In production, the local URL string is completely tree-shaken away.
 export const SYNC_SERVER_URL = import.meta.env.DEV
   ? "http://localhost:8787"
   : import.meta.env.VITE_SYNC_SERVER_URL;
 
-export async function synchronizeWorkspace(workspaceId: string = "default") {
+export async function synchronizeWorkspace(
+  workspaceId: string = "default",
+  transport: SyncTransport = defaultTransport
+) {
   if (!navigator.onLine) return;
 
   try {
@@ -84,12 +16,10 @@ export async function synchronizeWorkspace(workspaceId: string = "default") {
       "SELECT * FROM notes WHERE workspace_id = ? AND synced_at IS NULL",
       [workspaceId]
     );
-
     const unsyncedProposals = await dbClient.query(
       "SELECT * FROM merge_queue WHERE workspace_id = ? AND synced_at IS NULL",
       [workspaceId]
     );
-
     const unsyncedArchives = await dbClient.query(
       "SELECT * FROM archival_records WHERE workspace_id = ? AND synced_at IS NULL",
       [workspaceId]
@@ -97,24 +27,16 @@ export async function synchronizeWorkspace(workspaceId: string = "default") {
 
     const now = Date.now();
 
-    // 1. PUSH local changes (Notes, Proposals, Archives)
-    if (
-      unsyncedNotes.length > 0 ||
-      unsyncedProposals.length > 0 ||
-      unsyncedArchives.length > 0
-    ) {
-      const pushResponse = await fetch(`${SYNC_SERVER_URL}/api/sync/push`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspace_id: workspaceId,
-          notes: unsyncedNotes,
-          proposals: unsyncedProposals,
-          archives: unsyncedArchives
-        })
+    // 1. PUSH local changes using the Transport interface
+    if (unsyncedNotes.length > 0 || unsyncedProposals.length > 0 || unsyncedArchives.length > 0) {
+      const success = await transport.push({
+        workspace_id: workspaceId,
+        notes: unsyncedNotes,
+        proposals: unsyncedProposals,
+        archives: unsyncedArchives,
       });
 
-      if (pushResponse.ok) {
+      if (success) {
         await dbClient.execute(
           "UPDATE notes SET synced_at = ? WHERE workspace_id = ? AND synced_at IS NULL",
           [now, workspaceId]
@@ -130,17 +52,13 @@ export async function synchronizeWorkspace(workspaceId: string = "default") {
       }
     }
 
-    // 2. PULL remote changes
+    // 2. PULL remote changes using the Transport interface
     const lastSyncKey = `last_sync_${workspaceId}`;
     const lastSyncTimestamp = parseInt(localStorage.getItem(lastSyncKey) ?? "0", 10);
 
-    const pullResponse = await fetch(
-      `${SYNC_SERVER_URL}/api/sync/pull?workspace_id=${workspaceId}&since=${lastSyncTimestamp}`
-    );
+    const data = await transport.pull(workspaceId, lastSyncTimestamp);
 
-    if (pullResponse.ok) {
-      const data = (await pullResponse.json()) as SyncPullResponse;
-
+    if (data) {
       for (const remoteNote of data.notes) {
         await dbClient.execute(
           `INSERT INTO notes (
@@ -177,7 +95,7 @@ export async function synchronizeWorkspace(workspaceId: string = "default") {
             remoteNote.created_at,
             remoteNote.updated_at,
             remoteNote.is_deleted,
-            data.timestamp
+            data.timestamp,
           ]
         );
       }
@@ -234,7 +152,7 @@ export async function synchronizeWorkspace(workspaceId: string = "default") {
             remoteProp.review_comment,
             remoteProp.created_at,
             remoteProp.updated_at,
-            data.timestamp
+            data.timestamp,
           ]
         );
       }

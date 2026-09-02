@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import {
     Download,
     FileDown,
@@ -8,6 +8,7 @@ import {
     Layers,
     FileCode2,
     ChevronRight,
+    KeyRound
 } from "lucide-react"
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -22,9 +23,13 @@ import { SpecificationsManager } from "@/components/ui/custom/specifications-man
 import { ImportDataView } from "@/lib/import-export/import/ui"
 import { useModalStack } from "@/hooks/use-modal-stack"
 import { ModalStackHeader } from "@/components/ui/custom/modal-stack-header"
+import { AccessManagerView } from "./access-manager"
 
 export interface SettingsModalProps {
-    trigger?: React.ReactElement
+    trigger?: React.ReactElement;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    initialScreenId?: "settings" | "access-manager";
     groups: DocumentSchemaGroup[]
     specificationRegistry: SpecificationDefinition[]
     specifications: SpecificationStore
@@ -52,6 +57,7 @@ interface SettingsMainContentProps extends SettingsModalProps {
     onOpenSchemasPage: () => void
     onOpenSpecificationsPage: () => void
     onOpenImportPage: () => void
+    onOpenAccessManagerPage: () => void
 }
 
 function SettingsMainContent({
@@ -71,6 +77,7 @@ function SettingsMainContent({
     onOpenSchemasPage,
     onOpenSpecificationsPage,
     onOpenImportPage,
+    onOpenAccessManagerPage
 }: SettingsMainContentProps) {
     const [isExporting, setIsExporting] = useState(false)
     const [isCsvExporting, setIsCsvExporting] = useState(false)
@@ -213,6 +220,28 @@ function SettingsMainContent({
                         <CardContent className="p-4 pt-1">
                             <CardDescription className="text-xs">
                                 Configure specification definitions and values ({specificationRegistry.length} registered specs).
+                            </CardDescription>
+                        </CardContent>
+                    </Card>
+
+                    <Card
+                        className="cursor-pointer transition-all hover:border-primary/50 hover:shadow-sm"
+                        onClick={onOpenAccessManagerPage}
+                    >
+                        <CardHeader className="p-4 pb-2">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                                        <KeyRound className="h-5 w-5" />
+                                    </div>
+                                    <CardTitle className="text-sm font-semibold">Access Manager</CardTitle>
+                                </div>
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-1">
+                            <CardDescription className="text-xs">
+                                Manage active session tokens, invite links, and device authorization.
                             </CardDescription>
                         </CardContent>
                     </Card>
@@ -443,7 +472,14 @@ function CreateSchemaView({ sheetName, groups = [], onSchemaCreated, onCreateSch
 }
 
 export function SettingsModal(props: SettingsModalProps) {
-    const [open, setOpen] = useState(false)
+    const [internalOpen, setInternalOpen] = useState(false);
+    const isControlled = props.open !== undefined;
+    const open = isControlled ? props.open : internalOpen;
+
+    const setOpen = (nextOpen: boolean) => {
+        if (!isControlled) setInternalOpen(nextOpen);
+        props.onOpenChange?.(nextOpen);
+    };
 
     const activeWorkspace = props.workspaces.find((w) => w.id === props.activeWorkspaceId)
     const activeSchemaGroup = useMemo<DocumentSchemaGroup>(() => {
@@ -526,11 +562,38 @@ export function SettingsModal(props: SettingsModalProps) {
                         ),
                     })
                 }}
+                onOpenAccessManagerPage={() => {
+                    modalStack.push({
+                        id: "access-manager",
+                        title: "Access & Session Manager",
+                        content: (
+                            <AccessManagerView workspaceId={props.workspaceId ?? props.activeWorkspaceId} />
+                        ),
+                    })
+                }}
             />
         ),
     }
 
     const modalStack = useModalStack(primaryScreen)
+
+    const openAccessManager = () => {
+        modalStack.push({
+            id: "access-manager",
+            title: "Access & Session Manager",
+            content: (
+                <AccessManagerView workspaceId={props.workspaceId ?? props.activeWorkspaceId} />
+            ),
+        });
+    };
+
+    useEffect(() => {
+        if (open && props.initialScreenId === "access-manager") {
+            if (modalStack.currentScreen.id !== "access-manager") {
+                openAccessManager();
+            }
+        }
+    }, [open, props.initialScreenId]);
 
     const handleOpenChange = (nextOpen: boolean) => {
         setOpen(nextOpen)

@@ -159,6 +159,8 @@ function App() {
     const [schemaGroups, setSchemaGroups] = useState<DocumentSchemaGroup[]>(() =>
         createDefaultSchemaGroups()
     );
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [settingsScreen, setSettingsScreen] = useState<"settings" | "access-manager">("settings");
     const [documents, setDocuments] = useState<DocumentNode[]>([]);
     const [storedDocuments, setStoredDocuments] = useState<Record<string, StoredDocument>>({});
     const [specificationRegistry, setSpecificationRegistry] = useState<SpecificationDefinition[]>([]);
@@ -646,6 +648,16 @@ function App() {
         }
     };
 
+    const handleOpenInvite = () => {
+        setSettingsScreen("access-manager");
+        setIsSettingsOpen(true);
+    };
+
+    const handleOpenSettings = () => {
+        setSettingsScreen("settings");
+        setIsSettingsOpen(true);
+    };
+
     const triggerObsidianVaultExport = async (options?: { includeTutorial: boolean }) => {
         const { includeTutorial = shouldDefaultTutorialExport } = options ?? {};
         await exportWorkspaceAsObsidianVault(
@@ -913,6 +925,9 @@ function App() {
             onImportCompleted={handleImportCompleted}
             workspaceId={activeWorkspaceId}
             defaultIncludeTutorial={shouldDefaultTutorialExport}
+            open={isSettingsOpen}
+            onOpenChange={setIsSettingsOpen}
+            initialScreenId={settingsScreen}
             trigger={
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7">
                     <Settings className="h-4 w-4" />
@@ -982,6 +997,7 @@ function App() {
             }}
             onCreateDocument={handleCreateDocument}
             onDeleteDocument={handleDeleteDocument}
+            onOpenInvite={handleOpenInvite}
         >
             <div className="relative min-h-screen bg-background text-foreground flex p-8">
                 <main className="max-w-2xl mx-auto w-full space-y-4">

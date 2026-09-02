@@ -12,6 +12,7 @@ import {
   X,
   FilePlus,
   Trash2,
+  UserPlus
 } from "lucide-react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
@@ -45,6 +46,7 @@ interface SidebarProps {
   onSelectDocument: (documentId: string, schemaId: string) => void;
   onCreateDocument: (schema: DocumentSchema, parentId?: string) => void;
   onDeleteDocument: (documentId: string) => void;
+  onOpenInvite?: () => void;
 }
 
 type SortMode = "temporal" | "alphabetical";
@@ -174,6 +176,7 @@ function Sidebar({
   onSelectDocument,
   onCreateDocument,
   onDeleteDocument,
+  onOpenInvite
 }: SidebarProps) {
   const { state, setOpenMobile, isMobile } = useSidebar();
   const isIconCollapsed = state === "collapsed";
@@ -785,14 +788,24 @@ function Sidebar({
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="mt-auto border-t border-border px-3 py-3 space-y-3">
-        {footerContent ? (
-          <div className="flex items-center justify-between gap-2 rounded-md border border-border/70 bg-background/70 px-2.5 py-2">
-            {footerContent}
-          </div>
-        ) : null}
+      <SidebarFooter className="mt-auto border-t border-border px-3 py-3">
+        <div className="flex items-center gap-2 w-full">
+          {footerContent ? (
+            <div className="flex-1 min-w-0">
+              {footerContent}
+            </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={onOpenInvite}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-input bg-background text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            title="Quick Invite & Share"
+          >
+            <UserPlus className="h-4 w-4 text-primary" />
+          </button>
+        </div>
       </SidebarFooter>
-      
+
       {/* Resizing Handle */}
       <SidebarRail
         onMouseDown={handleStartResizing}
