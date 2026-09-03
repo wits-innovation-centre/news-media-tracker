@@ -45,7 +45,7 @@ export function getOrCreateDeviceId(): string {
 }
 
 /**
- * Creates a new single-use workspace invite link/token via the Cloudflare Worker API.
+ * Creates a new workspace invite link/token via the Worker API.
  */
 export async function createWorkspaceInvite({
   workspaceId,
@@ -107,11 +107,50 @@ export async function redeemWorkspaceInvite({
 
   const data = (await response.json()) as RedeemInviteResponse;
 
-  // Store credentials locally for D1HttpTransport authorization
+  // Store credentials locally for sync transport authorization
   localStorage.setItem("workspace_session_token", data.sessionToken);
+  localStorage.setItem(`workspace_session_token_${data.workspaceId}`, data.sessionToken);
   localStorage.setItem("active_workspace_id", data.workspaceId);
 
   return data;
+}
+
+/**
+ * Ensures the workspace has an active owner session token on the current device.
+ * Generates and redeems an initial SESSION invite if no token exists locally.
+ */
+export async function ensureWorkspaceOwnerSession(workspaceId: string): Promise<string | null> {
+  let token = localStorage.getItem(`workspace_session_token_${workspaceId}`);
+  if (token) {
+    localStorage.setItem("workspace_session_token", token);
+    return token;
+  }
+
+  try {
+    const setupPassword = crypto.randomUUID();
+
+    // 1. Create a SESSION invite with OWNER role
+    const invite = await createWorkspaceInvite({
+      workspaceId,
+      password: setupPassword,
+      inviteType: "SESSION",
+      role: "OWNER",
+      expiresInHours: 1,
+    });
+
+    // 2. Redeem immediately for this device to write member record to D1 and issue JWT
+    const redeemed = await redeemWorkspaceInvite({
+      inviteId: invite.inviteId,
+      rawToken: invite.rawToken,
+      password: setupPassword,
+      deviceId: getOrCreateDeviceId(),
+    });
+
+    return redeemed.sessionToken;
+  } catch (error) {
+    console.error(`Failed to register workspace owner session for ${workspaceId}:`, error);
+    return null;
+  }
 }
 
 /**

@@ -27,6 +27,7 @@ import {
     type SpecificationDefinition,
 } from "@/lib/types"
 import { toast } from "sonner"
+import { getActiveWorkspaceId } from "@/lib/db/utils"
 
 interface CustomSchemaFieldConfig {
     header: string
@@ -93,7 +94,7 @@ const guessTargetField = (header: string, availableFields: string[]) => {
 }
 
 function ImportDataView({
-    workspaceId = "default",
+    workspaceId = getActiveWorkspaceId(),
     initialSchemaId,
     schemaGroup,
     groups: passedGroups = [],

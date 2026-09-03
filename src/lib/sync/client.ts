@@ -1,4 +1,8 @@
+// src/lib/sync/client.ts
+
 import { dbClient } from "@/lib/db/client";
+import { deleteWorkspace, getActiveWorkspaceId } from "@/lib/db/utils";
+import { ensureWorkspaceOwnerSession } from "@/lib/auth/invites";
 import { defaultTransport, type SyncTransport } from "./transport";
 
 export const SYNC_SERVER_URL = import.meta.env.DEV
@@ -6,10 +10,13 @@ export const SYNC_SERVER_URL = import.meta.env.DEV
   : import.meta.env.VITE_SYNC_SERVER_URL;
 
 export async function synchronizeWorkspace(
-  workspaceId: string = "default",
+  workspaceId: string = getActiveWorkspaceId(),
   transport: SyncTransport = defaultTransport
 ) {
   if (!navigator.onLine) return;
+
+  // Ensure an active session token exists for this workspace before syncing
+  await ensureWorkspaceOwnerSession(workspaceId);
 
   try {
     const unsyncedNotes = await dbClient.query(
@@ -214,7 +221,27 @@ export async function synchronizeWorkspace(
 
       localStorage.setItem(lastSyncKey, data.timestamp.toString());
     }
-  } catch (error) {
+  } catch (error: any) {
+    if (
+      error?.status === 404 ||
+      error?.message === "WORKSPACE_DELETED" ||
+      error?.data?.error === "WORKSPACE_DELETED"
+    ) {
+      console.warn(`Parent workspace ${workspaceId} was deleted on remote host. Cleaning up locally...`);
+      await handleRemoteWorkspaceDeletion(workspaceId);
+      return;
+    }
+
     console.error("Synchronization failed:", error);
+  }
+}
+
+async function handleRemoteWorkspaceDeletion(workspaceId: string) {
+  localStorage.removeItem(`last_sync_${workspaceId}`);
+  const result = await deleteWorkspace(workspaceId);
+  localStorage.setItem("active_workspace_id", result.activeWorkspaceId);
+
+  if (typeof window !== "undefined") {
+    window.location.reload();
   }
 }

@@ -226,25 +226,38 @@ function App() {
         setRedeemError(null);
 
         try {
-            // 1. Unpack workspace information returned by the invite redemption
+            // 1. Redeem invite and retrieve host workspace ID
             const result = await redeemWorkspaceInvite({
                 inviteId: pendingInvite.inviteId,
                 rawToken: pendingInvite.rawToken,
                 password: invitePassword,
             });
 
-            // 2. Persist active workspace ID so the reloaded app boots directly into it
-            if (result?.workspaceId) {
-                localStorage.setItem("active_workspace_id", result.workspaceId);
-            }
+            const hostWorkspaceId = result.workspaceId;
+
+            // 2. Determine host workspace name from workspace list or fallback
+            const hostWorkspace = workspaces.find((w) => w.id === hostWorkspaceId);
+            const hostName = hostWorkspace?.name || "Shared Workspace";
+            const timestamp = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" });
+            const uniqueName = `${hostName} (Joined ${timestamp})`;
+
+            // 3. Create local workspace instance matching the host workspace ID
+            const newWorkspace = await createWorkspace(
+                uniqueName,
+                `Cloned from shared workspace "${hostName}".`,
+                hostWorkspaceId
+            );
+
+            // 4. Synchronize remote host data directly into local database tables
+            await synchronizeWorkspace(newWorkspace.id);
+
+            // 5. Activate the newly cloned workspace
+            await switchWorkspace(newWorkspace.id);
 
             setPendingInvite(null);
             setInvitePassword("");
 
-            // 3. Clear URL params and point back to root "/" instead of "/join"
             window.history.replaceState({}, document.title, "/");
-
-            // 4. Reload into the newly selected active workspace
             window.location.reload();
         } catch (err) {
             setRedeemError(err instanceof Error ? err.message : "Failed to redeem invite");
@@ -571,6 +584,13 @@ function App() {
         const duplicateResult = await detectPotentialDuplicatesForDocument(noteId, activeWorkspaceId);
         await refreshMergeQueue();
 
+        // Immediately push captured document to remote D1 backend
+        try {
+            await synchronizeWorkspace(activeWorkspaceId);
+        } catch (syncError) {
+            console.error("Auto-sync post capture failed:", syncError);
+        }
+
         setStatusMessage(
             duplicateResult.flagged > 0
                 ? `Stored ${documentTitle} and queued ${duplicateResult.flagged} duplicate review candidate(s).`
@@ -644,6 +664,7 @@ function App() {
         if (!activeSchema || !activeDocument) return;
 
         await saveDocumentCapture(activeSchema, activeDocument, frontmatter, body);
+        await synchronizeWorkspace(activeWorkspaceId)
     };
 
     const handleRequestWaybackSnapshot = async () => {

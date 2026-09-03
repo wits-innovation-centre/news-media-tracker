@@ -9,6 +9,7 @@ import type {
     SpecificationStore,
     StoredDocument,
 } from "@/lib/types"
+import { getActiveWorkspaceId } from "../db/utils"
 
 // ==========================================
 // CONSTANTS & TYPES
@@ -290,7 +291,7 @@ export async function exportWorkspaceToExcel(
                 parent_title: parentDoc ? parentDoc.title : "",
                 path: getPath(doc),
                 body: doc.body ?? "",
-                workspace_id: doc.workspace_id ?? options.workspaceId ?? "default",
+                workspace_id: doc.workspace_id ?? options.workspaceId ?? getActiveWorkspaceId(),
                 created_by: doc.created_by ?? "",
                 updated_by: doc.updated_by ?? "",
                 created_at: doc.created_at ?? "",
@@ -593,7 +594,7 @@ export function detectWorkbookSchemaGroup(
 }
 
 export async function importExcelWorkbook(options: ExcelImportOptions): Promise<SpreadsheetImportSummary> {
-    const { schemaGroup, inspection, workspaceId = "default" } = options
+    const { schemaGroup, inspection, workspaceId = getActiveWorkspaceId() } = options
     const sheetMap = new Map(inspection.sheets.map((s) => [canonicalize(s.name), s]))
 
     let rowsProcessed = 0
@@ -730,7 +731,7 @@ export async function importExcelWorkbook(options: ExcelImportOptions): Promise<
 export async function importSpreadsheetSheet(
     options: ImportSpreadsheetSheetOptions
 ): Promise<{ recordsUpserted: number }> {
-    const { schemaId, sheet, mapping, workspaceId = "default", titleField } = options
+    const { schemaId, sheet, mapping, workspaceId = getActiveWorkspaceId(), titleField } = options
     let recordsUpserted = 0
 
     for (const row of sheet.rows) {
@@ -835,7 +836,7 @@ export async function exportWorkspaceAsObsidianVault(
     triggerBlobDownload(blob, fileName)
 }
 
-export async function importVaultZip(file: File, workspaceId = "default"): Promise<VaultImportSummary> {
+export async function importVaultZip(file: File, workspaceId = getActiveWorkspaceId()): Promise<VaultImportSummary> {
     const archive = await JSZip.loadAsync(await file.arrayBuffer())
     let filesProcessed = 0
     let recordsUpserted = 0

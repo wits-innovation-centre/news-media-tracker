@@ -1,6 +1,10 @@
+// src/contexts/workspace.tsx
+
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 
 import { initializeDatabase } from "@/lib/db/client"
+import { synchronizeWorkspace } from "@/lib/sync/client";
+import { ensureWorkspaceOwnerSession } from "@/lib/auth/invites";
 import {
     createWorkspace as createWorkspaceRecord,
     deleteWorkspace as deleteWorkspaceRecord,
@@ -11,7 +15,7 @@ import {
     touchWorkspace,
 } from "@/lib/db/utils"
 import type { WorkspaceRecord } from "@/lib/types"
-import { DEFAULT_WORKSPACE_ICON } from "@/lib/db/utils"
+import { DEFAULT_WORKSPACE_ICON, getActiveWorkspaceId } from "@/lib/db/utils"
 
 const ACTIVE_WORKSPACE_STORAGE_KEY = "active_workspace_id"
 const FALLBACK_WORKSPACE_TIMESTAMP = 0
@@ -20,7 +24,7 @@ interface WorkspaceContextValue {
     activeWorkspace: WorkspaceRecord
     workspaces: WorkspaceRecord[]
     isReady: boolean
-    createWorkspace: (name: string, description?: string) => Promise<WorkspaceRecord>
+    createWorkspace: (name: string, description?: string, customId?: string) => Promise<WorkspaceRecord>
     renameWorkspace: (workspaceId: string, name: string, description?: string) => Promise<void>
     setWorkspaceTemplateGroup: (workspaceId: string, templateGroupId?: string) => Promise<void>
     switchWorkspace: (workspaceId: string) => Promise<void>
@@ -37,7 +41,7 @@ const getStoredWorkspaceId = () => {
 
 function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
-    const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("default")
+    const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(getActiveWorkspaceId())
     const [isReady, setIsReady] = useState(false)
 
     const refreshWorkspaces = useCallback(async () => {
@@ -63,17 +67,28 @@ function WorkspaceProvider({ children }: { children: React.ReactNode }) {
             setWorkspaces(records)
             setActiveWorkspaceId(initialWorkspaceId)
             await touchWorkspace(initialWorkspaceId)
+
+            // Ensure host session token exists for initial workspace
+            await ensureWorkspaceOwnerSession(initialWorkspaceId);
+
+            try {
+                await synchronizeWorkspace(initialWorkspaceId)
+            } catch { console.error("Workspace synchronisation failed.") }
             localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, initialWorkspaceId)
             setIsReady(true)
         })()
     }, [])
 
-    const createWorkspace = useCallback(async (name: string, description?: string) => {
-        const created = await createWorkspaceRecord(name, description)
+    const createWorkspace = useCallback(async (name: string, description?: string, customId?: string) => {
+        const created = await createWorkspaceRecord(name, description, customId)
         await refreshWorkspaces()
         await touchWorkspace(created.id)
         localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, created.id)
         setActiveWorkspaceId(created.id)
+
+        // Generate owner session token for newly created workspace
+        await ensureWorkspaceOwnerSession(created.id);
+
         return created
     }, [refreshWorkspaces])
 
@@ -86,7 +101,16 @@ function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         await touchWorkspace(workspaceId)
         localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspaceId)
         setActiveWorkspaceId(workspaceId)
+
+        // Restore or initialize session token for active workspace
+        await ensureWorkspaceOwnerSession(workspaceId);
+
         await refreshWorkspaces()
+        try {
+            await synchronizeWorkspace(workspaceId)
+        } catch (err) {
+            console.error("Failed auto-sync on workspace switch:", err)
+        }
     }, [refreshWorkspaces])
 
     const setWorkspaceTemplateGroup = useCallback(async (workspaceId: string, templateGroupId?: string) => {
@@ -95,23 +119,19 @@ function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     }, [refreshWorkspaces])
 
     const deleteWorkspace = useCallback(async (workspaceId: string) => {
-        await deleteWorkspaceRecord(workspaceId)
+        const result = await deleteWorkspaceRecord(workspaceId)
         const nextWorkspaces = await listWorkspaces()
-        const fallback = nextWorkspaces[0]
 
         setWorkspaces(nextWorkspaces)
-        if (activeWorkspaceId === workspaceId && fallback) {
-            await touchWorkspace(fallback.id)
-            localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, fallback.id)
-            setActiveWorkspaceId(fallback.id)
-        }
-    }, [activeWorkspaceId])
+        setActiveWorkspaceId(result.activeWorkspaceId)
+        localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, result.activeWorkspaceId)
+    }, [])
 
     const activeWorkspace = useMemo(() => {
         return workspaces.find((workspace) => workspace.id === activeWorkspaceId)
             ?? workspaces[0]
             ?? {
-            id: "default",
+            id: getActiveWorkspaceId(),
             name: "Homicide Tracker",
             description: "Default workspace set up to track reported incidents of homicide.",
             icon_path: DEFAULT_WORKSPACE_ICON,
@@ -154,4 +174,4 @@ function useWorkspace() {
     return context
 }
 
-export { WorkspaceProvider, useWorkspace }
+export { WorkspaceProvider, useWorkspace, getStoredWorkspaceId }

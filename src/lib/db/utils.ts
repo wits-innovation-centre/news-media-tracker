@@ -138,11 +138,41 @@ async function listWorkspaces(): Promise<WorkspaceRecord[]> {
   }))
 }
 
+async function createWorkspace(
+  name: string,
+  description?: string,
+  customId?: string,
+  iconPath?: string
+): Promise<WorkspaceRecord> {
+  const now = Date.now()
+  const trimmedName = name.trim()
+  if (!trimmedName) throw new Error("Workspace name is required.")
+
+  const id = customId?.trim() || `ws-${crypto.randomUUID()}`
+  const finalIcon = iconPath?.trim() || undefined
+
+  await getDb().execute(
+    `INSERT INTO workspaces (id, name, description, icon_path, template_group_id, created_at, last_accessed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, trimmedName, description?.trim() || null, finalIcon || null, null, now, now]
+  )
+
+  return {
+    id,
+    name: trimmedName,
+    description: description?.trim() || undefined,
+    icon_path: finalIcon,
+    template_group_id: undefined,
+    created_at: now,
+    last_accessed_at: now,
+  }
+}
+
 async function deleteWorkspace(workspaceId: string): Promise<{ isReset: boolean; activeWorkspaceId: string }> {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
   const db = getDb()
 
-  // 1. Purge all workspace data
+  // 1. Purge local database tables for this workspace
   await db.execute("DELETE FROM notes WHERE workspace_id = ?", [scopedWorkspaceId])
   await db.execute("DELETE FROM merge_queue WHERE workspace_id = ?", [scopedWorkspaceId])
   await db.execute("DELETE FROM archival_records WHERE workspace_id = ?", [scopedWorkspaceId])
@@ -153,17 +183,25 @@ async function deleteWorkspace(workspaceId: string): Promise<{ isReset: boolean;
   await db.execute("DELETE FROM specification_registry WHERE workspace_id = ?", [scopedWorkspaceId])
   await db.execute("DELETE FROM workspaces WHERE id = ?", [scopedWorkspaceId])
 
-  // 2. Check remaining count
+  // 2. Clear guest session tokens if the deleted workspace was active
+  if (typeof window !== "undefined") {
+    const activeStored = localStorage.getItem("active_workspace_id")
+    if (activeStored === scopedWorkspaceId) {
+      localStorage.removeItem("workspace_session_token")
+    }
+  }
+
+  // 3. Check remaining workspace count
   const countRows = await db.query(`SELECT COUNT(*) as count FROM workspaces`)
   const count = Number(countRows[0]?.count ?? 0)
 
   if (count === 0) {
-    // Re-create a fresh initial workspace and set it active
+    // Re-create a fresh initial local workspace
     const newWorkspace = await ensureInitialWorkspace()
     return { isReset: true, activeWorkspaceId: newWorkspace.id }
   }
 
-  // 3. Switch active pointer if the deleted workspace was active
+  // 4. Switch active workspace pointer if needed
   let activeWorkspaceId = localStorage.getItem("active_workspace_id") || ""
   if (activeWorkspaceId === scopedWorkspaceId) {
     const remaining = await db.query(`SELECT id FROM workspaces ORDER BY last_accessed_at DESC LIMIT 1`)
@@ -174,18 +212,6 @@ async function deleteWorkspace(workspaceId: string): Promise<{ isReset: boolean;
   }
 
   return { isReset: false, activeWorkspaceId }
-}
-
-async function createWorkspace(name: string, description?: string, iconPath?: string): Promise<WorkspaceRecord> {
-  const now = Date.now()
-  const trimmedName = name.trim()
-  if (!trimmedName) throw new Error("Workspace name is required.")
-
-  const id = `ws-${crypto.randomUUID()}`
-  const finalIcon = iconPath?.trim() || undefined
-  await getDb().execute(`INSERT INTO workspaces (id, name, description, icon_path, template_group_id, created_at, last_accessed_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [id, trimmedName, description?.trim() || null, finalIcon || null, null, now, now])
-
-  return { id, name: trimmedName, description: description?.trim() || undefined, icon_path: finalIcon, template_group_id: undefined, created_at: now, last_accessed_at: now }
 }
 
 async function renameWorkspace(workspaceId: string, name: string, description?: string, iconPath?: string): Promise<void> {
