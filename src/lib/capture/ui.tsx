@@ -329,20 +329,22 @@ export function Capture({
                       className={fieldDef.generator && fieldDef.type.input === "text" ? "pr-28" : undefined}
                     />
                     {fieldDef.generator && fieldDef.type.input === "text" ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        className="absolute top-1/2 right-1 h-6 -translate-y-1/2 px-2 text-[11px]"
-                        onClick={() => handleRegenerateField(fieldDef)}
-                      >
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <RefreshCw className="mr-1 h-3 w-3" />
-                          </TooltipTrigger>
-                          <TooltipContent>Generate New</TooltipContent>
-                        </Tooltip>
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              className="absolute top-1/2 right-1 h-6 -translate-y-1/2 px-2 text-[11px]"
+                              onClick={() => handleRegenerateField(fieldDef)}
+                            >
+                              <RefreshCw className="mr-1 h-3 w-3" />
+                            </Button>
+                          }
+                        />
+                        <TooltipContent>Generate New</TooltipContent>
+                      </Tooltip>
                     ) : null}
                   </div>
                 ) : fieldDef.type.input === "date-range" ? (

@@ -66,7 +66,22 @@ export async function synchronizeWorkspace(
     const data = await transport.pull(workspaceId, lastSyncTimestamp);
 
     if (data) {
-      for (const remoteNote of data.notes) {
+      for (const rawNote of data.notes) {
+        const note = rawNote as Record<string, any>;
+        const noteId = note.id;
+        const noteWorkspaceId = note.workspace_id ?? note.workspaceId ?? workspaceId;
+        const noteSchemaId = note.schema_id ?? note.schemaId ?? "report";
+
+        if (!noteId || !noteWorkspaceId) {
+          console.warn("[Sync] Skipping remote note missing critical ID keys:", note);
+          continue;
+        }
+
+        const frontmatterStr =
+          typeof note.frontmatter === "object" && note.frontmatter !== null
+            ? JSON.stringify(note.frontmatter)
+            : (note.frontmatter ?? "{}");
+
         await dbClient.execute(
           `INSERT INTO notes (
              id, workspace_id, schema_id, parent_id, title, frontmatter, body, 
@@ -87,27 +102,36 @@ export async function synchronizeWorkspace(
              synced_at = excluded.synced_at
            WHERE excluded.updated_at > notes.updated_at`,
           [
-            remoteNote.id,
-            remoteNote.workspace_id,
-            remoteNote.schema_id,
-            remoteNote.parent_id,
-            remoteNote.title,
-            remoteNote.frontmatter,
-            remoteNote.body,
-            remoteNote.created_by,
-            remoteNote.updated_by,
-            remoteNote.deleted_by,
-            remoteNote.user_id,
-            remoteNote.device_id,
-            remoteNote.created_at,
-            remoteNote.updated_at,
-            remoteNote.is_deleted,
+            noteId,
+            noteWorkspaceId,
+            noteSchemaId,
+            note.parent_id ?? note.parentId ?? null,
+            note.title ?? "",
+            frontmatterStr,
+            note.body ?? "",
+            note.created_by ?? note.createdBy ?? null,
+            note.updated_by ?? note.updatedBy ?? null,
+            note.deleted_by ?? note.deletedBy ?? null,
+            note.user_id ?? note.userId ?? null,
+            note.device_id ?? note.deviceId ?? null,
+            note.created_at ?? note.createdAt ?? now,
+            note.updated_at ?? note.updatedAt ?? now,
+            note.is_deleted || note.isDeleted ? 1 : 0,
             data.timestamp,
           ]
         );
       }
 
-      for (const remoteProp of data.proposals) {
+      for (const rawProp of data.proposals) {
+        const prop = rawProp as Record<string, any>;
+        const propId = prop.id;
+        const propWorkspaceId = prop.workspace_id ?? prop.workspaceId ?? workspaceId;
+
+        if (!propId || !propWorkspaceId) continue;
+
+        const stringifyObj = (val: any) =>
+          typeof val === "object" && val !== null ? JSON.stringify(val) : (val ?? null);
+
         await dbClient.execute(
           `INSERT INTO merge_queue (
              id, workspace_id, document_id, secondary_document_id, author_id, user_id, device_id, action,
@@ -134,37 +158,43 @@ export async function synchronizeWorkspace(
              synced_at = excluded.synced_at
            WHERE excluded.updated_at > merge_queue.updated_at`,
           [
-            remoteProp.id,
-            remoteProp.workspace_id,
-            remoteProp.document_id,
-            remoteProp.secondary_document_id,
-            remoteProp.author_id,
-            remoteProp.user_id,
-            remoteProp.device_id,
-            remoteProp.action,
-            remoteProp.source_id,
-            remoteProp.target_id,
-            remoteProp.entity_type,
-            remoteProp.similarity_score,
-            remoteProp.base_frontmatter,
-            remoteProp.base_body,
-            remoteProp.secondary_base_frontmatter,
-            remoteProp.secondary_base_body,
-            remoteProp.proposed_title,
-            remoteProp.proposed_frontmatter,
-            remoteProp.proposed_body,
-            remoteProp.metadata,
-            remoteProp.status,
-            remoteProp.reviewed_by,
-            remoteProp.review_comment,
-            remoteProp.created_at,
-            remoteProp.updated_at,
+            propId,
+            propWorkspaceId,
+            prop.document_id ?? prop.documentId ?? null,
+            prop.secondary_document_id ?? prop.secondaryDocumentId ?? null,
+            prop.author_id ?? prop.authorId ?? null,
+            prop.user_id ?? prop.userId ?? null,
+            prop.device_id ?? prop.deviceId ?? null,
+            prop.action ?? "MERGE",
+            prop.source_id ?? prop.sourceId ?? null,
+            prop.target_id ?? prop.targetId ?? null,
+            prop.entity_type ?? prop.entityType ?? null,
+            prop.similarity_score ?? prop.similarityScore ?? null,
+            stringifyObj(prop.base_frontmatter ?? prop.baseFrontmatter),
+            prop.base_body ?? prop.baseBody ?? null,
+            stringifyObj(prop.secondary_base_frontmatter ?? prop.secondaryBaseFrontmatter),
+            prop.secondary_base_body ?? prop.secondaryBaseBody ?? null,
+            prop.proposed_title ?? prop.proposedTitle ?? null,
+            stringifyObj(prop.proposed_frontmatter ?? prop.proposedFrontmatter),
+            prop.proposed_body ?? prop.proposedBody ?? null,
+            stringifyObj(prop.metadata),
+            prop.status ?? "PENDING",
+            prop.reviewed_by ?? prop.reviewedBy ?? null,
+            prop.review_comment ?? prop.reviewComment ?? null,
+            prop.created_at ?? prop.createdAt ?? now,
+            prop.updated_at ?? prop.updatedAt ?? now,
             data.timestamp,
           ]
         );
       }
 
-      for (const remoteArchive of data.archives) {
+      for (const rawArchive of data.archives) {
+        const archive = rawArchive as Record<string, any>;
+        const archiveId = archive.id;
+        const archiveWorkspaceId = archive.workspace_id ?? archive.workspaceId ?? workspaceId;
+
+        if (!archiveId || !archiveWorkspaceId) continue;
+
         await dbClient.execute(
           `INSERT INTO archival_records (
              id, article_id, workspace_id, archive_type, sha256_hash,
@@ -194,26 +224,26 @@ export async function synchronizeWorkspace(
              synced_at = excluded.synced_at
            WHERE excluded.updated_at > archival_records.updated_at`,
           [
-            remoteArchive.id,
-            remoteArchive.article_id,
-            remoteArchive.workspace_id,
-            remoteArchive.archive_type,
-            remoteArchive.sha256_hash,
-            remoteArchive.ipfs_cid ?? null,
-            remoteArchive.torrent_infohash ?? null,
-            remoteArchive.uri_or_path ?? null,
-            remoteArchive.file_size_bytes ?? null,
-            remoteArchive.device_id,
-            remoteArchive.last_verified_at ?? null,
-            remoteArchive.health_status,
-            remoteArchive.sync_status ?? "PENDING_ANCHOR",
-            remoteArchive.blockchain_tx_hash ?? null,
-            remoteArchive.blockchain_network ?? null,
-            remoteArchive.ots_proof_payload ?? null,
-            remoteArchive.anchored_at ?? null,
-            remoteArchive.created_at,
-            remoteArchive.updated_at,
-            remoteArchive.is_deleted,
+            archiveId,
+            archive.article_id ?? archive.articleId ?? null,
+            archiveWorkspaceId,
+            archive.archive_type ?? archive.archiveType ?? "WAYBACK",
+            archive.sha256_hash ?? archive.sha256Hash ?? "",
+            archive.ipfs_cid ?? archive.ipfsCid ?? null,
+            archive.torrent_infohash ?? archive.torrentInfohash ?? null,
+            archive.uri_or_path ?? archive.uriOrPath ?? null,
+            archive.file_size_bytes ?? archive.fileSizeBytes ?? null,
+            archive.device_id ?? archive.deviceId ?? "",
+            archive.last_verified_at ?? archive.lastVerifiedAt ?? null,
+            archive.health_status ?? archive.healthStatus ?? "UNKNOWN",
+            archive.sync_status ?? archive.syncStatus ?? "PENDING_ANCHOR",
+            archive.blockchain_tx_hash ?? archive.blockchainTxHash ?? null,
+            archive.blockchain_network ?? archive.blockchainNetwork ?? null,
+            archive.ots_proof_payload ?? archive.otsProofPayload ?? null,
+            archive.anchored_at ?? archive.anchoredAt ?? null,
+            archive.created_at ?? archive.createdAt ?? now,
+            archive.updated_at ?? archive.updatedAt ?? now,
+            archive.is_deleted || archive.isDeleted ? 1 : 0,
             data.timestamp,
           ]
         );
