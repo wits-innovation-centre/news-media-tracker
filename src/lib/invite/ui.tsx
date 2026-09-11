@@ -1,7 +1,7 @@
-// src/components/settings/access-manager-view.tsx
+// src/lib/invite/ui.tsx
 
-import { useState, useEffect } from "react"
-import { KeyRound, Copy, Check, Shield, UserX, RefreshCw, Laptop, CheckCircle2, Clock } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { KeyRound, Copy, Check, Shield, UserX, RefreshCw, Laptop, CheckCircle2, Clock, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { createWorkspaceInvite, generateOTP, getOrCreateDeviceId, type WorkspaceRole, type InviteType } from "@/lib/invite/fn"
+import { SYNC_SERVER_URL } from "@/lib/sync/transport"
 
 interface InviteRecord {
   id: string
@@ -17,6 +18,7 @@ interface InviteRecord {
   otp: string
   isRedeemed: boolean
   createdAt: string
+  expiresAt?: string
 }
 
 interface SessionRecord {
@@ -34,17 +36,46 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
   const [copiedLink, setCopiedLink] = useState(false)
   const [copiedOtp, setCopiedOtp] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  // Lists state
   const [invites, setInvites] = useState<InviteRecord[]>([])
   const [sessions, setSessions] = useState<SessionRecord[]>([])
 
+  // Fetch persisted active workspace invites from D1
+  const fetchActiveInvites = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("workspace_session_token")
+      const res = await fetch(`${SYNC_SERVER_URL}/api/invites/list?workspace_id=${workspaceId}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      })
+      if (res.ok) {
+        const data = (await res.json()) as { invites?: InviteRecord[] }
+        if (Array.isArray(data.invites)) {
+          setInvites(data.invites)
+        }
+      }
+    } catch (err) {
+      console.warn("Could not load persisted invites list:", err)
+    }
+  }, [workspaceId])
+
   useEffect(() => {
-    // Current active device session info
     const currentDevice = getOrCreateDeviceId()
     setSessions([
       { deviceId: currentDevice, isCurrent: true, lastActive: "Just now" },
     ])
+    fetchActiveInvites()
+  }, [fetchActiveInvites])
+
+  // Timer: Auto-rotate input OTP every 30 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setOtp(generateOTP(6))
+    }, 30000)
+
+    return () => clearInterval(timer)
   }, [])
 
   const handleRegenerateOtp = () => {
@@ -54,6 +85,10 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
   const handleGenerateLink = async () => {
     if (!otp || otp.length < 6) return
     setIsCreating(true)
+    setErrorMsg(null)
+
+    const submittedOtp = otp
+
     try {
       const inviteType: InviteType = isSessionInvite ? "SESSION" : "SHARE"
       const targetWorkspaceId = isSessionInvite ? "*" : workspaceId
@@ -61,7 +96,7 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
 
       const res = await createWorkspaceInvite({
         workspaceId: targetWorkspaceId,
-        otp,
+        otp: submittedOtp,
         inviteType,
         role: assignedRole,
         expiresInHours: 24,
@@ -69,22 +104,25 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
 
       const url = `${window.location.origin}/join?id=${res.inviteId}&token=${res.rawToken}&type=${inviteType}`
       setInviteUrl(url)
-      setCreatedOtp(res.otp || otp)
+      setCreatedOtp(res.otp || submittedOtp)
 
-      // Appends newly generated invite to the active list UI
-      setInvites((prev) => [
-        {
-          id: res.inviteId,
-          type: inviteType,
-          role: assignedRole,
-          otp: res.otp || otp,
-          isRedeemed: false,
-          createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        },
-        ...prev,
-      ])
-    } catch (error) {
+      // Persist created invite in local state list with locked OTP
+      const newInviteRecord: InviteRecord = {
+        id: res.inviteId,
+        type: inviteType,
+        role: assignedRole,
+        otp: res.otp || submittedOtp,
+        isRedeemed: false,
+        createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      }
+
+      setInvites((prev) => [newInviteRecord, ...prev])
+
+      // Immediately regenerate input OTP for next generation
+      setOtp(generateOTP(6))
+    } catch (error: any) {
       console.error("Failed to create workspace invite:", error)
+      setErrorMsg(error?.message || "Failed to generate invite link.")
     } finally {
       setIsCreating(false)
     }
@@ -115,6 +153,13 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
             Generate a single-use share link protected by a 6-digit One-Time PIN (OTP).
           </p>
         </div>
+
+        {errorMsg && (
+          <div className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-md flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1">
@@ -159,7 +204,6 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
           </div>
         </div>
 
-        {/* Checkbox for New User Session */}
         <div className="flex items-center space-x-2 pt-1">
           <Checkbox
             id="session-invite"
@@ -214,7 +258,7 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
           Workspace Invites
         </h4>
         {invites.length === 0 ? (
-          <p className="text-muted-foreground text-[11px]">No invites generated in this session.</p>
+          <p className="text-muted-foreground text-[11px]">No active invites found for this workspace.</p>
         ) : (
           <div className="space-y-2">
             {invites.map((inv) => (
@@ -229,7 +273,7 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
                       {inv.role}
                     </Badge>
                   </div>
-                  <p className="text-[11px] text-muted-foreground font-mono">OTP: {inv.otp} • Created at {inv.createdAt}</p>
+                  <p className="text-[11px] text-muted-foreground font-mono">OTP: <strong className="text-foreground">{inv.otp}</strong> • Created at {inv.createdAt}</p>
                 </div>
                 <div>
                   {inv.isRedeemed ? (

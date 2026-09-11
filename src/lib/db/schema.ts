@@ -16,21 +16,22 @@ export const workspaceInvites = sqliteTable(
   "workspace_invites",
   {
     id: text("id").primaryKey(),
-    workspaceId: text("workspace_id").notNull(), // Can hold specific ID or "*" for global session
-    createdBy: text("created_by"), // ADDED: Stores issuing userId for identity/workspace sync
+    workspaceId: text("workspace_id").notNull(),
+    createdBy: text("created_by"),
     tokenHash: text("token_hash").notNull(),
-    passwordHash: text("password_hash").notNull(), // Stores hashed OTP
+    passwordHash: text("password_hash").notNull(), // Stores hashed OTP for verification
+    otp: text("otp"), // Stores raw 6-digit PIN for invite list retrieval
     role: text("role").notNull().default("EDITOR"),
     inviteType: text("invite_type").notNull().default("SHARE"),
     expiresAt: integer("expires_at").notNull(),
-    usedAt: integer("used_at"), // Already exists: null = pending, integer = redeemed
+    usedAt: integer("used_at"),
     createdAt: integer("created_at")
       .notNull()
       .default(sql`(unixepoch())`),
   },
   (table) => ({
     idxInvitesWorkspace: index("idx_invites_workspace").on(table.workspaceId),
-    idxInvitesCreator: index("idx_invites_creator").on(table.createdBy), // ADDED: Fast lookup by creator
+    idxInvitesCreator: index("idx_invites_creator").on(table.createdBy),
   })
 );
 
