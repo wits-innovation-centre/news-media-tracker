@@ -25,14 +25,14 @@ if [ -n "$(git status --porcelain drizzle)" ]; then
   fi
 
   echo "📦 Applying local D1 migrations..."
-  pnpm exec wrangler d1 migrations apply news_media_db --local -y
+  CI=true pnpm exec wrangler d1 migrations apply news_media_db --local
   if [ $? -ne 0 ]; then
     echo "❌ Local migration failed. Commit aborted."
     exit 1
   fi
 
   echo "🌐 Applying remote D1 migrations..."
-  pnpm exec wrangler d1 migrations apply news_media_db --remote -y
+  CI=true pnpm exec wrangler d1 migrations apply news_media_db --remote
   if [ $? -ne 0 ]; then
     echo "❌ Remote migration failed. Commit aborted."
     exit 1
