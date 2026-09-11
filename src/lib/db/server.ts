@@ -116,7 +116,7 @@ export default {
     const secret = env.JWT_SECRET ?? "fallback-dev-secret-change-in-prod";
 
     // 1. LIST INVITES ENDPOINT
-    if (url.pathname === "/api/invites" && request.method === "GET") {
+    if ((url.pathname === "/api/invites" || url.pathname === "/api/invites/list") && request.method === "GET") {
       const workspaceId = url.searchParams.get("workspace_id") ?? "*";
 
       if (workspaceId !== "*") {
@@ -155,7 +155,8 @@ export default {
     if (url.pathname === "/api/invites/create" && request.method === "POST") {
       const { workspace_id, invite_type, password, otp, role = "EDITOR", expires_in_hours = 24, created_by } = await request.json() as any;
 
-      if (workspace_id !== "*") {
+      // Allow SESSION invite creation for initial device session bootstrapping
+      if (workspace_id !== "*" && invite_type !== "SESSION") {
         const access = await verifyMemberAccess(request, env, workspace_id);
         if (access.status !== "OK") {
           return new Response(JSON.stringify({ error: "Unauthorized to invite to this workspace" }), { status: 403, headers });

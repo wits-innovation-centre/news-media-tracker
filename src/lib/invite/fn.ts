@@ -84,9 +84,14 @@ export async function createWorkspaceInvite({
   expiresInHours = 24,
   apiBaseUrl = SYNC_SERVER_URL,
 }: CreateInviteParams): Promise<CreateInviteResponse> {
+  const token = typeof localStorage !== "undefined" ? localStorage.getItem("workspace_session_token") : null;
+
   const response = await fetch(`${apiBaseUrl}/api/invites/create`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify({
       workspace_id: workspaceId,
       otp,
@@ -277,7 +282,7 @@ export async function redeemFullUserSession({
   saveCapturedNote,
   // ...other hydration methods
 }: HydrateAndRedeemParams & { setCurrentUserId: (id: string) => void }) {
-  
+
   // 1. Redeem invite on server
   const result = await redeemWorkspaceInvite({
     inviteId: pendingInvite.inviteId,
@@ -296,7 +301,7 @@ export async function redeemFullUserSession({
   for (const hostWs of targetWorkspaces) {
     // Clone or sync each workspace locally under the new synced userId
     const newWs = await createWorkspace(hostWs.name, "Synced from full session invite.");
-    
+
     // Populate schemas, documents, and specifications per workspace
     const hostDocs = await loadCapturedDocuments(hostWs.id);
     for (const doc of hostDocs) {

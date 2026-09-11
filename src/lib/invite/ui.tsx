@@ -40,6 +40,7 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
 
   const [invites, setInvites] = useState<InviteRecord[]>([])
   const [sessions, setSessions] = useState<SessionRecord[]>([])
+  const [timeLeft, setTimeLeft] = useState(30)
 
   // Fetch persisted active workspace invites from D1
   const fetchActiveInvites = useCallback(async () => {
@@ -69,17 +70,24 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
     fetchActiveInvites()
   }, [fetchActiveInvites])
 
-  // Timer: Auto-rotate input OTP every 30 seconds
+  // Timer: Auto-rotate input OTP every 30 seconds with 1-second countdown updates
   useEffect(() => {
     const timer = setInterval(() => {
-      setOtp(generateOTP(6))
-    }, 30000)
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          setOtp(generateOTP(6))
+          return 30
+        }
+        return prev - 1
+      })
+    }, 1000)
 
     return () => clearInterval(timer)
   }, [])
 
   const handleRegenerateOtp = () => {
     setOtp(generateOTP(6))
+    setTimeLeft(30)
   }
 
   const handleGenerateLink = async () => {
@@ -164,7 +172,12 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <Label className="text-xs">6-Digit One-Time PIN</Label>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs">6-Digit One-Time PIN</Label>
+                <span className="text-[10px] text-muted-foreground font-mono">
+                  (Auto-rotates in {timeLeft}s)
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={handleRegenerateOtp}
@@ -176,7 +189,7 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
             </div>
             <Input
               type="text"
-              pattern="[0-9]*"
+              pattern="[3-11]*"
               maxLength={6}
               placeholder="6-digit PIN"
               value={otp}
