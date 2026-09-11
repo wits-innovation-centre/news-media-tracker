@@ -1,5 +1,4 @@
 // src/lib/db/server.ts
-
 import { drizzle } from 'drizzle-orm/d1';
 import { eq, and, gt, sql, asc } from 'drizzle-orm';
 import * as schema from './schema';
@@ -72,7 +71,6 @@ async function verifyMemberAccess(request: Request, env: Env, targetWorkspaceId:
   }
 
   const db = drizzle(env.DB, { schema });
-
   const member = await db.select()
     .from(schema.workspaceMembers)
     .where(and(
@@ -99,9 +97,6 @@ export default {
   },
 
   async fetch(request: Request, env: Env): Promise<Response> {
-    const db = drizzle(env.DB, { schema });
-    const url = new URL(request.url);
-
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: {
@@ -113,331 +108,343 @@ export default {
     }
 
     const headers = { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" };
-    const secret = env.JWT_SECRET ?? "fallback-dev-secret-change-in-prod";
 
-    // 1. LIST INVITES ENDPOINT
-    if ((url.pathname === "/api/invites" || url.pathname === "/api/invites/list") && request.method === "GET") {
-      const workspaceId = url.searchParams.get("workspace_id") ?? "*";
+    try {
+      const db = drizzle(env.DB, { schema });
+      const url = new URL(request.url);
+      const secret = env.JWT_SECRET ?? "fallback-dev-secret-change-in-prod";
 
-      if (workspaceId !== "*") {
-        const access = await verifyMemberAccess(request, env, workspaceId);
-        if (access.status !== "OK") {
-          return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 403, headers });
+      // 1. LIST INVITES ENDPOINT
+      if ((url.pathname === "/api/invites" || url.pathname === "/api/invites/list") && request.method === "GET") {
+        const workspaceId = url.searchParams.get("workspace_id") ?? "*";
+
+        if (workspaceId !== "*") {
+          const access = await verifyMemberAccess(request, env, workspaceId);
+          if (access.status !== "OK") {
+            return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 403, headers });
+          }
         }
+
+        const invites = await db.select()
+          .from(schema.workspaceInvites)
+          .where(eq(schema.workspaceInvites.workspaceId, workspaceId));
+
+        return new Response(JSON.stringify({ invites }), { headers });
       }
 
-      const invites = await db.select()
-        .from(schema.workspaceInvites)
-        .where(eq(schema.workspaceInvites.workspaceId, workspaceId));
+      // 2. LIST ACTIVE SESSIONS ENDPOINT
+      if (url.pathname === "/api/sessions" && request.method === "GET") {
+        const workspaceId = url.searchParams.get("workspace_id") ?? "*";
 
-      return new Response(JSON.stringify({ invites }), { headers });
-    }
-
-    // 2. LIST ACTIVE SESSIONS ENDPOINT
-    if (url.pathname === "/api/sessions" && request.method === "GET") {
-      const workspaceId = url.searchParams.get("workspace_id") ?? "*";
-
-      if (workspaceId !== "*") {
-        const access = await verifyMemberAccess(request, env, workspaceId);
-        if (access.status !== "OK") {
-          return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 403, headers });
+        if (workspaceId !== "*") {
+          const access = await verifyMemberAccess(request, env, workspaceId);
+          if (access.status !== "OK") {
+            return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 403, headers });
+          }
         }
+
+        const members = await db.select()
+          .from(schema.workspaceMembers)
+          .where(eq(schema.workspaceMembers.workspaceId, workspaceId));
+
+        return new Response(JSON.stringify({ sessions: members }), { headers });
       }
 
-      const members = await db.select()
-        .from(schema.workspaceMembers)
-        .where(eq(schema.workspaceMembers.workspaceId, workspaceId));
+      // 3. CREATE INVITE ENDPOINT
+      if (url.pathname === "/api/invites/create" && request.method === "POST") {
+        const { workspace_id, invite_type, password, otp, role = "EDITOR", expires_in_hours = 24, created_by } = await request.json() as any;
 
-      return new Response(JSON.stringify({ sessions: members }), { headers });
-    }
-
-    // 3. CREATE INVITE ENDPOINT
-    if (url.pathname === "/api/invites/create" && request.method === "POST") {
-      const { workspace_id, invite_type, password, otp, role = "EDITOR", expires_in_hours = 24, created_by } = await request.json() as any;
-
-      // Allow SESSION invite creation for initial device session bootstrapping
-      if (workspace_id !== "*" && invite_type !== "SESSION") {
-        const access = await verifyMemberAccess(request, env, workspace_id);
-        if (access.status !== "OK") {
-          return new Response(JSON.stringify({ error: "Unauthorized to invite to this workspace" }), { status: 403, headers });
+        if (workspace_id !== "*" && invite_type !== "SESSION") {
+          const access = await verifyMemberAccess(request, env, workspace_id);
+          if (access.status !== "OK") {
+            return new Response(JSON.stringify({ error: "Unauthorized to invite to this workspace" }), { status: 403, headers });
+          }
         }
+
+        const inviteId = crypto.randomUUID();
+        const rawToken = crypto.randomUUID();
+        const tokenHash = await hashSha256(rawToken);
+        const passwordHash = await hashSha256(otp || password);
+        const expiresAt = Date.now() + (expires_in_hours * 3600 * 1000);
+
+        await db.insert(schema.workspaceInvites).values({
+          id: inviteId,
+          workspaceId: workspace_id,
+          createdBy: created_by ?? null,
+          tokenHash,
+          passwordHash,
+          otp: otp ?? null,
+          inviteType: invite_type,
+          role,
+          expiresAt,
+        });
+
+        return new Response(JSON.stringify({ inviteId, rawToken, otp }), { headers });
       }
 
-      const inviteId = crypto.randomUUID();
-      const rawToken = crypto.randomUUID();
-      const tokenHash = await hashSha256(rawToken);
-      const passwordHash = await hashSha256(otp || password);
-      const expiresAt = Date.now() + (expires_in_hours * 3600 * 1000);
+      // 4. REDEEM INVITE ENDPOINT
+      if (url.pathname === "/api/invites/redeem" && request.method === "POST") {
+        const { inviteId, rawToken, password, otp, deviceId } = await request.json() as any;
+        const tokenHash = await hashSha256(rawToken);
+        const passwordHash = await hashSha256(otp || password);
+        const now = Date.now();
 
-      await db.insert(schema.workspaceInvites).values({
-        id: inviteId,
-        workspaceId: workspace_id,
-        createdBy: created_by ?? null,
-        tokenHash,
-        passwordHash,
-        inviteType: invite_type,
-        role,
-        expiresAt,
-      });
-
-      return new Response(JSON.stringify({ inviteId, rawToken }), { headers });
-    }
-
-    // 4. REDEEM INVITE ENDPOINT
-    if (url.pathname === "/api/invites/redeem" && request.method === "POST") {
-      const { inviteId, rawToken, password, otp, deviceId } = await request.json() as any;
-      const tokenHash = await hashSha256(rawToken);
-      const passwordHash = await hashSha256(otp || password);
-      const now = Date.now();
-
-      const result = await env.DB.prepare(
-        `UPDATE workspace_invites 
+        const result = await env.DB.prepare(
+          `UPDATE workspace_invites 
          SET used_at = ? 
          WHERE id = ? 
            AND token_hash = ? 
            AND password_hash = ? 
            AND used_at IS NULL 
            AND expires_at > ?`
-      ).bind(now, inviteId, tokenHash, passwordHash, now).run();
+        ).bind(now, inviteId, tokenHash, passwordHash, now).run();
 
-      if (result.meta.changes === 0) {
-        return new Response(JSON.stringify({ error: "Invalid, expired, or previously redeemed invite link." }), { status: 400, headers });
-      }
-
-      const invite = await db.select()
-        .from(schema.workspaceInvites)
-        .where(eq(schema.workspaceInvites.id, inviteId))
-        .get();
-
-      if (!invite) return new Response(JSON.stringify({ error: "Invite not found." }), { status: 404, headers });
-
-      if (invite.workspaceId === "*" || invite.inviteType === "SESSION") {
-        const allWorkspaces = await db.select().from(schema.workspaces);
-
-        for (const ws of allWorkspaces) {
-          await db.insert(schema.workspaceMembers).values({
-            id: crypto.randomUUID(),
-            workspaceId: ws.id,
-            deviceId,
-            role: invite.role,
-          }).onConflictDoUpdate({
-            target: [schema.workspaceMembers.workspaceId, schema.workspaceMembers.deviceId],
-            set: { role: invite.role }
-          });
+        if (result.meta.changes === 0) {
+          return new Response(JSON.stringify({ error: "Invalid, expired, or previously redeemed invite link." }), { status: 400, headers });
         }
 
-        const sessionToken = await signJwt({
-          workspaceId: "*",
+        const invite = await db.select()
+          .from(schema.workspaceInvites)
+          .where(eq(schema.workspaceInvites.id, inviteId))
+          .get();
+
+        if (!invite) return new Response(JSON.stringify({ error: "Invite not found." }), { status: 404, headers });
+
+        if (invite.workspaceId === "*" || invite.inviteType === "SESSION") {
+          const allWorkspaces = await db.select().from(schema.workspaces);
+
+          for (const ws of allWorkspaces) {
+            await db.insert(schema.workspaceMembers).values({
+              id: crypto.randomUUID(),
+              workspaceId: ws.id,
+              deviceId,
+              role: invite.role,
+            }).onConflictDoUpdate({
+              target: [schema.workspaceMembers.workspaceId, schema.workspaceMembers.deviceId],
+              set: { role: invite.role }
+            });
+          }
+
+          const sessionToken = await signJwt({
+            workspaceId: "*",
+            deviceId,
+            role: invite.role,
+            userId: invite.createdBy,
+          }, secret);
+
+          return new Response(JSON.stringify({
+            sessionToken,
+            workspaceId: "*",
+            userId: invite.createdBy,
+            workspaces: allWorkspaces
+          }), { headers });
+        }
+
+        await db.insert(schema.workspaceMembers).values({
+          id: crypto.randomUUID(),
+          workspaceId: invite.workspaceId,
           deviceId,
           role: invite.role,
-          userId: invite.createdBy,
+        }).onConflictDoUpdate({
+          target: [schema.workspaceMembers.workspaceId, schema.workspaceMembers.deviceId],
+          set: { role: invite.role }
+        });
+
+        const sessionToken = await signJwt({
+          workspaceId: invite.workspaceId,
+          deviceId,
+          role: invite.role,
         }, secret);
 
-        return new Response(JSON.stringify({
-          sessionToken,
-          workspaceId: "*",
-          userId: invite.createdBy,
-          workspaces: allWorkspaces
-        }), { headers });
+        return new Response(JSON.stringify({ sessionToken, workspaceId: invite.workspaceId }), { headers });
       }
 
-      await db.insert(schema.workspaceMembers).values({
-        id: crypto.randomUUID(),
-        workspaceId: invite.workspaceId,
-        deviceId,
-        role: invite.role,
-      }).onConflictDoUpdate({
-        target: [schema.workspaceMembers.workspaceId, schema.workspaceMembers.deviceId],
-        set: { role: invite.role }
-      });
+      // 5. PUSH API ENDPOINT
+      if (url.pathname === "/api/sync/push" && request.method === "POST") {
+        const body = await request.json() as any;
+        const { workspace_id, notes, proposals, archives } = body;
 
-      const sessionToken = await signJwt({
-        workspaceId: invite.workspaceId,
-        deviceId,
-        role: invite.role,
-      }, secret);
+        const access = await verifyMemberAccess(request, env, workspace_id);
+        if (access.status === "WORKSPACE_DELETED") {
+          return new Response(JSON.stringify({ error: "WORKSPACE_DELETED", message: "Workspace or membership no longer exists." }), { status: 404, headers });
+        }
+        if (access.status !== "OK" || !access.member || access.member.role === 'VIEWER') {
+          return new Response(JSON.stringify({ error: "Forbidden: Read-only or unauthorized device." }), { status: 403, headers });
+        }
 
-      return new Response(JSON.stringify({ sessionToken, workspaceId: invite.workspaceId }), { headers });
-    }
+        // 1. Process Notes Push
+        if (Array.isArray(notes)) {
+          for (const note of notes) {
+            const frontmatterStr = typeof note.frontmatter === "object"
+              ? JSON.stringify(note.frontmatter)
+              : (note.frontmatter ?? "{}");
 
-    // 5. PUSH API ENDPOINT
-    if (url.pathname === "/api/sync/push" && request.method === "POST") {
-      const body = await request.json() as any;
-      const { workspace_id, notes, proposals, archives } = body;
+            const now = Date.now();
+            const parseTimestamp = (val: unknown): number => {
+              if (typeof val === "number" && !isNaN(val)) return val;
+              if (typeof val === "string" && val.trim()) {
+                const parsed = new Date(val).getTime();
+                if (!isNaN(parsed)) return parsed;
+              }
+              return now;
+            };
 
-      const access = await verifyMemberAccess(request, env, workspace_id);
-      if (access.status === "WORKSPACE_DELETED") {
-        return new Response(JSON.stringify({ error: "WORKSPACE_DELETED", message: "Workspace or membership no longer exists." }), { status: 404, headers });
-      }
-      if (access.status !== "OK" || !access.member || access.member.role === 'VIEWER') {
-        return new Response(JSON.stringify({ error: "Forbidden: Read-only or unauthorized device." }), { status: 403, headers });
-      }
+            const createdAt = parseTimestamp(note.created_at ?? note.createdAt);
+            const updatedAt = parseTimestamp(note.updated_at ?? note.updatedAt);
 
-      if (Array.isArray(notes)) {
-        for (const note of notes) {
-          const frontmatterStr = typeof note.frontmatter === "object"
-            ? JSON.stringify(note.frontmatter)
-            : (note.frontmatter ?? "{}");
-
-          const now = Date.now();
-
-          // Helper to coerce integer timestamp from numbers, ISO strings, or missing values
-          const parseTimestamp = (val: unknown): number => {
-            if (typeof val === "number" && !isNaN(val)) return val;
-            if (typeof val === "string" && val.trim()) {
-              const parsed = new Date(val).getTime();
-              if (!isNaN(parsed)) return parsed;
-            }
-            return now;
-          };
-
-          const createdAt = parseTimestamp(note.created_at ?? note.createdAt);
-          const updatedAt = parseTimestamp(note.updated_at ?? note.updatedAt);
-
-          await db.insert(schema.notes).values({
-            id: note.id,
-            workspaceId: workspace_id,
-            schemaId: note.schema_id ?? note.schemaId ?? "report",
-            parentId: note.parent_id ?? note.parentId ?? null,
-            title: note.title ?? "",
-            frontmatter: frontmatterStr,
-            body: note.body ?? "",
-            createdBy: note.created_by ?? note.createdBy ?? null,
-            updatedBy: note.updated_by ?? note.updatedBy ?? null,
-            deletedBy: note.deleted_by ?? note.deletedBy ?? null,
-            userId: note.user_id ?? note.userId ?? note.updated_by ?? note.createdBy ?? null,
-            deviceId: note.device_id ?? note.deviceId ?? null,
-            createdAt: createdAt,
-            updatedAt: updatedAt,
-            isDeleted: (note.is_deleted || note.isDeleted) ? 1 : 0,
-          }).onConflictDoUpdate({
-            target: schema.notes.id,
-            set: {
+            await db.insert(schema.notes).values({
+              id: note.id,
+              workspaceId: workspace_id,
               schemaId: note.schema_id ?? note.schemaId ?? "report",
               parentId: note.parent_id ?? note.parentId ?? null,
               title: note.title ?? "",
               frontmatter: frontmatterStr,
               body: note.body ?? "",
+              createdBy: note.created_by ?? note.createdBy ?? null,
               updatedBy: note.updated_by ?? note.updatedBy ?? null,
               deletedBy: note.deleted_by ?? note.deletedBy ?? null,
               userId: note.user_id ?? note.userId ?? note.updated_by ?? note.createdBy ?? null,
               deviceId: note.device_id ?? note.deviceId ?? null,
-              updatedAt: updatedAt,
+              createdAt,
+              updatedAt,
               isDeleted: (note.is_deleted || note.isDeleted) ? 1 : 0,
-            },
-            where: sql`excluded.updated_at > notes.updated_at`
-          });
+            }).onConflictDoUpdate({
+              target: schema.notes.id,
+              set: {
+                schemaId: note.schema_id ?? note.schemaId ?? "report",
+                parentId: note.parent_id ?? note.parentId ?? null,
+                title: note.title ?? "",
+                frontmatter: frontmatterStr,
+                body: note.body ?? "",
+                updatedBy: note.updated_by ?? note.updatedBy ?? null,
+                deletedBy: note.deleted_by ?? note.deletedBy ?? null,
+                userId: note.user_id ?? note.userId ?? note.updated_by ?? note.createdBy ?? null,
+                deviceId: note.device_id ?? note.deviceId ?? null,
+                updatedAt,
+                isDeleted: (note.is_deleted || note.isDeleted) ? 1 : 0,
+              },
+              where: sql`excluded.updated_at > notes.updated_at`
+            });
+          }
         }
-      }
 
-      if (Array.isArray(proposals)) {
-        for (const prop of proposals) {
-          await db.insert(schema.mergeQueue).values({
-            id: prop.id,
-            workspaceId: workspace_id,
-            documentId: prop.document_id,
-            secondaryDocumentId: prop.secondary_document_id ?? null,
-            authorId: prop.author_id,
-            userId: prop.user_id ?? prop.author_id ?? null,
-            deviceId: prop.device_id ?? null,
-            action: prop.action,
-            sourceId: prop.source_id ?? prop.secondary_document_id ?? null,
-            targetId: prop.target_id ?? prop.document_id,
-            entityType: prop.entity_type ?? null,
-            similarityScore: prop.similarity_score ?? null,
-            baseFrontmatter: prop.base_frontmatter ?? null,
-            baseBody: prop.base_body ?? null,
-            secondaryBaseFrontmatter: prop.secondary_base_frontmatter ?? null,
-            secondaryBaseBody: prop.secondary_base_body ?? null,
-            proposedTitle: prop.proposed_title,
-            proposedFrontmatter: prop.proposed_frontmatter,
-            proposedBody: prop.proposed_body,
-            metadata: prop.metadata ?? null,
-            status: prop.status,
-            reviewedBy: prop.reviewed_by ?? null,
-            reviewComment: prop.review_comment ?? null,
-            createdAt: prop.created_at,
-            updatedAt: prop.updated_at,
-          }).onConflictDoUpdate({
-            target: schema.mergeQueue.id,
-            set: {
+        // 2. Process Proposals Push
+        if (Array.isArray(proposals)) {
+          for (const prop of proposals) {
+            await db.insert(schema.mergeQueue).values({
+              id: prop.id,
+              workspaceId: workspace_id,
               documentId: prop.document_id,
               secondaryDocumentId: prop.secondary_document_id ?? null,
+              authorId: prop.author_id,
+              userId: prop.user_id ?? prop.author_id ?? null,
+              deviceId: prop.device_id ?? null,
+              action: prop.action,
+              sourceId: prop.source_id ?? prop.secondary_document_id ?? null,
+              targetId: prop.target_id ?? prop.document_id,
+              entityType: prop.entity_type ?? null,
+              similarityScore: prop.similarity_score ?? null,
+              baseFrontmatter: prop.base_frontmatter ?? null,
+              baseBody: prop.base_body ?? null,
+              secondaryBaseFrontmatter: prop.secondary_base_frontmatter ?? null,
+              secondaryBaseBody: prop.secondary_base_body ?? null,
               proposedTitle: prop.proposed_title,
               proposedFrontmatter: prop.proposed_frontmatter,
               proposedBody: prop.proposed_body,
+              metadata: prop.metadata ?? null,
               status: prop.status,
+              reviewedBy: prop.reviewed_by ?? null,
+              reviewComment: prop.review_comment ?? null,
+              createdAt: prop.created_at,
               updatedAt: prop.updated_at,
-            },
-            where: sql`excluded.updated_at > merge_queue.updated_at`
-          });
+            }).onConflictDoUpdate({
+              target: schema.mergeQueue.id,
+              set: {
+                documentId: prop.document_id,
+                secondaryDocumentId: prop.secondary_document_id ?? null,
+                proposedTitle: prop.proposed_title,
+                proposedFrontmatter: prop.proposed_frontmatter,
+                proposedBody: prop.proposed_body,
+                status: prop.status,
+                updatedAt: prop.updated_at,
+              },
+              where: sql`excluded.updated_at > merge_queue.updated_at`
+            });
+          }
         }
-      }
 
-      if (Array.isArray(archives)) {
-        for (const archive of archives) {
-          await db.insert(schema.archivalRecords).values({
-            id: archive.id,
-            articleId: archive.article_id,
-            workspaceId: workspace_id,
-            archiveType: archive.archive_type,
-            sha256Hash: archive.sha256_hash,
-            ipfsCid: archive.ipfs_cid ?? null,
-            torrentInfohash: archive.torrent_infohash ?? null,
-            uriOrPath: archive.uri_or_path ?? null,
-            fileSizeBytes: archive.file_size_bytes ?? null,
-            deviceId: archive.device_id,
-            lastVerifiedAt: archive.last_verified_at ?? null,
-            healthStatus: archive.health_status ?? "UNCHECKED",
-            syncStatus: archive.sync_status ?? "PENDING_ANCHOR",
-            blockchainTxHash: archive.blockchain_tx_hash ?? null,
-            blockchainNetwork: archive.blockchain_network ?? null,
-            otsProofPayload: archive.ots_proof_payload ?? null,
-            anchoredAt: archive.anchored_at ?? null,
-            createdAt: archive.created_at,
-            updatedAt: archive.updated_at,
-            isDeleted: archive.is_deleted ?? 0,
-          }).onConflictDoUpdate({
-            target: schema.archivalRecords.id,
-            set: {
-              healthStatus: archive.health_status,
-              syncStatus: archive.sync_status,
+        // 3. Process Archival Records Push
+        if (Array.isArray(archives)) {
+          for (const archive of archives) {
+            await db.insert(schema.archivalRecords).values({
+              id: archive.id,
+              articleId: archive.article_id,
+              workspaceId: workspace_id,
+              archiveType: archive.archive_type,
+              sha256Hash: archive.sha256_hash,
+              ipfsCid: archive.ipfs_cid ?? null,
+              torrentInfohash: archive.torrent_infohash ?? null,
+              uriOrPath: archive.uri_or_path ?? null,
+              fileSizeBytes: archive.file_size_bytes ?? null,
+              deviceId: archive.device_id,
+              lastVerifiedAt: archive.last_verified_at ?? null,
+              healthStatus: archive.health_status ?? "UNCHECKED",
+              syncStatus: archive.sync_status ?? "PENDING_ANCHOR",
+              blockchainTxHash: archive.blockchain_tx_hash ?? null,
+              blockchainNetwork: archive.blockchain_network ?? null,
+              otsProofPayload: archive.ots_proof_payload ?? null,
+              anchoredAt: archive.anchored_at ?? null,
+              createdAt: archive.created_at,
               updatedAt: archive.updated_at,
-            },
-            where: sql`excluded.updated_at > archival_records.updated_at`
-          });
+              isDeleted: archive.is_deleted ?? 0,
+            }).onConflictDoUpdate({
+              target: schema.archivalRecords.id,
+              set: {
+                healthStatus: archive.health_status,
+                syncStatus: archive.sync_status,
+                updatedAt: archive.updated_at,
+              },
+              where: sql`excluded.updated_at > archival_records.updated_at`
+            });
+          }
         }
+
+        return new Response(JSON.stringify({ success: true, timestamp: Date.now() }), { headers });
       }
 
-      return new Response(JSON.stringify({ success: true, timestamp: Date.now() }), { headers });
+      // 6. PULL API ENDPOINT
+      if (url.pathname === "/api/sync/pull" && request.method === "GET") {
+        const workspace_id = url.searchParams.get("workspace_id") ?? "default";
+        const since = parseInt(url.searchParams.get("since") ?? "0", 10);
+
+        const access = await verifyMemberAccess(request, env, workspace_id);
+        if (access.status === "WORKSPACE_DELETED") {
+          return new Response(JSON.stringify({ error: "WORKSPACE_DELETED", message: "Workspace or membership no longer exists." }), { status: 404, headers });
+        }
+        if (access.status !== "OK" || !access.member) {
+          return new Response(JSON.stringify({ error: "Unauthorized access to workspace." }), { status: 403, headers });
+        }
+
+        const notesRes = await db.select().from(schema.notes).where(and(eq(schema.notes.workspaceId, workspace_id), gt(schema.notes.updatedAt, since)));
+        const proposalsRes = await db.select().from(schema.mergeQueue).where(and(eq(schema.mergeQueue.workspaceId, workspace_id), gt(schema.mergeQueue.updatedAt, since)));
+        const archivesRes = await db.select().from(schema.archivalRecords).where(and(eq(schema.archivalRecords.workspaceId, workspace_id), gt(schema.archivalRecords.updatedAt, since)));
+
+        return new Response(JSON.stringify({
+          timestamp: Date.now(),
+          notes: notesRes,
+          proposals: proposalsRes,
+          archives: archivesRes,
+        }), { headers });
+      }
+
+      return new Response("Not Found", { status: 404, headers });
+    } catch (err: any) {
+      console.error("Worker Execution Error:", err);
+      return new Response(
+        JSON.stringify({ error: err?.message || "Internal Server Error" }),
+        { status: 500, headers }
+      );
     }
-
-    // 6. PULL API ENDPOINT
-    if (url.pathname === "/api/sync/pull" && request.method === "GET") {
-      const workspace_id = url.searchParams.get("workspace_id") ?? "default";
-      const since = parseInt(url.searchParams.get("since") ?? "0", 10);
-
-      const access = await verifyMemberAccess(request, env, workspace_id);
-      if (access.status === "WORKSPACE_DELETED") {
-        return new Response(JSON.stringify({ error: "WORKSPACE_DELETED", message: "Workspace or membership no longer exists." }), { status: 404, headers });
-      }
-      if (access.status !== "OK" || !access.member) {
-        return new Response(JSON.stringify({ error: "Unauthorized access to workspace." }), { status: 403, headers });
-      }
-
-      const notesRes = await db.select().from(schema.notes).where(and(eq(schema.notes.workspaceId, workspace_id), gt(schema.notes.updatedAt, since)));
-      const proposalsRes = await db.select().from(schema.mergeQueue).where(and(eq(schema.mergeQueue.workspaceId, workspace_id), gt(schema.mergeQueue.updatedAt, since)));
-      const archivesRes = await db.select().from(schema.archivalRecords).where(and(eq(schema.archivalRecords.workspaceId, workspace_id), gt(schema.archivalRecords.updatedAt, since)));
-
-      return new Response(JSON.stringify({
-        timestamp: Date.now(),
-        notes: notesRes,
-        proposals: proposalsRes,
-        archives: archivesRes,
-      }), { headers });
-    }
-
-    return new Response("Not Found", { status: 404, headers });
   }
 };
 
@@ -462,7 +469,13 @@ async function processPendingWaybackArchives(env: Env, limit = 25) {
       const snapshotUrl = await saveWaybackSnapshotUrl(record.uriOrPath.trim());
       const verifiedAt = Date.now();
       await db.update(schema.archivalRecords)
-        .set({ uriOrPath: snapshotUrl, syncStatus: 'SYNCED', healthStatus: 'HEALTHY', lastVerifiedAt: verifiedAt, updatedAt: verifiedAt })
+        .set({
+          uriOrPath: snapshotUrl,
+          syncStatus: 'SYNCED',
+          healthStatus: 'HEALTHY',
+          lastVerifiedAt: verifiedAt,
+          updatedAt: verifiedAt
+        })
         .where(eq(schema.archivalRecords.id, record.id));
       processed.push({ id: record.id, status: WAYBACK_SYNC_STATUS.synced, uri_or_path: snapshotUrl });
     } catch (err) {
