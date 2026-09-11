@@ -71,7 +71,7 @@ async function verifyMemberAccess(request: Request, env: Env, targetWorkspaceId:
   }
 
   const db = drizzle(env.DB, { schema });
-  const member = await db.select()
+  let member = await db.select()
     .from(schema.workspaceMembers)
     .where(and(
       eq(schema.workspaceMembers.workspaceId, targetWorkspaceId),
@@ -80,7 +80,34 @@ async function verifyMemberAccess(request: Request, env: Env, targetWorkspaceId:
     .get();
 
   if (!member) {
-    return { status: "WORKSPACE_DELETED", member: null };
+    // If the token is a valid wildcard session or OWNER session, auto-provision workspace membership
+    if (decoded.workspaceId === "*" || decoded.role === "OWNER") {
+      const now = Date.now();
+
+      await db.insert(schema.workspaces).values({
+        id: targetWorkspaceId,
+        name: "Synced Workspace",
+        createdAt: now,
+        lastAccessedAt: now,
+      }).onConflictDoNothing();
+
+      const newMember = {
+        id: crypto.randomUUID(),
+        workspaceId: targetWorkspaceId,
+        deviceId: decoded.deviceId,
+        role: decoded.role ?? "OWNER",
+        createdAt: now, // Added missing required property
+      };
+
+      await db.insert(schema.workspaceMembers).values(newMember).onConflictDoUpdate({
+        target: [schema.workspaceMembers.workspaceId, schema.workspaceMembers.deviceId],
+        set: { role: decoded.role ?? "OWNER" }
+      });
+
+      member = newMember;
+    } else {
+      return { status: "WORKSPACE_DELETED", member: null };
+    }
   }
 
   return { status: "OK", member };
@@ -211,19 +238,26 @@ export default {
         if (!invite) return new Response(JSON.stringify({ error: "Invite not found." }), { status: 404, headers });
 
         if (invite.workspaceId === "*" || invite.inviteType === "SESSION") {
-          const allWorkspaces = await db.select().from(schema.workspaces);
+          const targetWsId = invite.workspaceId === "*" ? "default" : invite.workspaceId;
+          const now = Date.now();
 
-          for (const ws of allWorkspaces) {
-            await db.insert(schema.workspaceMembers).values({
-              id: crypto.randomUUID(),
-              workspaceId: ws.id,
-              deviceId,
-              role: invite.role,
-            }).onConflictDoUpdate({
-              target: [schema.workspaceMembers.workspaceId, schema.workspaceMembers.deviceId],
-              set: { role: invite.role }
-            });
-          }
+          await db.insert(schema.workspaces).values({
+            id: targetWsId,
+            name: "Synced Workspace",
+            createdAt: now,
+            lastAccessedAt: now,
+          }).onConflictDoNothing();
+
+          await db.insert(schema.workspaceMembers).values({
+            id: crypto.randomUUID(),
+            workspaceId: targetWsId,
+            deviceId,
+            role: invite.role,
+            createdAt: now,
+          }).onConflictDoUpdate({
+            target: [schema.workspaceMembers.workspaceId, schema.workspaceMembers.deviceId],
+            set: { role: invite.role }
+          });
 
           const sessionToken = await signJwt({
             workspaceId: "*",
@@ -234,9 +268,8 @@ export default {
 
           return new Response(JSON.stringify({
             sessionToken,
-            workspaceId: "*",
+            workspaceId: targetWsId,
             userId: invite.createdBy,
-            workspaces: allWorkspaces
           }), { headers });
         }
 
@@ -245,6 +278,7 @@ export default {
           workspaceId: invite.workspaceId,
           deviceId,
           role: invite.role,
+          createdAt: now,
         }).onConflictDoUpdate({
           target: [schema.workspaceMembers.workspaceId, schema.workspaceMembers.deviceId],
           set: { role: invite.role }
