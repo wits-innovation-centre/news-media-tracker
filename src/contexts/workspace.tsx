@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import { initializeDatabase } from "@/lib/db/client"
 import { synchronizeWorkspace } from "@/lib/sync/client";
-import { ensureWorkspaceOwnerSession } from "@/lib/auth/invites";
+import { ensureWorkspaceOwnerSession } from "@/lib/invite/fn";
 import {
     createWorkspace as createWorkspaceRecord,
     deleteWorkspace as deleteWorkspaceRecord,

@@ -52,7 +52,7 @@ import type {
     StoredDocument,
 } from "@/lib/types";
 import { useWorkspace } from "@/contexts/workspace";
-import { redeemWorkspaceInvite } from "@/lib/auth/invites";
+import { redeemAndHydrateInviteWorkspace } from "@/lib/invite/fn";
 
 const MERGE_QUEUE_PATH = "/merge-queue";
 const OBSIDIAN_TUTORIAL_EXPORT_KEY = "obsidian-export-tutorial-dismissed";
@@ -185,7 +185,7 @@ function App() {
         return window.localStorage.getItem(OBSIDIAN_TUTORIAL_EXPORT_KEY) !== "true";
     });
     const [pendingInvite, setPendingInvite] = useState<{ inviteId: string; rawToken: string } | null>(null);
-    const [invitePassword, setInvitePassword] = useState("");
+    const [inviteOtp, setInviteOtp] = useState("");
     const [redeemError, setRedeemError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const activeWorkspaceId = activeWorkspace.id;
@@ -220,42 +220,30 @@ function App() {
 
     const handleRedeemSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!pendingInvite || !invitePassword) return;
+        if (!pendingInvite || !inviteOtp) return;
 
         setIsSubmitting(true);
         setRedeemError(null);
 
         try {
-            // 1. Redeem invite and retrieve host workspace ID
-            const result = await redeemWorkspaceInvite({
-                inviteId: pendingInvite.inviteId,
-                rawToken: pendingInvite.rawToken,
-                password: invitePassword,
+            await redeemAndHydrateInviteWorkspace({
+                pendingInvite,
+                otp: inviteOtp,
+                currentUserId,
+                workspaces,
+                createWorkspace,
+                loadSchemaGroups,
+                saveSchemaWorkspace,
+                loadSpecificationRegistry,
+                saveSpecificationRegistry,
+                loadSpecifications,
+                saveSpecificationsStore,
+                loadCapturedDocuments,
+                saveCapturedNote,
             });
 
-            const hostWorkspaceId = result.workspaceId;
-
-            // 2. Determine host workspace name from workspace list or fallback
-            const hostWorkspace = workspaces.find((w) => w.id === hostWorkspaceId);
-            const hostName = hostWorkspace?.name || "Shared Workspace";
-            const timestamp = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" });
-            const uniqueName = `${hostName} (Joined ${timestamp})`;
-
-            // 3. Create local workspace instance matching the host workspace ID
-            const newWorkspace = await createWorkspace(
-                uniqueName,
-                `Cloned from shared workspace "${hostName}".`,
-                hostWorkspaceId
-            );
-
-            // 4. Synchronize remote host data directly into local database tables
-            await synchronizeWorkspace(newWorkspace.id);
-
-            // 5. Activate the newly cloned workspace
-            await switchWorkspace(newWorkspace.id);
-
             setPendingInvite(null);
-            setInvitePassword("");
+            setInviteOtp("");
 
             window.history.replaceState({}, document.title, "/");
             window.location.reload();
@@ -268,7 +256,7 @@ function App() {
 
     const handleCancelInvite = () => {
         setPendingInvite(null);
-        setInvitePassword("");
+        setInviteOtp("");
         setRedeemError(null);
         window.history.replaceState({}, document.title, window.location.pathname);
     };
@@ -282,7 +270,6 @@ function App() {
     useEffect(() => {
         const checkInviteParams = () => {
             const params = new URLSearchParams(window.location.search);
-            // Added params.get("id") to support join URLs formatted as ?id=...
             const inviteId = params.get("id") || params.get("inviteId") || params.get("invite_id");
             const rawToken = params.get("token") || params.get("rawToken") || params.get("raw_token");
 
@@ -584,13 +571,6 @@ function App() {
         const duplicateResult = await detectPotentialDuplicatesForDocument(noteId, activeWorkspaceId);
         await refreshMergeQueue();
 
-        // Immediately push captured document to remote D1 backend
-        try {
-            await synchronizeWorkspace(activeWorkspaceId);
-        } catch (syncError) {
-            console.error("Auto-sync post capture failed:", syncError);
-        }
-
         setStatusMessage(
             duplicateResult.flagged > 0
                 ? `Stored ${documentTitle} and queued ${duplicateResult.flagged} duplicate review candidate(s).`
@@ -664,7 +644,6 @@ function App() {
         if (!activeSchema || !activeDocument) return;
 
         await saveDocumentCapture(activeSchema, activeDocument, frontmatter, body);
-        await synchronizeWorkspace(activeWorkspaceId)
     };
 
     const handleRequestWaybackSnapshot = async () => {
@@ -1381,20 +1360,22 @@ function App() {
                     <div className="w-full max-w-md rounded-lg bg-background p-6 shadow-lg border border-border">
                         <h2 className="text-lg font-semibold mb-2">Join Workspace</h2>
                         <p className="text-sm text-muted-foreground mb-4">
-                            Enter the password provided with this invite link to access the workspace.
+                            Enter the One-Time PIN (OTP) provided with this invite link to access the workspace.
                         </p>
 
                         <form onSubmit={handleRedeemSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium mb-1">Invite Password</label>
+                                <label className="block text-sm font-medium mb-1">One-Time PIN (OTP)</label>
                                 <input
-                                    type="password"
-                                    value={invitePassword}
-                                    onChange={(e) => setInvitePassword(e.target.value)}
-                                    placeholder="Enter password..."
+                                    type="text"
+                                    pattern="[0-9]*"
+                                    maxLength={6}
+                                    value={inviteOtp}
+                                    onChange={(e) => setInviteOtp(e.target.value)}
+                                    placeholder="Enter 6-digit OTP..."
                                     required
                                     autoFocus
-                                    className="w-full px-3 py-2 border rounded-md bg-input text-foreground"
+                                    className="w-full px-3 py-2 border rounded-md bg-input text-foreground tracking-widest text-center font-mono text-lg"
                                 />
                             </div>
 
@@ -1412,7 +1393,7 @@ function App() {
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={isSubmitting || !invitePassword}
+                                    disabled={isSubmitting || !inviteOtp}
                                     className="px-4 py-2 bg-primary text-primary-foreground rounded-md disabled:opacity-50"
                                 >
                                     {isSubmitting ? "Joining..." : "Join Workspace"}

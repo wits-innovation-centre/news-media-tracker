@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { createWorkspaceInvite, type WorkspaceRole } from "@/lib/auth/invites"
+import { createWorkspaceInvite, type WorkspaceRole } from "@/lib/invite/fn"
 
 export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
   const [password, setPassword] = useState("")

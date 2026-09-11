@@ -2,7 +2,7 @@
 
 import { dbClient } from "@/lib/db/client";
 import { deleteWorkspace, getActiveWorkspaceId } from "@/lib/db/utils";
-import { ensureWorkspaceOwnerSession } from "@/lib/auth/invites";
+import { ensureWorkspaceOwnerSession } from "@/lib/invite/fn";
 import { defaultTransport, type SyncTransport } from "./transport";
 
 export const SYNC_SERVER_URL = import.meta.env.DEV

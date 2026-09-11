@@ -200,7 +200,7 @@ const DEFAULT_SCHEMA_TEMPLATES: DocumentSchemaGroup[] = [
                     {
                         name: "publication_date_range",
                         label: "Publication Date",
-                        type: { data: "date", input: "date" },
+                        type: { data: "date-range", input: "date-range" },
                         visibility: {
                             dependsOn: "publication_date_mode",
                             operator: "eq",

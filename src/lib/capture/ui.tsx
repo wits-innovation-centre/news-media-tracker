@@ -286,7 +286,7 @@ export function Capture({
                                       <div className="pt-2">
                                         <Checkbox
                                           checked={Boolean(childValue)}
-                                          onCheckedChange={(checked) => updateItemField(itemIndex, child.name, checked)}
+                                          onCheckedChange={(checked: Boolean) => updateItemField(itemIndex, child.name, checked)}
                                         />
                                       </div>
                                     ) : (
