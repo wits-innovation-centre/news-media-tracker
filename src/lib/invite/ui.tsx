@@ -189,7 +189,7 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
             </div>
             <Input
               type="text"
-              pattern="[1-7, 11, 12]*"
+              pattern="[1-7, 10, 16]*" 
               maxLength={6}
               placeholder="6-digit PIN"
               value={otp}
