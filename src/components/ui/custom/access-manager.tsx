@@ -20,7 +20,6 @@ export function AccessManagerView({ workspaceId }: { workspaceId: string }) {
     try {
       const { inviteId, rawToken } = await createWorkspaceInvite({
         workspaceId,
-        password,
         role,
         expiresInHours: 24,
       })
