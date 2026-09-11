@@ -41,6 +41,8 @@ export interface RedeemInviteParams {
 export interface RedeemInviteResponse {
   sessionToken: string;
   workspaceId: string;
+  userId?: string; // Transferred user ID when workspaceId === "*"
+  workspaces?: Array<{ id: string; name: string }>; // List of all user workspaces
 }
 
 export interface HydrateAndRedeemParams {
@@ -261,4 +263,55 @@ export async function ensureWorkspaceOwnerSession(workspaceId: string): Promise<
 export function clearWorkspaceSession(): void {
   localStorage.removeItem("workspace_session_token");
   localStorage.removeItem("active_workspace_id");
+}
+
+/**
+ * Handles full user identity redemption and multi-workspace hydration
+ */
+export async function redeemFullUserSession({
+  pendingInvite,
+  otp,
+  setCurrentUserId,
+  createWorkspace,
+  loadCapturedDocuments,
+  saveCapturedNote,
+  // ...other hydration methods
+}: HydrateAndRedeemParams & { setCurrentUserId: (id: string) => void }) {
+  
+  // 1. Redeem invite on server
+  const result = await redeemWorkspaceInvite({
+    inviteId: pendingInvite.inviteId,
+    rawToken: pendingInvite.rawToken,
+    otp,
+  });
+
+  // 2. Transfer User Identity
+  if (result.userId) {
+    localStorage.setItem("current_user_id", result.userId);
+    setCurrentUserId(result.userId);
+  }
+
+  // 3. Hydrate all workspaces returned by the identity session
+  const targetWorkspaces = result.workspaces || [];
+  for (const hostWs of targetWorkspaces) {
+    // Clone or sync each workspace locally under the new synced userId
+    const newWs = await createWorkspace(hostWs.name, "Synced from full session invite.");
+    
+    // Populate schemas, documents, and specifications per workspace
+    const hostDocs = await loadCapturedDocuments(hostWs.id);
+    for (const doc of hostDocs) {
+      await saveCapturedNote(
+        doc.id,
+        doc.schema_id,
+        doc.title,
+        doc.frontmatter,
+        doc.body,
+        result.userId || "synced-user",
+        doc.parent_id,
+        newWs.id
+      );
+    }
+  }
+
+  return result.userId;
 }

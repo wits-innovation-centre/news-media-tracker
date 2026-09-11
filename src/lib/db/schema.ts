@@ -16,19 +16,21 @@ export const workspaceInvites = sqliteTable(
   "workspace_invites",
   {
     id: text("id").primaryKey(),
-    workspaceId: text("workspace_id").notNull(),
+    workspaceId: text("workspace_id").notNull(), // Can hold specific ID or "*" for global session
+    createdBy: text("created_by"), // ADDED: Stores issuing userId for identity/workspace sync
     tokenHash: text("token_hash").notNull(),
-    passwordHash: text("password_hash").notNull(),
+    passwordHash: text("password_hash").notNull(), // Stores hashed OTP
     role: text("role").notNull().default("EDITOR"),
     inviteType: text("invite_type").notNull().default("SHARE"),
     expiresAt: integer("expires_at").notNull(),
-    usedAt: integer("used_at"),
+    usedAt: integer("used_at"), // Already exists: null = pending, integer = redeemed
     createdAt: integer("created_at")
       .notNull()
       .default(sql`(unixepoch())`),
   },
   (table) => ({
     idxInvitesWorkspace: index("idx_invites_workspace").on(table.workspaceId),
+    idxInvitesCreator: index("idx_invites_creator").on(table.createdBy), // ADDED: Fast lookup by creator
   })
 );
 
@@ -186,3 +188,26 @@ export const archivalRecords = sqliteTable('archival_records', {
   index('idx_archival_records_wayback_sync').on(table.workspaceId, table.archiveType, table.syncStatus, table.updatedAt),
   index('idx_pending_anchors').on(table.blockchainTxHash, table.healthStatus),
 ]);
+
+export const userSessions = sqliteTable(
+  "user_sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    lastActiveAt: integer("last_active_at")
+      .notNull()
+      .default(sql`(unixepoch())`),
+    createdAt: integer("created_at")
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (table) => ({
+    idxUserSessions: index("idx_user_sessions_user").on(table.userId),
+    idxDeviceSessions: uniqueIndex("idx_device_sessions").on(
+      table.userId,
+      table.deviceId
+    ),
+  })
+);

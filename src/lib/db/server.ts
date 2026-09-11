@@ -1,3 +1,5 @@
+// src/lib/db/server.ts
+
 import { drizzle } from 'drizzle-orm/d1';
 import { eq, and, gt, sql, asc } from 'drizzle-orm';
 import * as schema from './schema';
@@ -23,13 +25,13 @@ async function signJwt(payload: Record<string, any>, secret: string): Promise<st
   const header = { alg: "HS256", typ: "JWT" };
   const encodedHeader = btoa(JSON.stringify(header)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
   const encodedPayload = btoa(JSON.stringify(payload)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-  
+
   const key = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
   );
   const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`));
   const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-  
+
   return `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
 }
 
@@ -43,7 +45,7 @@ async function verifyJwt(token: string, secret: string): Promise<Record<string, 
     );
     const sigBuf = Uint8Array.from(atob(signature.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
     const isValid = await crypto.subtle.verify("HMAC", key, sigBuf, new TextEncoder().encode(`${header}.${payload}`));
-    
+
     if (!isValid) return null;
     return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
   } catch {
@@ -51,7 +53,7 @@ async function verifyJwt(token: string, secret: string): Promise<Record<string, 
   }
 }
 
-type AuthResult = 
+type AuthResult =
   | { status: "OK"; member: any }
   | { status: "WORKSPACE_DELETED"; member: null }
   | { status: "UNAUTHORIZED"; member: null };
@@ -64,12 +66,13 @@ async function verifyMemberAccess(request: Request, env: Env, targetWorkspaceId:
   const secret = env.JWT_SECRET ?? "fallback-dev-secret-change-in-prod";
   const decoded = await verifyJwt(token, secret);
 
-  if (!decoded || decoded.workspaceId !== targetWorkspaceId) {
+  // Allow wildcard session tokens ("*") or exact workspace matches
+  if (!decoded || (decoded.workspaceId !== "*" && decoded.workspaceId !== targetWorkspaceId)) {
     return { status: "UNAUTHORIZED", member: null };
   }
 
-  // Verify member record status in D1
   const db = drizzle(env.DB, { schema });
+
   const member = await db.select()
     .from(schema.workspaceMembers)
     .where(and(
@@ -78,7 +81,6 @@ async function verifyMemberAccess(request: Request, env: Env, targetWorkspaceId:
     ))
     .get();
 
-  // If the host deleted the workspace, member row will no longer exist
   if (!member) {
     return { status: "WORKSPACE_DELETED", member: null };
   }
@@ -113,19 +115,63 @@ export default {
     const headers = { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }; 
     const secret = env.JWT_SECRET ?? "fallback-dev-secret-change-in-prod";
 
-    // 1. CREATE INVITE ENDPOINT
+    // 1. LIST INVITES ENDPOINT
+    if (url.pathname === "/api/invites" && request.method === "GET") {
+      const workspaceId = url.searchParams.get("workspace_id") ?? "*";
+
+      if (workspaceId !== "*") {
+        const access = await verifyMemberAccess(request, env, workspaceId);
+        if (access.status !== "OK") {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 403, headers });
+        }
+      }
+
+      const invites = await db.select()
+        .from(schema.workspaceInvites)
+        .where(eq(schema.workspaceInvites.workspaceId, workspaceId));
+
+      return new Response(JSON.stringify({ invites }), { headers });
+    }
+
+    // 2. LIST ACTIVE SESSIONS ENDPOINT
+    if (url.pathname === "/api/sessions" && request.method === "GET") {
+      const workspaceId = url.searchParams.get("workspace_id") ?? "*";
+
+      if (workspaceId !== "*") {
+        const access = await verifyMemberAccess(request, env, workspaceId);
+        if (access.status !== "OK") {
+          return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 403, headers });
+        }
+      }
+
+      const members = await db.select()
+        .from(schema.workspaceMembers)
+        .where(eq(schema.workspaceMembers.workspaceId, workspaceId));
+
+      return new Response(JSON.stringify({ sessions: members }), { headers });
+    }
+
+    // 3. CREATE INVITE ENDPOINT
     if (url.pathname === "/api/invites/create" && request.method === "POST") {
-      const { workspace_id, invite_type, password, role = "EDITOR", expires_in_hours = 24 } = await request.json() as any;
+      const { workspace_id, invite_type, password, otp, role = "EDITOR", expires_in_hours = 24, created_by } = await request.json() as any;
+
+      if (workspace_id !== "*") {
+        const access = await verifyMemberAccess(request, env, workspace_id);
+        if (access.status !== "OK") {
+          return new Response(JSON.stringify({ error: "Unauthorized to invite to this workspace" }), { status: 403, headers });
+        }
+      }
 
       const inviteId = crypto.randomUUID();
       const rawToken = crypto.randomUUID();
       const tokenHash = await hashSha256(rawToken);
-      const passwordHash = await hashSha256(password);
+      const passwordHash = await hashSha256(otp || password);
       const expiresAt = Date.now() + (expires_in_hours * 3600 * 1000);
 
       await db.insert(schema.workspaceInvites).values({
         id: inviteId,
         workspaceId: workspace_id,
+        createdBy: created_by ?? null,
         tokenHash,
         passwordHash,
         inviteType: invite_type,
@@ -136,11 +182,11 @@ export default {
       return new Response(JSON.stringify({ inviteId, rawToken }), { headers });
     }
 
-    // 2. REDEEM INVITE ENDPOINT
+    // 4. REDEEM INVITE ENDPOINT
     if (url.pathname === "/api/invites/redeem" && request.method === "POST") {
-      const { inviteId, rawToken, password, deviceId } = await request.json() as any;
+      const { inviteId, rawToken, password, otp, deviceId } = await request.json() as any;
       const tokenHash = await hashSha256(rawToken);
-      const passwordHash = await hashSha256(password);
+      const passwordHash = await hashSha256(otp || password);
       const now = Date.now();
 
       const result = await env.DB.prepare(
@@ -164,6 +210,36 @@ export default {
 
       if (!invite) return new Response(JSON.stringify({ error: "Invite not found." }), { status: 404, headers });
 
+      if (invite.workspaceId === "*" || invite.inviteType === "SESSION") {
+        const allWorkspaces = await db.select().from(schema.workspaces);
+
+        for (const ws of allWorkspaces) {
+          await db.insert(schema.workspaceMembers).values({
+            id: crypto.randomUUID(),
+            workspaceId: ws.id,
+            deviceId,
+            role: invite.role,
+          }).onConflictDoUpdate({
+            target: [schema.workspaceMembers.workspaceId, schema.workspaceMembers.deviceId],
+            set: { role: invite.role }
+          });
+        }
+
+        const sessionToken = await signJwt({
+          workspaceId: "*",
+          deviceId,
+          role: invite.role,
+          userId: invite.createdBy,
+        }, secret);
+
+        return new Response(JSON.stringify({ 
+          sessionToken, 
+          workspaceId: "*",
+          userId: invite.createdBy,
+          workspaces: allWorkspaces 
+        }), { headers });
+      }
+
       await db.insert(schema.workspaceMembers).values({
         id: crypto.randomUUID(),
         workspaceId: invite.workspaceId,
@@ -183,7 +259,7 @@ export default {
       return new Response(JSON.stringify({ sessionToken, workspaceId: invite.workspaceId }), { headers });
     }
 
-    // 3. PUSH API Endpoint
+    // 5. PUSH API ENDPOINT
     if (url.pathname === "/api/sync/push" && request.method === "POST") { 
       const body = await request.json() as any;
       const { workspace_id, notes, proposals, archives } = body; 
@@ -317,7 +393,7 @@ export default {
       return new Response(JSON.stringify({ success: true, timestamp: Date.now() }), { headers }); 
     }
 
-    // 4. PULL API Endpoint
+    // 6. PULL API ENDPOINT
     if (url.pathname === "/api/sync/pull" && request.method === "GET") { 
       const workspace_id = url.searchParams.get("workspace_id") ?? "default"; 
       const since = parseInt(url.searchParams.get("since") ?? "0", 10); 

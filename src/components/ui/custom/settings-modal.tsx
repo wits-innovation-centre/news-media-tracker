@@ -23,7 +23,7 @@ import { SpecificationsManager } from "@/components/ui/custom/specifications-man
 import { ImportDataView } from "@/lib/import-export/import/ui"
 import { useModalStack } from "@/hooks/use-modal-stack"
 import { ModalStackHeader } from "@/components/ui/custom/modal-stack-header"
-import { AccessManagerView } from "./access-manager"
+import { AccessManagerView } from "../../../lib/invite/ui"
 
 export interface SettingsModalProps {
     trigger?: React.ReactElement;
