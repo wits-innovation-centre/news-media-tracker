@@ -115,35 +115,21 @@ export default {
       const secret = env.JWT_SECRET ?? "fallback-dev-secret-change-in-prod";
 
       // 1. LIST INVITES ENDPOINT
-      if (url.pathname === "/api/invites/create" && request.method === "POST") {
-        const { workspace_id, invite_type, password, otp, role = "EDITOR", expires_in_hours = 24, created_by } = await request.json() as any;
+      if ((url.pathname === "/api/invites" || url.pathname === "/api/invites/list") && request.method === "GET") {
+        const workspaceId = url.searchParams.get("workspace_id") ?? "*";
 
-        if (workspace_id !== "*" && invite_type !== "SESSION") {
-          const access = await verifyMemberAccess(request, env, workspace_id);
+        if (workspaceId !== "*") {
+          const access = await verifyMemberAccess(request, env, workspaceId);
           if (access.status !== "OK") {
-            return new Response(JSON.stringify({ error: "Unauthorized to invite to this workspace" }), { status: 403, headers });
+            return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 403, headers });
           }
         }
 
-        const inviteId = crypto.randomUUID();
-        const rawToken = crypto.randomUUID();
-        const tokenHash = await hashSha256(rawToken);
-        const passwordHash = await hashSha256(otp || password);
-        const expiresAt = Date.now() + (expires_in_hours * 3600 * 1000);
+        const invites = await db.select()
+          .from(schema.workspaceInvites)
+          .where(eq(schema.workspaceInvites.workspaceId, workspaceId));
 
-        await db.insert(schema.workspaceInvites).values({
-          id: inviteId,
-          workspaceId: workspace_id,
-          createdBy: created_by ?? null,
-          tokenHash,
-          passwordHash,
-          otp: otp ?? null,
-          inviteType: invite_type,
-          role,
-          expiresAt,
-        });
-
-        return new Response(JSON.stringify({ inviteId, rawToken, otp }), { headers });
+        return new Response(JSON.stringify({ invites }), { headers });
       }
 
       // 2. LIST ACTIVE SESSIONS ENDPOINT
