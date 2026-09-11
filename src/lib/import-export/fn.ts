@@ -606,7 +606,7 @@ export async function importExcelWorkbook(options: ExcelImportOptions): Promise<
             await dbClient.execute("DELETE FROM specifications WHERE workspace_id = ? AND kind = ?", [workspaceId, specId])
             for (const val of values) {
                 await dbClient.execute(
-                    "INSERT INTO specifications (kind, value, workspace_id) VALUES (?, ?, ?)",
+                    "INSERT OR REPLACE INTO specifications (kind, value, workspace_id) VALUES (?, ?, ?)",
                     [specId, val, workspaceId]
                 )
             }

@@ -334,7 +334,7 @@ async function saveSpecificationValues(specificationId: string, values: string[]
   const db = getDb()
   await db.execute("DELETE FROM specifications WHERE workspace_id = ? AND kind = ?", [scopedWorkspaceId, specificationId])
   for (const value of normalized) {
-    await db.execute("INSERT INTO specifications (kind, value, workspace_id) VALUES (?, ?, ?)", [specificationId, value, scopedWorkspaceId])
+    await db.execute("INSERT OR REPLACE INTO specifications (kind, value, workspace_id) VALUES (?, ?, ?)", [specificationId, value, scopedWorkspaceId])
   }
 }
 
@@ -345,7 +345,7 @@ async function saveSpecificationsStore(store: SpecificationStore, workspaceId: s
   for (const [specificationId, values] of Object.entries(store)) {
     const normalized = [...new Set(values.map((v) => v.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
     for (const value of normalized) {
-      await db.execute("INSERT INTO specifications (kind, value, workspace_id) VALUES (?, ?, ?)", [specificationId, value, scopedWorkspaceId])
+      await db.execute("INSERT OR REPLACE INTO specifications (kind, value, workspace_id) VALUES (?, ?, ?)", [specificationId, value, scopedWorkspaceId])
     }
   }
 }

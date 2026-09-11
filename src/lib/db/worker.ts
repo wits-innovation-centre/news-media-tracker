@@ -35,6 +35,14 @@ async function syncDrizzleSchema(dbClient: {
           return def;
         });
 
+        // Extract composite primary key definitions if present
+        const pkSymbol = Symbol.for("drizzle:PrimaryKey");
+        const compositePk = (exportValue as any)[pkSymbol];
+        if (compositePk && compositePk.columns?.length > 0) {
+          const pkCols = compositePk.columns.map((c: Column) => `"${c.name}"`).join(", ");
+          colDefs.push(`PRIMARY KEY (${pkCols})`);
+        }
+
         await dbClient.execute(
           `CREATE TABLE IF NOT EXISTS "${tableName}" (${colDefs.join(", ")});`
         );
