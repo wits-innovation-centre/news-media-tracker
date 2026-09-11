@@ -1,0 +1,46 @@
+#!/bin/sh
+
+# 1. Run TypeScript Type Check
+echo "🔍 Running TypeScript typecheck..."
+npx tsc -b
+if [ $? -ne 0 ]; then
+  echo "❌ TypeScript check failed. Commit aborted."
+  exit 1
+fi
+
+# 2. Check for Schema Changes & Generate Migrations
+echo "🔍 Checking Drizzle schema changes..."
+pnpm exec drizzle-kit generate
+
+# 3. If new migration files were created in ./drizzle, apply & stage them
+if [ -n "$(git status --porcelain drizzle)" ]; then
+  echo "✨ New schema changes detected."
+
+  # Ensure Cloudflare API Token is available before attempting remote deployment
+  if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+    echo "❌ Error: CLOUDFLARE_API_TOKEN environment variable is missing."
+    echo "💡 Please export your token before committing schema changes:"
+    echo "   export CLOUDFLARE_API_TOKEN=\"your_api_token_here\""
+    exit 1
+  fi
+
+  echo "📦 Applying local D1 migrations..."
+  pnpm exec wrangler d1 migrations apply news_media_db --local -y
+  if [ $? -ne 0 ]; then
+    echo "❌ Local migration failed. Commit aborted."
+    exit 1
+  fi
+
+  echo "🌐 Applying remote D1 migrations..."
+  pnpm exec wrangler d1 migrations apply news_media_db --remote -y
+  if [ $? -ne 0 ]; then
+    echo "❌ Remote migration failed. Commit aborted."
+    exit 1
+  fi
+
+  # Auto-stage generated migration files into the current commit
+  git add drizzle/
+  echo "✅ Migrations applied (local + remote) and staged for commit."
+fi
+
+exit 0
