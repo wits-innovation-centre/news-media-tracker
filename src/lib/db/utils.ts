@@ -401,8 +401,31 @@ async function softDeleteCapturedNote(id: string, userId?: string, workspaceId: 
 
 async function loadCapturedDocuments(workspaceId: string = getActiveWorkspaceId()) {
   const scopedWorkspaceId = normalizeWorkspaceId(workspaceId)
-  const records = await getDb().query(`SELECT id, workspace_id, schema_id, parent_id, title, frontmatter, body, created_at, created_by, updated_by, user_id, device_id, updated_at FROM notes WHERE workspace_id = ? AND is_deleted = 0 ORDER BY created_at DESC`, [scopedWorkspaceId])
-  return records.map((row) => ({ id: row.id, workspace_id: row.workspace_id, schema_id: row.schema_id, title: row.title, frontmatter: JSON.parse(row.frontmatter), body: row.body, parent_id: row.parent_id ?? undefined, created_at: typeof row.created_at === "number" ? new Date(row.created_at).toISOString() : row.created_at, created_by: row.created_by ?? undefined, updated_by: row.updated_by ?? undefined, user_id: row.user_id ?? undefined, device_id: row.device_id ?? undefined, updated_at: typeof row.updated_at === "number" ? row.updated_at : undefined })) as StoredDocument[]
+  const records = await getDb().query(
+    `SELECT id, workspace_id, schema_id, parent_id, title, frontmatter, body, created_at, created_by, updated_by, user_id, device_id, updated_at 
+     FROM notes WHERE workspace_id = ? AND is_deleted = 0 ORDER BY created_at DESC`,
+    [scopedWorkspaceId]
+  )
+  return records.map((row) => {
+    const rawCreatedAt = typeof row.created_at === "number" ? row.created_at : Date.now();
+    const rawUpdatedAt = typeof row.updated_at === "number" ? row.updated_at : rawCreatedAt;
+
+    return {
+      id: row.id,
+      workspace_id: row.workspace_id,
+      schema_id: row.schema_id,
+      title: row.title,
+      frontmatter: JSON.parse(row.frontmatter),
+      body: row.body,
+      parent_id: row.parent_id ?? undefined,
+      created_at: new Date(rawCreatedAt).toISOString(),
+      created_by: row.created_by ?? undefined,
+      updated_by: row.updated_by ?? undefined,
+      user_id: row.user_id ?? undefined,
+      device_id: row.device_id ?? undefined,
+      updated_at: rawUpdatedAt
+    };
+  }) as StoredDocument[]
 }
 
 async function loadDeletedDocumentsForReview(workspaceId: string = getActiveWorkspaceId()) {

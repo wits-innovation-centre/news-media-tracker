@@ -94,15 +94,15 @@ async function verifyMemberAccess(request: Request, env: Env, targetWorkspaceId:
 
 export default {
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(anchorPendingRecords(env)); 
-    ctx.waitUntil(processPendingWaybackArchives(env)); 
+    ctx.waitUntil(anchorPendingRecords(env));
+    ctx.waitUntil(processPendingWaybackArchives(env));
   },
 
   async fetch(request: Request, env: Env): Promise<Response> {
-    const db = drizzle(env.DB, { schema }); 
-    const url = new URL(request.url); 
+    const db = drizzle(env.DB, { schema });
+    const url = new URL(request.url);
 
-    if (request.method === "OPTIONS") { 
+    if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: {
           "Access-Control-Allow-Origin": "*",
@@ -112,7 +112,7 @@ export default {
       });
     }
 
-    const headers = { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }; 
+    const headers = { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" };
     const secret = env.JWT_SECRET ?? "fallback-dev-secret-change-in-prod";
 
     // 1. LIST INVITES ENDPOINT
@@ -232,11 +232,11 @@ export default {
           userId: invite.createdBy,
         }, secret);
 
-        return new Response(JSON.stringify({ 
-          sessionToken, 
+        return new Response(JSON.stringify({
+          sessionToken,
           workspaceId: "*",
           userId: invite.createdBy,
-          workspaces: allWorkspaces 
+          workspaces: allWorkspaces
         }), { headers });
       }
 
@@ -260,9 +260,9 @@ export default {
     }
 
     // 5. PUSH API ENDPOINT
-    if (url.pathname === "/api/sync/push" && request.method === "POST") { 
+    if (url.pathname === "/api/sync/push" && request.method === "POST") {
       const body = await request.json() as any;
-      const { workspace_id, notes, proposals, archives } = body; 
+      const { workspace_id, notes, proposals, archives } = body;
 
       const access = await verifyMemberAccess(request, env, workspace_id);
       if (access.status === "WORKSPACE_DELETED") {
@@ -272,48 +272,66 @@ export default {
         return new Response(JSON.stringify({ error: "Forbidden: Read-only or unauthorized device." }), { status: 403, headers });
       }
 
-      if (Array.isArray(notes)) { 
-        for (const note of notes) { 
-          const frontmatterStr = typeof note.frontmatter === "object" ? JSON.stringify(note.frontmatter) : note.frontmatter; 
-          await db.insert(schema.notes).values({ 
+      if (Array.isArray(notes)) {
+        for (const note of notes) {
+          const frontmatterStr = typeof note.frontmatter === "object"
+            ? JSON.stringify(note.frontmatter)
+            : (note.frontmatter ?? "{}");
+
+          const now = Date.now();
+
+          // Helper to coerce integer timestamp from numbers, ISO strings, or missing values
+          const parseTimestamp = (val: unknown): number => {
+            if (typeof val === "number" && !isNaN(val)) return val;
+            if (typeof val === "string" && val.trim()) {
+              const parsed = new Date(val).getTime();
+              if (!isNaN(parsed)) return parsed;
+            }
+            return now;
+          };
+
+          const createdAt = parseTimestamp(note.created_at ?? note.createdAt);
+          const updatedAt = parseTimestamp(note.updated_at ?? note.updatedAt);
+
+          await db.insert(schema.notes).values({
             id: note.id,
             workspaceId: workspace_id,
-            schemaId: note.schema_id,
-            parentId: note.parent_id ?? null,
-            title: note.title,
+            schemaId: note.schema_id ?? note.schemaId ?? "report",
+            parentId: note.parent_id ?? note.parentId ?? null,
+            title: note.title ?? "",
             frontmatter: frontmatterStr,
-            body: note.body,
-            createdBy: note.created_by ?? null,
-            updatedBy: note.updated_by ?? null,
-            deletedBy: note.deleted_by ?? null,
-            userId: note.user_id ?? note.updated_by ?? note.created_by ?? null,
-            deviceId: note.device_id ?? null,
-            createdAt: note.created_at,
-            updatedAt: note.updated_at,
-            isDeleted: note.is_deleted ? 1 : 0,
-          }).onConflictDoUpdate({ 
+            body: note.body ?? "",
+            createdBy: note.created_by ?? note.createdBy ?? null,
+            updatedBy: note.updated_by ?? note.updatedBy ?? null,
+            deletedBy: note.deleted_by ?? note.deletedBy ?? null,
+            userId: note.user_id ?? note.userId ?? note.updated_by ?? note.createdBy ?? null,
+            deviceId: note.device_id ?? note.deviceId ?? null,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            isDeleted: (note.is_deleted || note.isDeleted) ? 1 : 0,
+          }).onConflictDoUpdate({
             target: schema.notes.id,
             set: {
-              schemaId: note.schema_id,
-              parentId: note.parent_id ?? null,
-              title: note.title,
+              schemaId: note.schema_id ?? note.schemaId ?? "report",
+              parentId: note.parent_id ?? note.parentId ?? null,
+              title: note.title ?? "",
               frontmatter: frontmatterStr,
-              body: note.body,
-              updatedBy: note.updated_by ?? null,
-              deletedBy: note.deleted_by ?? null,
-              userId: note.user_id ?? note.updated_by ?? note.created_by ?? null,
-              deviceId: note.device_id ?? null,
-              updatedAt: note.updated_at,
-              isDeleted: note.is_deleted ? 1 : 0,
+              body: note.body ?? "",
+              updatedBy: note.updated_by ?? note.updatedBy ?? null,
+              deletedBy: note.deleted_by ?? note.deletedBy ?? null,
+              userId: note.user_id ?? note.userId ?? note.updated_by ?? note.createdBy ?? null,
+              deviceId: note.device_id ?? note.deviceId ?? null,
+              updatedAt: updatedAt,
+              isDeleted: (note.is_deleted || note.isDeleted) ? 1 : 0,
             },
             where: sql`excluded.updated_at > notes.updated_at`
           });
         }
       }
 
-      if (Array.isArray(proposals)) { 
-        for (const prop of proposals) { 
-          await db.insert(schema.mergeQueue).values({ 
+      if (Array.isArray(proposals)) {
+        for (const prop of proposals) {
+          await db.insert(schema.mergeQueue).values({
             id: prop.id,
             workspaceId: workspace_id,
             documentId: prop.document_id,
@@ -339,7 +357,7 @@ export default {
             reviewComment: prop.review_comment ?? null,
             createdAt: prop.created_at,
             updatedAt: prop.updated_at,
-          }).onConflictDoUpdate({ 
+          }).onConflictDoUpdate({
             target: schema.mergeQueue.id,
             set: {
               documentId: prop.document_id,
@@ -355,9 +373,9 @@ export default {
         }
       }
 
-      if (Array.isArray(archives)) { 
-        for (const archive of archives) { 
-          await db.insert(schema.archivalRecords).values({ 
+      if (Array.isArray(archives)) {
+        for (const archive of archives) {
+          await db.insert(schema.archivalRecords).values({
             id: archive.id,
             articleId: archive.article_id,
             workspaceId: workspace_id,
@@ -378,7 +396,7 @@ export default {
             createdAt: archive.created_at,
             updatedAt: archive.updated_at,
             isDeleted: archive.is_deleted ?? 0,
-          }).onConflictDoUpdate({ 
+          }).onConflictDoUpdate({
             target: schema.archivalRecords.id,
             set: {
               healthStatus: archive.health_status,
@@ -390,13 +408,13 @@ export default {
         }
       }
 
-      return new Response(JSON.stringify({ success: true, timestamp: Date.now() }), { headers }); 
+      return new Response(JSON.stringify({ success: true, timestamp: Date.now() }), { headers });
     }
 
     // 6. PULL API ENDPOINT
-    if (url.pathname === "/api/sync/pull" && request.method === "GET") { 
-      const workspace_id = url.searchParams.get("workspace_id") ?? "default"; 
-      const since = parseInt(url.searchParams.get("since") ?? "0", 10); 
+    if (url.pathname === "/api/sync/pull" && request.method === "GET") {
+      const workspace_id = url.searchParams.get("workspace_id") ?? "default";
+      const since = parseInt(url.searchParams.get("since") ?? "0", 10);
 
       const access = await verifyMemberAccess(request, env, workspace_id);
       if (access.status === "WORKSPACE_DELETED") {
@@ -406,53 +424,53 @@ export default {
         return new Response(JSON.stringify({ error: "Unauthorized access to workspace." }), { status: 403, headers });
       }
 
-      const notesRes = await db.select().from(schema.notes).where(and(eq(schema.notes.workspaceId, workspace_id), gt(schema.notes.updatedAt, since))); 
-      const proposalsRes = await db.select().from(schema.mergeQueue).where(and(eq(schema.mergeQueue.workspaceId, workspace_id), gt(schema.mergeQueue.updatedAt, since))); 
-      const archivesRes = await db.select().from(schema.archivalRecords).where(and(eq(schema.archivalRecords.workspaceId, workspace_id), gt(schema.archivalRecords.updatedAt, since))); 
+      const notesRes = await db.select().from(schema.notes).where(and(eq(schema.notes.workspaceId, workspace_id), gt(schema.notes.updatedAt, since)));
+      const proposalsRes = await db.select().from(schema.mergeQueue).where(and(eq(schema.mergeQueue.workspaceId, workspace_id), gt(schema.mergeQueue.updatedAt, since)));
+      const archivesRes = await db.select().from(schema.archivalRecords).where(and(eq(schema.archivalRecords.workspaceId, workspace_id), gt(schema.archivalRecords.updatedAt, since)));
 
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         timestamp: Date.now(),
         notes: notesRes,
         proposals: proposalsRes,
         archives: archivesRes,
-      }), { headers }); 
+      }), { headers });
     }
 
-    return new Response("Not Found", { status: 404, headers }); 
+    return new Response("Not Found", { status: 404, headers });
   }
 };
 
-async function processPendingWaybackArchives(env: Env, limit = 25) { 
-  const db = drizzle(env.DB, { schema }); 
-  const pending = await db.select() 
-    .from(schema.archivalRecords) 
-    .where(and( 
-      eq(schema.archivalRecords.archiveType, WAYBACK_ARCHIVE_TYPE), 
-      eq(schema.archivalRecords.syncStatus, WAYBACK_SYNC_STATUS.pending), 
-      eq(schema.archivalRecords.isDeleted, 0) 
+async function processPendingWaybackArchives(env: Env, limit = 25) {
+  const db = drizzle(env.DB, { schema });
+  const pending = await db.select()
+    .from(schema.archivalRecords)
+    .where(and(
+      eq(schema.archivalRecords.archiveType, WAYBACK_ARCHIVE_TYPE),
+      eq(schema.archivalRecords.syncStatus, WAYBACK_SYNC_STATUS.pending),
+      eq(schema.archivalRecords.isDeleted, 0)
     ))
-    .orderBy(asc(schema.archivalRecords.updatedAt)) 
-    .limit(limit); 
+    .orderBy(asc(schema.archivalRecords.updatedAt))
+    .limit(limit);
 
-  if (!pending || pending.length === 0) return { status: "NO_PENDING_RECORDS", processed: 0 }; 
+  if (!pending || pending.length === 0) return { status: "NO_PENDING_RECORDS", processed: 0 };
 
-  const processed = []; 
-  for (const record of pending) { 
+  const processed = [];
+  for (const record of pending) {
     try {
-      if (!record.uriOrPath) throw new Error("Missing source URL."); 
-      const snapshotUrl = await saveWaybackSnapshotUrl(record.uriOrPath.trim()); 
-      const verifiedAt = Date.now(); 
-      await db.update(schema.archivalRecords) 
-        .set({ uriOrPath: snapshotUrl, syncStatus: 'SYNCED', healthStatus: 'HEALTHY', lastVerifiedAt: verifiedAt, updatedAt: verifiedAt }) 
-        .where(eq(schema.archivalRecords.id, record.id)); 
-      processed.push({ id: record.id, status: WAYBACK_SYNC_STATUS.synced, uri_or_path: snapshotUrl }); 
+      if (!record.uriOrPath) throw new Error("Missing source URL.");
+      const snapshotUrl = await saveWaybackSnapshotUrl(record.uriOrPath.trim());
+      const verifiedAt = Date.now();
+      await db.update(schema.archivalRecords)
+        .set({ uriOrPath: snapshotUrl, syncStatus: 'SYNCED', healthStatus: 'HEALTHY', lastVerifiedAt: verifiedAt, updatedAt: verifiedAt })
+        .where(eq(schema.archivalRecords.id, record.id));
+      processed.push({ id: record.id, status: WAYBACK_SYNC_STATUS.synced, uri_or_path: snapshotUrl });
     } catch (err) {
-      await db.update(schema.archivalRecords) 
-        .set({ syncStatus: 'FAILED', updatedAt: Date.now() }) 
-        .where(eq(schema.archivalRecords.id, record.id)); 
-      processed.push({ id: record.id, status: WAYBACK_SYNC_STATUS.failed, uri_or_path: record.uriOrPath }); 
+      await db.update(schema.archivalRecords)
+        .set({ syncStatus: 'FAILED', updatedAt: Date.now() })
+        .where(eq(schema.archivalRecords.id, record.id));
+      processed.push({ id: record.id, status: WAYBACK_SYNC_STATUS.failed, uri_or_path: record.uriOrPath });
     }
   }
 
-  return { status: "SUCCESS", processed: processed.length, records: processed }; 
+  return { status: "SUCCESS", processed: processed.length, records: processed };
 }
